@@ -38,6 +38,7 @@ export interface ProfileWithDetails {
 interface ProfileState {
   profiles: ProfileWithDetails[]
   currentProfile: ProfileWithDetails | null
+  myProfile: ProfileWithDetails | null
   loading: boolean
   includeDevMocks: boolean
   setIncludeDevMocks: (val: boolean) => void
@@ -49,13 +50,16 @@ interface ProfileState {
     modalidad?: string
   }) => Promise<void>
   fetchProfileBySlug: (slug: string) => Promise<ProfileWithDetails | null>
+  fetchMyProfile: () => Promise<ProfileWithDetails | null>
   createProfile: (profileData: any) => Promise<{ error: string | null; slug?: string }>
+  submitRecommendation: (profileId: string, data: { from_name: string; text: string; context?: string }) => Promise<{ error: string | null }>
   submitReport: (profileId: string, reason: string, description: string) => Promise<{ error: string | null }>
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
   currentProfile: null,
+  myProfile: null,
   loading: false,
   includeDevMocks: false, // Default false: zero fake profiles shown by default
 
@@ -199,6 +203,49 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     }
   },
 
+  fetchMyProfile: async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData?.user) {
+        set({ myProfile: null })
+        return null
+      }
+      const userId = userData.user.id
+      const { data, error } = await (supabase.from('profiles') as any)
+        .select(`
+          id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo,
+          disponibilidad, modalidad, status, created_at,
+          skills ( name ),
+          services ( title, description, precio_orientativo ),
+          contact_methods ( id, type, value, is_public ),
+          recommendations ( id, from_name, text, context, created_at )
+        `)
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (error || !data) {
+        set({ myProfile: null })
+        return null
+      }
+
+      const item = data as any
+      const profile: ProfileWithDetails = {
+        ...item,
+        skills: item.skills?.map((s: any) => s.name) || [],
+        services: item.services || [],
+        contact_methods: item.contact_methods || [],
+        recommendations: item.recommendations || [],
+        categories: []
+      }
+      set({ myProfile: profile })
+      return profile
+    } catch (e) {
+      console.warn('fetchMyProfile error:', e)
+      set({ myProfile: null })
+      return null
+    }
+  },
+
   createProfile: async (profileData) => {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -207,27 +254,61 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       const userId = userData.user.id
-      const slug = profileData.name
-        .toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') + '-' + Math.random().toString(36).substring(2, 6)
 
-      // 1. Insert Profile
-      const { error: profileError } = await (supabase.from('profiles') as any).insert({
-        id: userId,
-        name: profileData.name,
-        slug: slug,
-        bio: profileData.bio || null,
-        provincia: profileData.provincia,
-        localidad: profileData.localidad,
-        zona_trabajo: profileData.zona_trabajo || null,
-        disponibilidad: profileData.disponibilidad || 'disponible',
-        modalidad: profileData.modalidad || 'presencial',
-        status: 'activo'
-      })
+      // Check if user already has an existing profile (update vs insert)
+      const { data: existingProfile } = await (supabase.from('profiles') as any)
+        .select('id, slug')
+        .eq('id', userId)
+        .maybeSingle()
 
-      if (profileError) return { error: profileError.message }
+      let slug = existingProfile?.slug
+      if (!slug) {
+        slug = profileData.name
+          .toLowerCase()
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') + '-' + Math.random().toString(36).substring(2, 6)
+      }
+
+      if (existingProfile) {
+        // 1. Update Profile
+        const { error: profileError } = await (supabase.from('profiles') as any)
+          .update({
+            name: profileData.name,
+            bio: profileData.bio || null,
+            provincia: profileData.provincia,
+            localidad: profileData.localidad,
+            zona_trabajo: profileData.zona_trabajo || null,
+            disponibilidad: profileData.disponibilidad || 'disponible',
+            modalidad: profileData.modalidad || 'presencial',
+            status: 'activo',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId)
+
+        if (profileError) return { error: profileError.message }
+
+        // Clean previous related records to replace cleanly
+        await (supabase.from('skills') as any).delete().eq('profile_id', userId)
+        await (supabase.from('services') as any).delete().eq('profile_id', userId)
+        await (supabase.from('contact_methods') as any).delete().eq('profile_id', userId)
+      } else {
+        // 1. Insert Profile
+        const { error: profileError } = await (supabase.from('profiles') as any).insert({
+          id: userId,
+          name: profileData.name,
+          slug: slug,
+          bio: profileData.bio || null,
+          provincia: profileData.provincia,
+          localidad: profileData.localidad,
+          zona_trabajo: profileData.zona_trabajo || null,
+          disponibilidad: profileData.disponibilidad || 'disponible',
+          modalidad: profileData.modalidad || 'presencial',
+          status: 'activo'
+        })
+
+        if (profileError) return { error: profileError.message }
+      }
 
       // 2. Insert Skills
       if (profileData.skills?.length) {
@@ -270,9 +351,57 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }
       }
 
+      // Refresh myProfile in state
+      await get().fetchMyProfile()
+
       return { error: null, slug }
     } catch (err: any) {
       return { error: err.message || 'Error inesperado al guardar el perfil.' }
+    }
+  },
+
+  submitRecommendation: async (profileId, data) => {
+    try {
+      if (!data.from_name?.trim()) {
+        return { error: 'Por favor ingresá tu nombre o iniciales.' }
+      }
+      if (!data.text || data.text.trim().length < 10) {
+        return { error: 'La reseña debe tener al menos 10 caracteres.' }
+      }
+
+      const { data: userData } = await supabase.auth.getUser()
+      const { data: inserted, error } = await (supabase.from('recommendations') as any).insert({
+        to_profile_id: profileId,
+        from_name: data.from_name.trim(),
+        text: data.text.trim(),
+        context: data.context?.trim() || null,
+        from_user_id: userData?.user?.id || null,
+        status: 'visible'
+      }).select().single()
+
+      if (error) return { error: error.message }
+
+      // Optimistically append new review to currentProfile if matching
+      const current = get().currentProfile
+      if (current && (current.id === profileId || current.slug === profileId)) {
+        const newRec = {
+          id: inserted?.id,
+          from_name: data.from_name.trim(),
+          text: data.text.trim(),
+          context: data.context?.trim() || null,
+          created_at: new Date().toISOString()
+        }
+        set({
+          currentProfile: {
+            ...current,
+            recommendations: [newRec, ...(current.recommendations || [])]
+          }
+        })
+      }
+
+      return { error: null }
+    } catch (err: any) {
+      return { error: err.message || 'Error al guardar la reseña.' }
     }
   },
 

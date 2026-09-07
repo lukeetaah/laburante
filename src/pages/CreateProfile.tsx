@@ -8,7 +8,7 @@ import { Plus, Trash2, CheckCircle2, ShieldAlert, ArrowRight, User } from 'lucid
 
 export default function CreateProfile() {
   const { user, loading: authLoading } = useAuthStore()
-  const createProfile = useProfileStore((s) => s.createProfile)
+  const { myProfile, fetchMyProfile, createProfile } = useProfileStore()
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
@@ -18,6 +18,7 @@ export default function CreateProfile() {
   const [zonaTrabajo, setZonaTrabajo] = useState('')
   const [modalidad, setModalidad] = useState<'presencial' | 'remoto' | 'ambas'>('presencial')
   const [disponibilidad, setDisponibilidad] = useState<'disponible' | 'ocupado' | 'no_disponible'>('disponible')
+  const [isEditing, setIsEditing] = useState(false)
 
   // Dynamic lists
   const [skills, setSkills] = useState<string[]>([''])
@@ -35,21 +36,49 @@ export default function CreateProfile() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (user?.user_metadata) {
-      if (user.user_metadata.name && !name) {
-        setName(user.user_metadata.name)
+    if (!user) return
+
+    fetchMyProfile().then((existing) => {
+      if (existing) {
+        setIsEditing(true)
+        setName(existing.name || '')
+        setBio(existing.bio || '')
+        setProvincia(existing.provincia || 'CABA')
+        setLocalidad(existing.localidad || '')
+        setZonaTrabajo(existing.zona_trabajo || '')
+        setModalidad(existing.modalidad || 'presencial')
+        setDisponibilidad(existing.disponibilidad || 'disponible')
+        if (existing.skills && existing.skills.length > 0) {
+          setSkills(existing.skills)
+        }
+        if (existing.services && existing.services.length > 0) {
+          setServices(
+            existing.services.map((s) => ({
+              title: s.title,
+              description: s.description || '',
+              precio_orientativo: s.precio_orientativo || '',
+            }))
+          )
+        }
+        if (existing.contact_methods && existing.contact_methods.length > 0) {
+          setContactMethods(
+            existing.contact_methods.map((c) => ({
+              type: c.type,
+              value: c.value,
+            }))
+          )
+        }
+        setConsentGranted(true)
+      } else if (user.user_metadata) {
+        if (user.user_metadata.name) setName(user.user_metadata.name)
+        if (user.user_metadata.provincia) setProvincia(user.user_metadata.provincia)
+        if (user.user_metadata.localidad) setLocalidad(user.user_metadata.localidad)
+        if (user.user_metadata.phone) {
+          setContactMethods([{ type: 'whatsapp', value: user.user_metadata.phone }])
+        }
       }
-      if (user.user_metadata.provincia) {
-        setProvincia(user.user_metadata.provincia)
-      }
-      if (user.user_metadata.localidad && !localidad) {
-        setLocalidad(user.user_metadata.localidad)
-      }
-      if (user.user_metadata.phone && contactMethods.length === 1 && !contactMethods[0].value) {
-        setContactMethods([{ type: 'whatsapp', value: user.user_metadata.phone }])
-      }
-    }
-  }, [user])
+    })
+  }, [user, fetchMyProfile])
 
   if (authLoading) {
     return <div className="container py-20 text-center text-sm">Cargando...</div>
@@ -159,16 +188,54 @@ export default function CreateProfile() {
     <div className="container py-8 md:py-12 max-w-2xl mx-auto space-y-8">
       <div>
         <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
-          Ofrecé tu trabajo en LABURANTE
+          {isEditing ? 'Editar mi perfil profesional' : 'Ofrecé tu trabajo en LABURANTE'}
         </h1>
         <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] mt-1">
-          Completá lo que sabés hacer para que personas de tu zona puedan encontrarte y contactarte. 100% gratuito.
+          {isEditing
+            ? 'Actualizá tus especialidades, servicios, zona de cobertura o datos de contacto.'
+            : 'Completá lo que sabés hacer para que personas de tu zona puedan encontrarte y contactarte. 100% gratuito.'}
         </p>
       </div>
 
       {error && (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">
           {error}
+        </div>
+      )}
+
+      {/* Banner: Editing existing published profile */}
+      {isEditing && myProfile && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="text-xs sm:text-sm space-y-0.5">
+            <p className="font-bold text-indigo-900 flex items-center gap-1.5">
+              <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />
+              Tu perfil está activo y publicado
+            </p>
+            <p className="text-indigo-700 text-xs">
+              Los cambios que guardes se reflejarán inmediatamente en las búsquedas públicas.
+            </p>
+          </div>
+          <Link
+            to={`/p/${myProfile.slug}`}
+            className="px-4 py-2 rounded-xl bg-white border border-indigo-200 font-heading font-bold text-xs text-indigo-700 hover:bg-indigo-100/50 shrink-0 transition-colors shadow-2xs"
+          >
+            Ver mi perfil público →
+          </Link>
+        </div>
+      )}
+
+      {/* Banner: Arrived from registration */}
+      {typeof window !== 'undefined' && window.location.search.includes('from=registro') && !isEditing && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
+          <CheckCircle2 size={22} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs sm:text-sm space-y-1">
+            <p className="font-bold text-amber-900">
+              ¡Cuenta creada! Paso 2 de 2: Completá tu perfil profesional
+            </p>
+            <p className="text-amber-800 leading-relaxed text-xs">
+              Ya precargamos tus datos de contacto iniciales. Solo agregá qué tareas realizás, tu zona habitual y confirmá la publicación para empezar a recibir consultas directas.
+            </p>
+          </div>
         </div>
       )}
 
@@ -479,7 +546,11 @@ export default function CreateProfile() {
             disabled={submitting}
             className="btn-dark w-full py-4 px-6 rounded-2xl font-heading font-bold text-base transition-all shadow-md disabled:opacity-50"
           >
-            {submitting ? 'Publicando perfil...' : 'Publicar mi perfil en LABURANTE'}
+            {submitting
+              ? 'Guardando cambios...'
+              : isEditing
+              ? 'Guardar y actualizar mi perfil'
+              : 'Publicar mi perfil en LABURANTE'}
           </button>
         </div>
       </form>

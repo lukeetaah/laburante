@@ -1,30 +1,36 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare } from 'lucide-react'
+import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import ContactModal from '@/components/profile/ContactModal'
 import ReportModal from '@/components/profile/ReportModal'
+import RecommendationModal from '@/components/profile/RecommendationModal'
 import { SITE_CONFIG } from '@/lib/constants'
 
 export default function ProfilePage() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
-  const [profile, setProfile] = useState<ProfileWithDetails | null>(null)
+  const [rawProfile, setRawProfile] = useState<ProfileWithDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [contactOpen, setContactOpen] = useState(searchParams.get('contacto') === '1' || searchParams.get('contacto') === 'true')
   const [reportOpen, setReportOpen] = useState(false)
+  const [recommendationOpen, setRecommendationOpen] = useState(false)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
+  const currentProfile = useProfileStore((s) => s.currentProfile)
 
   useEffect(() => {
     if (!slug) return
     setLoading(true)
     fetchProfileBySlug(slug).then((res) => {
-      setProfile(res)
+      setRawProfile(res)
       setLoading(false)
     })
   }, [slug, fetchProfileBySlug])
+
+  // Prefer store's currentProfile so newly added recommendations reflect immediately
+  const profile = (currentProfile && currentProfile.slug === slug) ? currentProfile : rawProfile
 
   const handleShare = () => {
     const url = `${window.location.origin}/p/${profile?.slug}`
@@ -121,13 +127,22 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Action Buttons: Contact + Share */}
+        {/* Action Buttons: Contact + Review + Share */}
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
           <button
             onClick={() => setContactOpen(true)}
             className="btn-dark flex-1 sm:flex-initial py-3.5 px-8 rounded-2xl font-heading font-bold text-sm transition-transform hover:scale-[1.02] shadow-md text-center"
           >
             Contactar ahora
+          </button>
+
+          <button
+            onClick={() => setRecommendationOpen(true)}
+            className="py-3.5 px-5 rounded-2xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-amber-900 font-heading font-semibold text-xs sm:text-sm transition-colors flex items-center gap-2"
+            title="Dejar una reseña o recomendación tras finalizar un trabajo"
+          >
+            <Star size={16} className="text-amber-500 fill-amber-500" />
+            Dejar reseña
           </button>
 
           <button
@@ -211,25 +226,46 @@ export default function ProfilePage() {
         </section>
       )}
 
-      {/* Recommendations */}
-      {profile.recommendations && profile.recommendations.length > 0 && (
-        <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8">
-          <div className="flex items-center gap-2 mb-4">
+      {/* Recommendations / Reseñas de trabajo */}
+      <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[var(--color-laburante-border)]">
+          <div className="flex items-center gap-2">
             <MessageSquare size={18} className="text-[var(--color-laburante-indigo)]" />
             <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
               Referencias y experiencias de trabajo
             </h2>
+            {profile.recommendations && profile.recommendations.length > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-laburante-surface-alt)] font-semibold text-[var(--color-laburante-text-secondary)]">
+                {profile.recommendations.length}
+              </span>
+            )}
           </div>
-          <div className="space-y-3">
+
+          <button
+            onClick={() => setRecommendationOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-amber-50 text-amber-900 text-xs font-heading font-semibold transition-colors self-start sm:self-auto"
+          >
+            <MessageSquarePlus size={14} className="text-amber-600" />
+            Escribir reseña del trabajo
+          </button>
+        </div>
+
+        {profile.recommendations && profile.recommendations.length > 0 ? (
+          <div className="space-y-3 pt-2">
             {profile.recommendations.map((rec, idx) => (
               <div key={idx} className="p-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30 space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-[var(--color-laburante-text)]">{rec.from_name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[var(--color-laburante-text)]">{rec.from_name}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
+                      Cliente
+                    </span>
+                  </div>
                   {rec.date && <span className="text-[var(--color-laburante-text-muted)]">{rec.date}</span>}
                 </div>
                 {rec.context && (
                   <p className="text-[11px] text-[var(--color-laburante-indigo)] font-medium">
-                    Trabajo: {rec.context}
+                    Trabajo realizado: {rec.context}
                   </p>
                 )}
                 <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed pt-1">
@@ -238,8 +274,29 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="p-8 rounded-2xl border border-dashed border-[var(--color-laburante-border)] text-center space-y-3 bg-[var(--color-laburante-surface-alt)]/20">
+            <div className="h-12 w-12 mx-auto rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+              <Star size={22} className="fill-amber-400" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-heading text-sm font-bold text-[var(--color-laburante-text)]">
+                Aún no hay reseñas registradas
+              </h3>
+              <p className="text-xs text-[var(--color-laburante-text-secondary)] max-w-md mx-auto leading-relaxed">
+                ¿Contrataste o trabajaste con <strong>{profile.name}</strong>? Contá cómo fue la experiencia para que otros vecinos contraten con seguridad y el buen trabajo se reconozca.
+              </p>
+            </div>
+            <button
+              onClick={() => setRecommendationOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-dark text-xs font-heading font-semibold shadow-xs"
+            >
+              <Star size={14} className="fill-amber-400 text-amber-400" />
+              Dejar la primera reseña del trabajo
+            </button>
+          </div>
+        )}
+      </section>
 
       {/* Signals of Trust (Honest, not fabricated) */}
       <section className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-xs text-[var(--color-laburante-text-secondary)] space-y-2">
@@ -277,6 +334,13 @@ export default function ProfilePage() {
       <ReportModal
         isOpen={reportOpen}
         onClose={() => setReportOpen(false)}
+        profileId={profile.id}
+        profileName={profile.name}
+      />
+
+      <RecommendationModal
+        isOpen={recommendationOpen}
+        onClose={() => setRecommendationOpen(false)}
         profileId={profile.id}
         profileName={profile.name}
       />

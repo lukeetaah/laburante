@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { PROVINCES } from '@/data/provinces'
-import { ShieldCheck } from 'lucide-react'
+import { ShieldCheck, Mail, CheckCircle2, ArrowRight } from 'lucide-react'
 
 export default function Register() {
   const [name, setName] = useState('')
@@ -17,6 +17,7 @@ export default function Register() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successEmail, setSuccessEmail] = useState<string | null>(null)
 
   const signUp = useAuthStore((s) => s.signUp)
   const navigate = useNavigate()
@@ -64,13 +65,63 @@ export default function Register() {
 
     if (res.error) {
       setError(res.error)
+    } else if (res.needsEmailConfirmation) {
+      setSuccessEmail(email.trim())
     } else {
       if (intent === 'ofrecer' || intent === 'ambas') {
-        navigate('/crear-perfil')
+        navigate('/crear-perfil?from=registro')
       } else {
         navigate('/buscar')
       }
     }
+  }
+
+  if (successEmail) {
+    return (
+      <div className="container py-12 md:py-20 max-w-md mx-auto">
+        <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-6 shadow-xs text-center">
+          <div className="h-16 w-16 mx-auto rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+            <Mail size={32} />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="font-heading text-2xl font-extrabold text-[var(--color-laburante-text)]">
+              ¡Cuenta creada!
+            </h1>
+            <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
+              Te enviamos un correo de verificación a <strong className="text-[var(--color-laburante-text)]">{successEmail}</strong>.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-left space-y-2 text-xs text-[var(--color-laburante-text-secondary)]">
+            <p className="font-semibold text-[var(--color-laburante-text)] flex items-center gap-1.5">
+              <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
+              Siguientes pasos:
+            </p>
+            <ol className="list-decimal list-inside space-y-1.5 pl-1 leading-relaxed text-[11px]">
+              <li>Abrí el enlace de confirmación que te enviamos a tu email.</li>
+              <li>Completá los datos de tu perfil profesional (oficios, fotos y contacto).</li>
+              <li>Tu perfil quedará publicado de inmediato para que te contacten.</li>
+            </ol>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <Link
+              to="/ingresar"
+              className="btn-dark w-full py-3.5 px-4 rounded-xl font-heading font-bold text-sm inline-flex items-center justify-center gap-2"
+            >
+              Ir a Iniciar Sesión <ArrowRight size={16} />
+            </Link>
+            <Link
+              to="/crear-perfil"
+              className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] text-xs font-semibold text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)] inline-block"
+            >
+              Ya lo confirmé, completar mi perfil
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

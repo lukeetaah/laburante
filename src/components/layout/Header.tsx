@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert } from 'lucide-react'
@@ -7,8 +7,17 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { user, isAdmin, signOut } = useAuthStore()
   const location = useLocation()
+  const navigate = useNavigate()
 
   const isActive = (path: string) => location.pathname === path
+
+  const handleSignOut = async () => {
+    await signOut()
+    setMenuOpen(false)
+    navigate('/')
+  }
+
+  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Mi cuenta'
 
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]/95 backdrop-blur-md">
@@ -75,27 +84,40 @@ export default function Header() {
           )}
 
           {user ? (
-            <div className="hidden md:flex items-center gap-3">
-              <Link to="/crear-perfil" className="flex items-center gap-2 text-sm text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]">
-                <User size={16} />
-                Mi perfil
+            <div className="hidden md:flex items-center gap-2">
+              <Link
+                to="/crear-perfil"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-xs font-semibold text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-border)] transition-colors max-w-[160px] truncate"
+                title={`Conectado como ${displayName}`}
+              >
+                <User size={14} className="shrink-0 text-[var(--color-laburante-accent)]" />
+                <span className="truncate">{displayName}</span>
               </Link>
               <button
-                onClick={() => signOut()}
-                className="flex items-center gap-2 text-sm text-[var(--color-laburante-text-muted)] hover:text-[var(--color-laburante-text)]"
+                onClick={handleSignOut}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-[var(--color-laburante-text-muted)] hover:text-rose-600 hover:bg-rose-50 transition-colors"
                 title="Cerrar sesión"
               >
-                <LogOut size={16} />
+                <LogOut size={14} />
+                <span>Salir</span>
               </button>
             </div>
           ) : (
-            <Link
-              to="/ingresar"
-              className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)] transition-colors"
-            >
-              <LogIn size={16} />
-              Ingresar
-            </Link>
+            <div className="hidden md:flex items-center gap-2">
+              <Link
+                to="/ingresar"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)] transition-colors"
+              >
+                <LogIn size={16} />
+                Ingresar
+              </Link>
+              <Link
+                to="/registrar"
+                className="btn-dark px-4 py-2 rounded-xl text-xs font-heading font-semibold shadow-xs"
+              >
+                Registrarme
+              </Link>
+            </div>
           )}
 
           <button
@@ -131,17 +153,25 @@ export default function Header() {
           <hr className="border-[var(--color-laburante-border)]" />
           {user ? (
             <>
+              <div className="px-4 py-2 text-xs font-semibold text-[var(--color-laburante-text-muted)]">
+                Conectado como: <span className="text-[var(--color-laburante-text)]">{displayName}</span>
+              </div>
               <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                <User size={16} /> Mi perfil
+                <User size={16} /> Mi perfil profesional
               </Link>
-              <button onClick={() => { signOut(); setMenuOpen(false) }} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-text-muted)] w-full text-left">
+              <button onClick={handleSignOut} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-rose-600 hover:bg-rose-50 w-full text-left font-medium">
                 <LogOut size={16} /> Cerrar sesión
               </button>
             </>
           ) : (
-            <Link to="/ingresar" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-              <LogIn size={16} /> Ingresar
-            </Link>
+            <div className="pt-2 space-y-2">
+              <Link to="/ingresar" onClick={() => setMenuOpen(false)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--color-laburante-border)] text-sm font-semibold">
+                <LogIn size={16} /> Ingresar
+              </Link>
+              <Link to="/registrar" onClick={() => setMenuOpen(false)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl btn-dark text-sm font-semibold">
+                Registrarme gratis
+              </Link>
+            </div>
           )}
         </div>
       )}

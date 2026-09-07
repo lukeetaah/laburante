@@ -17,7 +17,7 @@ interface AuthState {
   loading: boolean
   isAdmin: boolean
   setSession: (session: Session | null) => void
-  signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: string | null }>
+  signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   initialize: () => Promise<void>
@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       ? `${window.location.origin}/crear-perfil?confirmed=true`
       : undefined
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -67,17 +67,40 @@ export const useAuthStore = create<AuthState>((set) => ({
       },
     })
     if (error) return { error: error.message }
-    return { error: null }
+
+    // If Supabase requires email verification, session will be null but user object is returned
+    const needsEmailConfirmation = !data.session && !!data.user
+    if (data.session) {
+      set({
+        session: data.session,
+        user: data.session.user,
+        isAdmin: checkIsAdmin(data.session.user),
+        loading: false,
+      })
+    }
+    return { error: null, needsEmailConfirmation }
   },
 
   signIn: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
+    if (data.session) {
+      set({
+        session: data.session,
+        user: data.session.user,
+        isAdmin: checkIsAdmin(data.session.user),
+        loading: false,
+      })
+    }
     return { error: null }
   },
 
   signOut: async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {
+      console.warn('SignOut error:', e)
+    }
     set({ user: null, session: null, isAdmin: false })
   },
 
