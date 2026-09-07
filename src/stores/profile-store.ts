@@ -1,0 +1,292 @@
+import { create } from 'zustand'
+import { supabase } from '@/lib/supabase'
+import { DEV_MOCK_PROFILES } from '@/lib/mock-fixtures'
+
+export interface ProfileWithDetails {
+  id: string
+  name: string
+  slug: string
+  photo_url: string | null
+  bio: string | null
+  provincia: string
+  localidad: string
+  zona_trabajo: string | null
+  disponibilidad: 'disponible' | 'ocupado' | 'no_disponible'
+  modalidad: 'presencial' | 'remoto' | 'ambas'
+  status: 'activo' | 'oculto' | 'suspendido' | 'eliminado'
+  created_at: string
+  isMock?: boolean
+  categories?: string[]
+  skills?: string[]
+  services?: { title: string; description: string | null; precio_orientativo?: string | null }[]
+  contact_methods?: {
+    id?: string
+    type: 'whatsapp' | 'telefono' | 'email' | 'instagram' | 'linkedin' | 'web' | 'portfolio' | string
+    value: string
+    is_public: boolean
+  }[]
+  recommendations?: {
+    id?: string
+    from_name: string
+    text: string
+    context: string | null
+    date?: string
+    created_at?: string
+  }[]
+}
+
+interface ProfileState {
+  profiles: ProfileWithDetails[]
+  currentProfile: ProfileWithDetails | null
+  loading: boolean
+  includeDevMocks: boolean
+  setIncludeDevMocks: (val: boolean) => void
+  fetchProfiles: (filters?: {
+    query?: string
+    category?: string
+    provincia?: string
+    localidad?: string
+    modalidad?: string
+  }) => Promise<void>
+  fetchProfileBySlug: (slug: string) => Promise<ProfileWithDetails | null>
+  createProfile: (profileData: any) => Promise<{ error: string | null; slug?: string }>
+  submitReport: (profileId: string, reason: string, description: string) => Promise<{ error: string | null }>
+}
+
+export const useProfileStore = create<ProfileState>((set, get) => ({
+  profiles: [],
+  currentProfile: null,
+  loading: false,
+  includeDevMocks: false, // Default false: zero fake profiles shown by default
+
+  setIncludeDevMocks: (val) => {
+    set({ includeDevMocks: val })
+    get().fetchProfiles()
+  },
+
+  fetchProfiles: async (filters = {}) => {
+    set({ loading: true })
+    try {
+      let query = (supabase.from('profiles') as any)
+        .select(`
+          id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo,
+          disponibilidad, modalidad, status, created_at,
+          skills ( name ),
+          services ( title, description, precio_orientativo ),
+          contact_methods ( type, value, is_public )
+        `)
+        .eq('status', 'activo')
+
+      if (filters.provincia) {
+        query = query.eq('provincia', filters.provincia)
+      }
+      if (filters.localidad) {
+        query = query.ilike('localidad', `%${filters.localidad}%`)
+      }
+      if (filters.modalidad && filters.modalidad !== 'todas') {
+        query = query.eq('modalidad', filters.modalidad)
+      }
+
+      const { data, error } = await query
+
+      let realProfiles: ProfileWithDetails[] = []
+      if (!error && data) {
+        realProfiles = (data as any[]).map((item: any) => ({
+          ...item,
+          skills: item.skills?.map((s: any) => s.name) || [],
+          services: item.services || [],
+          contact_methods: item.contact_methods || [],
+          categories: []
+        }))
+      }
+
+      // Filter by text query if given
+      if (filters.query && filters.query.trim()) {
+        const q = filters.query.toLowerCase().trim()
+        realProfiles = realProfiles.filter(p =>
+          p.name.toLowerCase().includes(q) ||
+          p.bio?.toLowerCase().includes(q) ||
+          p.provincia.toLowerCase().includes(q) ||
+          p.localidad.toLowerCase().includes(q) ||
+          p.skills?.some((s: string) => s.toLowerCase().includes(q)) ||
+          p.services?.some((s: any) => s.title.toLowerCase().includes(q))
+        )
+      }
+
+      // If user enabled dev mocks in testing toggle
+      let combined = [...realProfiles]
+      if (get().includeDevMocks) {
+        let mockFiltered = [...DEV_MOCK_PROFILES]
+        if (filters.provincia) {
+          mockFiltered = mockFiltered.filter(p => p.provincia === filters.provincia)
+        }
+        if (filters.localidad) {
+          mockFiltered = mockFiltered.filter(p => p.localidad.toLowerCase().includes(filters.localidad!.toLowerCase()))
+        }
+        if (filters.modalidad && filters.modalidad !== 'todas') {
+          mockFiltered = mockFiltered.filter(p => p.modalidad === filters.modalidad)
+        }
+        if (filters.category) {
+          mockFiltered = mockFiltered.filter(p => p.categories.some(c => c.toLowerCase() === filters.category!.toLowerCase()))
+        }
+        if (filters.query && filters.query.trim()) {
+          const q = filters.query.toLowerCase().trim()
+          mockFiltered = mockFiltered.filter(p =>
+            p.name.toLowerCase().includes(q) ||
+            p.bio.toLowerCase().includes(q) ||
+            p.skills.some((s: string) => s.toLowerCase().includes(q)) ||
+            p.services.some((s: any) => s.title.toLowerCase().includes(q))
+          )
+        }
+        combined = [...combined, ...mockFiltered]
+      }
+
+      set({ profiles: combined, loading: false })
+    } catch (err) {
+      console.warn('Error fetching profiles from Supabase:', err)
+      if (get().includeDevMocks) {
+        set({ profiles: DEV_MOCK_PROFILES, loading: false })
+      } else {
+        set({ profiles: [], loading: false })
+      }
+    }
+  },
+
+  fetchProfileBySlug: async (slug: string) => {
+    set({ loading: true })
+    try {
+      // Check Supabase first
+      const { data, error } = await (supabase.from('profiles') as any)
+        .select(`
+          id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo,
+          disponibilidad, modalidad, status, created_at,
+          skills ( name ),
+          services ( title, description, precio_orientativo ),
+          contact_methods ( id, type, value, is_public ),
+          recommendations ( id, from_name, text, context, created_at )
+        `)
+        .eq('slug', slug)
+        .single()
+
+      if (!error && data) {
+        const item = data as any
+        const fullProfile: ProfileWithDetails = {
+          ...item,
+          skills: item.skills?.map((s: any) => s.name) || [],
+          services: item.services || [],
+          contact_methods: item.contact_methods || [],
+          recommendations: item.recommendations || [],
+          categories: []
+        }
+        set({ currentProfile: fullProfile, loading: false })
+        return fullProfile
+      }
+
+      // Check dev mocks if not found in DB
+      const mockFound = DEV_MOCK_PROFILES.find(p => p.slug === slug)
+      if (mockFound) {
+        set({ currentProfile: mockFound, loading: false })
+        return mockFound
+      }
+
+      set({ currentProfile: null, loading: false })
+      return null
+    } catch (err) {
+      console.warn('Error fetching profile by slug:', err)
+      const mockFound = DEV_MOCK_PROFILES.find(p => p.slug === slug)
+      set({ currentProfile: mockFound || null, loading: false })
+      return mockFound || null
+    }
+  },
+
+  createProfile: async (profileData) => {
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError || !userData?.user) {
+        return { error: 'Debes iniciar sesión para publicar un perfil.' }
+      }
+
+      const userId = userData.user.id
+      const slug = profileData.name
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') + '-' + Math.random().toString(36).substring(2, 6)
+
+      // 1. Insert Profile
+      const { error: profileError } = await (supabase.from('profiles') as any).insert({
+        id: userId,
+        name: profileData.name,
+        slug: slug,
+        bio: profileData.bio || null,
+        provincia: profileData.provincia,
+        localidad: profileData.localidad,
+        zona_trabajo: profileData.zona_trabajo || null,
+        disponibilidad: profileData.disponibilidad || 'disponible',
+        modalidad: profileData.modalidad || 'presencial',
+        status: 'activo'
+      })
+
+      if (profileError) return { error: profileError.message }
+
+      // 2. Insert Skills
+      if (profileData.skills?.length) {
+        const skillsRows = profileData.skills.map((s: string) => ({
+          profile_id: userId,
+          name: s.trim()
+        })).filter((s: any) => s.name)
+
+        if (skillsRows.length) {
+          await (supabase.from('skills') as any).insert(skillsRows)
+        }
+      }
+
+      // 3. Insert Services
+      if (profileData.services?.length) {
+        const serviceRows = profileData.services.map((srv: any) => ({
+          profile_id: userId,
+          title: srv.title,
+          description: srv.description || null,
+          precio_orientativo: srv.precio_orientativo || null
+        })).filter((s: any) => s.title)
+
+        if (serviceRows.length) {
+          await (supabase.from('services') as any).insert(serviceRows)
+        }
+      }
+
+      // 4. Insert Contact Methods (only authorized ones with consent)
+      if (profileData.contact_methods?.length) {
+        const contactRows = profileData.contact_methods.map((c: any) => ({
+          profile_id: userId,
+          type: c.type,
+          value: c.value,
+          is_public: c.is_public !== false,
+          consent_at: new Date().toISOString()
+        })).filter((c: any) => c.value)
+
+        if (contactRows.length) {
+          await (supabase.from('contact_methods') as any).insert(contactRows)
+        }
+      }
+
+      return { error: null, slug }
+    } catch (err: any) {
+      return { error: err.message || 'Error inesperado al guardar el perfil.' }
+    }
+  },
+
+  submitReport: async (profileId, reason, description) => {
+    try {
+      const { error } = await (supabase.from('reports') as any).insert({
+        profile_id: profileId,
+        reason: reason as any,
+        description: description || null
+      })
+      if (error) return { error: error.message }
+      return { error: null }
+    } catch (err: any) {
+      return { error: err.message || 'Error al enviar reporte.' }
+    }
+  }
+}))

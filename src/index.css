@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* ============================================
+   LABURANTE — Design System
+   ADN: Lukson Arts + personalidad LABURANTE
+   ============================================ */
+
+@theme {
+  /* Typography — Lukson DNA */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Space Grotesk', system-ui, sans-serif;
+
+  /* LABURANTE Colors — warm, human, argentino + Lukson accents */
+  --color-laburante-bg: #FAFAF7;
+  --color-laburante-surface: #FFFFFF;
+  --color-laburante-surface-alt: #F4F2ED;
+  --color-laburante-text: #1a1a2e;
+  --color-laburante-text-secondary: #5a5a72;
+  --color-laburante-text-muted: #8d8d9f;
+  --color-laburante-border: #e8e6e1;
+  --color-laburante-border-hover: #d0cec7;
+
+  /* Accent — Sendero amber + Lukson indigo */
+  --color-laburante-accent: #F5A623;
+  --color-laburante-accent-hover: #E09510;
+  --color-laburante-indigo: #6366f1;
+  --color-laburante-violet: #8B6FD4;
+  --color-laburante-teal: #00C9A7;
+
+  /* Portal (footer transition to Lukson dark) */
+  --color-lukson-bg: #050508;
+  --color-lukson-card: #0b0c14;
+  --color-lukson-border: rgba(255, 255, 255, 0.08);
+  --color-lukson-text: #a4abbf;
+  --color-lukson-text-bright: #ffffff;
+  --color-lukson-grad-1: #c084fc;
+  --color-lukson-grad-2: #6366f1;
+  --color-lukson-grad-3: #22d3ee;
+}
+
+/* Base */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-laburante-bg);
+  color: var(--color-laburante-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: rgba(99, 102, 241, 0.2);
+  color: var(--color-laburante-text);
+}
+
+/* Heading font */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+/* Link reset */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Button reset */
+button {
+  cursor: pointer;
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid var(--color-laburante-indigo);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Container */
+.container {
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+/* Smooth page transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: fadeIn 0.3s ease-out;
+}

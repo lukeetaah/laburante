@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /p/
+Allow: /categorias/
+Allow: /terminos
+Allow: /privacidad
+
+Disallow: /editar-perfil
+Disallow: /admin
+
+Sitemap: https://laburante.vercel.app/sitemap.xml

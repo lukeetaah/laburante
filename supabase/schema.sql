@@ -1,0 +1,245 @@
+-- ==========================================================
+-- LABURANTE — Supabase Database Schema & RLS Policies
+-- Infraestructura digital de conexión laboral para Argentina
+-- ==========================================================
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Enum types
+DO $$ BEGIN
+    CREATE TYPE profile_status AS ENUM ('activo', 'oculto', 'suspendido', 'eliminado');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE job_disponibilidad AS ENUM ('disponible', 'ocupado', 'no_disponible');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE job_modalidad AS ENUM ('presencial', 'remoto', 'ambas');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE contact_type AS ENUM ('whatsapp', 'telefono', 'email', 'instagram', 'linkedin', 'web', 'portfolio');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE report_reason AS ENUM (
+        'datos_falsos',
+        'spam',
+        'fraude',
+        'ofensivo',
+        'acoso',
+        'suplantacion',
+        'datos_sin_autorizacion',
+        'otro'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- 1. PROFILES TABLE
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL CHECK (char_length(trim(name)) >= 2),
+    slug TEXT NOT NULL UNIQUE CHECK (slug ~ '^[a-z0-9-]+$'),
+    photo_url TEXT,
+    bio TEXT CHECK (char_length(bio) <= 2000),
+    provincia TEXT NOT NULL,
+    localidad TEXT NOT NULL,
+    zona_trabajo TEXT,
+    disponibilidad job_disponibilidad NOT NULL DEFAULT 'disponible',
+    modalidad job_modalidad NOT NULL DEFAULT 'presencial',
+    status profile_status NOT NULL DEFAULT 'activo',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. CATEGORIES TABLE
+CREATE TABLE IF NOT EXISTS public.categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL UNIQUE,
+    slug TEXT NOT NULL UNIQUE,
+    icon TEXT,
+    parent_id UUID REFERENCES public.categories(id) ON DELETE SET NULL
+);
+
+-- 3. PROFILE_CATEGORIES (M:N)
+CREATE TABLE IF NOT EXISTS public.profile_categories (
+    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    category_id UUID NOT NULL REFERENCES public.categories(id) ON DELETE CASCADE,
+    PRIMARY KEY (profile_id, category_id)
+);
+
+-- 4. SKILLS TABLE
+CREATE TABLE IF NOT EXISTS public.skills (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL CHECK (char_length(trim(name)) > 0)
+);
+
+-- 5. SERVICES TABLE
+CREATE TABLE IF NOT EXISTS public.services (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    precio_orientativo TEXT
+);
+
+-- 6. CONTACT METHODS TABLE (Privacy by design with explicit consent)
+CREATE TABLE IF NOT EXISTS public.contact_methods (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    type contact_type NOT NULL,
+    value TEXT NOT NULL,
+    is_public BOOLEAN NOT NULL DEFAULT true,
+    consent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 7. RECOMMENDATIONS TABLE
+CREATE TABLE IF NOT EXISTS public.recommendations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    from_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    from_name TEXT NOT NULL,
+    to_profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    text TEXT NOT NULL CHECK (char_length(trim(text)) >= 10),
+    context TEXT,
+    status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible', 'oculto', 'reportado')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 8. REPORTS TABLE
+CREATE TABLE IF NOT EXISTS public.reports (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    reporter_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    reason report_reason NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'revisado', 'resuelto')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- INDEXES
+CREATE INDEX IF NOT EXISTS idx_profiles_slug ON public.profiles(slug);
+CREATE INDEX IF NOT EXISTS idx_profiles_provincia ON public.profiles(provincia);
+CREATE INDEX IF NOT EXISTS idx_profiles_localidad ON public.profiles(localidad);
+CREATE INDEX IF NOT EXISTS idx_profiles_status ON public.profiles(status);
+CREATE INDEX IF NOT EXISTS idx_contact_methods_profile ON public.contact_methods(profile_id);
+CREATE INDEX IF NOT EXISTS idx_services_profile ON public.services(profile_id);
+CREATE INDEX IF NOT EXISTS idx_skills_profile ON public.skills(profile_id);
+CREATE INDEX IF NOT EXISTS idx_reports_profile ON public.reports(profile_id);
+
+-- ==========================================================
+-- ROW LEVEL SECURITY (RLS) POLICIES
+-- ==========================================================
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profile_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.skills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.contact_methods ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recommendations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+
+-- Profiles: Public can read active profiles; owners can read/update their own
+CREATE POLICY "Public read active profiles"
+    ON public.profiles FOR SELECT
+    USING (status = 'activo' OR auth.uid() = id);
+
+CREATE POLICY "Users can insert own profile"
+    ON public.profiles FOR INSERT
+    WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile"
+    ON public.profiles FOR UPDATE
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
+
+-- Categories: Anyone can read categories
+CREATE POLICY "Public read categories"
+    ON public.categories FOR SELECT
+    USING (true);
+
+-- Profile Categories: Anyone can read; owners can modify
+CREATE POLICY "Public read profile_categories"
+    ON public.profile_categories FOR SELECT
+    USING (true);
+
+CREATE POLICY "Owner manage profile_categories"
+    ON public.profile_categories FOR ALL
+    USING (auth.uid() = profile_id)
+    WITH CHECK (auth.uid() = profile_id);
+
+-- Skills: Anyone can read; owners can modify
+CREATE POLICY "Public read skills"
+    ON public.skills FOR SELECT
+    USING (true);
+
+CREATE POLICY "Owner manage skills"
+    ON public.skills FOR ALL
+    USING (auth.uid() = profile_id)
+    WITH CHECK (auth.uid() = profile_id);
+
+-- Services: Anyone can read; owners can modify
+CREATE POLICY "Public read services"
+    ON public.services FOR SELECT
+    USING (true);
+
+CREATE POLICY "Owner manage services"
+    ON public.services FOR ALL
+    USING (auth.uid() = profile_id)
+    WITH CHECK (auth.uid() = profile_id);
+
+-- Contact Methods: Only public if is_public = true AND profile is active; owner can read and edit all
+CREATE POLICY "Public read public contact methods"
+    ON public.contact_methods FOR SELECT
+    USING (
+        (is_public = true AND EXISTS (
+            SELECT 1 FROM public.profiles p WHERE p.id = contact_methods.profile_id AND p.status = 'activo'
+        ))
+        OR auth.uid() = profile_id
+    );
+
+CREATE POLICY "Owner manage contact methods"
+    ON public.contact_methods FOR ALL
+    USING (auth.uid() = profile_id)
+    WITH CHECK (auth.uid() = profile_id);
+
+-- Recommendations: Anyone can read visible recommendations
+CREATE POLICY "Public read visible recommendations"
+    ON public.recommendations FOR SELECT
+    USING (status = 'visible');
+
+CREATE POLICY "Anyone can create recommendation"
+    ON public.recommendations FOR INSERT
+    WITH CHECK (true);
+
+-- Reports: Anyone can submit a report; read only for authorized roles
+CREATE POLICY "Anyone can submit report"
+    ON public.reports FOR INSERT
+    WITH CHECK (true);
+
+-- Trigger for updating updated_at timestamp
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;
+CREATE TRIGGER set_profiles_updated_at
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
