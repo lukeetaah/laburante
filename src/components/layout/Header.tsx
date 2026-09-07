@@ -44,6 +44,16 @@ export default function Header() {
             Categorías
           </Link>
           <Link
+            to="/como-funciona"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isActive('/como-funciona')
+                ? 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)]'
+                : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]'
+            }`}
+          >
+            Cómo funciona
+          </Link>
+          <Link
             to="/crear-perfil"
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-laburante-accent)] hover:bg-amber-50 transition-colors"
           >
@@ -106,6 +116,9 @@ export default function Header() {
           </Link>
           <Link to="/categorias" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             Categorías
+          </Link>
+          <Link to="/como-funciona" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
+            Cómo funciona
           </Link>
           <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-accent)] font-medium">
             <UserPlus size={16} /> Ofrecer mi trabajo

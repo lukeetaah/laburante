@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Search, ArrowRight, UserCheck, Shield, Sparkles, MapPin, CheckCircle2, ChevronRight, HelpCircle } from 'lucide-react'
 import { CATEGORIES } from '@/data/categories'
 import { PROVINCES } from '@/data/provinces'
+import HowItWorksVisual from '@/components/home/HowItWorksVisual'
+import ComparisonSection from '@/components/home/ComparisonSection'
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -139,57 +141,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. HOW IT WORKS (SIMPLE & HONEST) */}
-      <section className="container">
-        <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-8 md:p-12">
-          <div className="max-w-2xl mb-10">
-            <h2 className="font-heading text-2xl sm:text-3xl font-bold text-[var(--color-laburante-text)]">
-              Cómo funciona LABURANTE
-            </h2>
-            <p className="text-sm text-[var(--color-laburante-text-secondary)] mt-2">
-              Un puente directo entre personas. Sin burocracia, sin algoritmos opacos, sin cobro de entrada.
-            </p>
-          </div>
+      {/* 3. HOW IT WORKS (VISUAL SHOWCASE WITH REAL USAGE IMAGES & GIF) */}
+      <HowItWorksVisual />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-bold text-sm text-[var(--color-laburante-text)]">
-                1
-              </div>
-              <h3 className="font-heading text-lg font-semibold text-[var(--color-laburante-text)]">
-                Buscás o mostrás
-              </h3>
-              <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-                Si sabés hacer algo, publicás tu perfil con lo que ofrecés y tus zonas. Si necesitás resolver algo, buscás por oficio, servicio o lugar.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-bold text-sm text-[var(--color-laburante-text)]">
-                2
-              </div>
-              <h3 className="font-heading text-lg font-semibold text-[var(--color-laburante-text)]">
-                Contactás directamente
-              </h3>
-              <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-                Elegís el medio de contacto habilitado por el titular (WhatsApp, teléfono, email, redes). No cobramos por mensaje ni retenemos conversaciones.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-bold text-sm text-[var(--color-laburante-text)]">
-                3
-              </div>
-              <h3 className="font-heading text-lg font-semibold text-[var(--color-laburante-text)]">
-                Arreglan entre ustedes
-              </h3>
-              <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-                El presupuesto, los tiempos, el método de pago y los detalles del trabajo los definen libremente las partes. Sin comisiones de plataforma.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* 4. COMPARISON: LABURANTE VS TRADITIONAL PORTALS */}
+      <ComparisonSection />
 
       {/* 4. TRUST & PRIVACY PILLARS (NO FAKE GUARANTEES) */}
       <section className="container">

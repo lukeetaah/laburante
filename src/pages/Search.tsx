@@ -21,6 +21,9 @@ export default function Search() {
 
   // Sync state with URL params
   useEffect(() => {
+    if (searchParams.get('mock') === '1' && !includeDevMocks) {
+      setIncludeDevMocks(true)
+    }
     fetchProfiles({
       query: searchParams.get('q') || undefined,
       provincia: searchParams.get('provincia') || undefined,
@@ -28,7 +31,7 @@ export default function Search() {
       category: searchParams.get('categoria') || undefined,
       modalidad: searchParams.get('modalidad') || undefined,
     })
-  }, [searchParams, fetchProfiles])
+  }, [searchParams, fetchProfiles, includeDevMocks, setIncludeDevMocks])
 
   const handleApplyFilters = (e?: React.FormEvent) => {
     if (e) e.preventDefault()

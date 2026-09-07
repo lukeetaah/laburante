@@ -13,6 +13,7 @@ import CreateProfile from '@/pages/CreateProfile'
 import Admin from '@/pages/Admin'
 import Terms from '@/pages/Terms'
 import Privacy from '@/pages/Privacy'
+import HowItWorks from '@/pages/HowItWorks'
 import NotFound from '@/pages/NotFound'
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="registrar" element={<Register />} />
           <Route path="crear-perfil" element={<CreateProfile />} />
           <Route path="admin" element={<Admin />} />
+          <Route path="como-funciona" element={<HowItWorks />} />
           <Route path="terminos" element={<Terms />} />
           <Route path="privacidad" element={<Privacy />} />
           <Route path="*" element={<NotFound />} />

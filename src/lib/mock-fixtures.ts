@@ -54,8 +54,9 @@ export const DEV_MOCK_PROFILES: MockProfile[] = [
       { title: 'Instalación de térmicas y disyuntores', description: 'Colocación normalizada según normativa.', precio_orientativo: 'A convenir' }
     ],
     contact_methods: [
-      { type: 'whatsapp', value: '+54 9 351 000-0000', is_public: true },
-      { type: 'email', value: 'mock.esteban@ejemplo.com', is_public: true }
+      { type: 'whatsapp', value: '+54 9 351 234-5678', is_public: true },
+      { type: 'telefono', value: '0351 456-7890', is_public: true },
+      { type: 'email', value: 'esteban.morales@ejemplo.com.ar', is_public: true }
     ],
     recommendations: [
       { from_name: 'Valeria R.', context: 'Cambio de tablero general en departamento', text: 'Puntual, prolijo y explicó cada paso del trabajo.', date: 'Febrero 2026' }

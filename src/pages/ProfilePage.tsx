@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import ContactModal from '@/components/profile/ContactModal'
@@ -8,10 +8,11 @@ import { SITE_CONFIG } from '@/lib/constants'
 
 export default function ProfilePage() {
   const { slug } = useParams<{ slug: string }>()
+  const [searchParams] = useSearchParams()
   const [profile, setProfile] = useState<ProfileWithDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
-  const [contactOpen, setContactOpen] = useState(false)
+  const [contactOpen, setContactOpen] = useState(searchParams.get('contacto') === '1' || searchParams.get('contacto') === 'true')
   const [reportOpen, setReportOpen] = useState(false)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
