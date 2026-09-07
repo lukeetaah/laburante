@@ -1,15 +1,42 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProfileStore, type AccountDeletionRecord } from '@/stores/profile-store'
 import { supabase } from '@/lib/supabase'
-import { ShieldAlert, Users, AlertTriangle, CheckCircle, Eye, Slash, RefreshCw, Lock } from 'lucide-react'
+import {
+  ShieldAlert,
+  Users,
+  AlertTriangle,
+  CheckCircle,
+  Eye,
+  Slash,
+  RefreshCw,
+  Lock,
+  ShieldCheck,
+  EyeOff,
+  Trash2,
+  Filter,
+  MessageCircle
+} from 'lucide-react'
+
+const REASON_LABELS: Record<string, string> = {
+  trabajo_suficiente: 'Ya consiguió suficiente trabajo',
+  sin_consultas: 'No recibió consultas o solicitudes',
+  mala_experiencia: 'Problema o desacuerdo con cliente',
+  problemas_tecnicos: 'Dificultad técnica con la app',
+  cambio_datos: 'Creará otro perfil con otros datos',
+  otro: 'Otro motivo',
+}
 
 export default function Admin() {
   const { user, isAdmin, loading: authLoading } = useAuthStore()
+  const { fetchAccountDeletions, updateProfileVisibility } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'reports' | 'profiles'>('reports')
+  const [activeTab, setActiveTab] = useState<'reports' | 'profiles' | 'deletions'>('reports')
+  const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos'>('todos')
   const [reports, setReports] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
+  const [deletions, setDeletions] = useState<AccountDeletionRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
 
@@ -29,10 +56,27 @@ export default function Admin() {
 
       // 2. Fetch all Profiles
       const { data: profilesData } = await (supabase.from('profiles') as any)
-        .select('id, name, slug, provincia, localidad, status, disponibilidad, created_at')
+        .select('id, name, slug, provincia, localidad, status, disponibilidad, created_at, whatsapp_verified, whatsapp_verified_at')
         .order('created_at', { ascending: false })
 
-      if (profilesData) setProfiles(profilesData)
+      // Local WhatsApp cache hydration
+      let localWA: Record<string, any> = {}
+      try {
+        const raw = localStorage.getItem('laburante_verified_wa')
+        if (raw) localWA = JSON.parse(raw)
+      } catch {}
+
+      if (profilesData) {
+        const hydrated = profilesData.map((p: any) => ({
+          ...p,
+          whatsapp_verified: Boolean(p.whatsapp_verified || (localWA[p.id] !== undefined)),
+        }))
+        setProfiles(hydrated)
+      }
+
+      // 3. Fetch Deletions
+      const delList = await fetchAccountDeletions()
+      setDeletions(delList)
     } catch (err) {
       console.warn('Error loading admin data:', err)
     }
@@ -102,12 +146,70 @@ export default function Admin() {
       .eq('id', profileId)
 
     if (!error) {
+      setProfiles((prev) =>
+        prev.map((p) => (p.id === profileId ? { ...p, status: nextStatus } : p))
+      )
       setActionMessage(`Estado del perfil actualizado a: ${nextStatus.toUpperCase()}.`)
-      loadData()
     }
   }
 
+  const handleToggleProfileVisibility = async (profileId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'oculto' ? 'activo' : 'oculto'
+    await updateProfileVisibility(profileId, nextStatus)
+    setProfiles((prev) =>
+      prev.map((p) => (p.id === profileId ? { ...p, status: nextStatus } : p))
+    )
+    setActionMessage(
+      nextStatus === 'oculto'
+        ? 'El perfil fue configurado como PRIVADO / PAUSADO.'
+        : 'El perfil fue activado y ya es visible en búsquedas.'
+    )
+  }
+
+  const handleToggleWhatsAppVerified = async (profileId: string, currentVerified: boolean) => {
+    const nextVal = !currentVerified
+    const now = new Date().toISOString()
+    try {
+      await (supabase.from('profiles') as any)
+        .update({
+          whatsapp_verified: nextVal,
+          whatsapp_verified_at: nextVal ? now : null,
+        })
+        .eq('id', profileId)
+    } catch (e) {
+      console.warn('Supabase update error:', e)
+    }
+
+    try {
+      const raw = localStorage.getItem('laburante_verified_wa')
+      const parsed = raw ? JSON.parse(raw) : {}
+      if (nextVal) {
+        parsed[profileId] = { phone: 'admin-override', at: now }
+      } else {
+        delete parsed[profileId]
+      }
+      localStorage.setItem('laburante_verified_wa', JSON.stringify(parsed))
+    } catch {}
+
+    setProfiles((prev) =>
+      prev.map((p) => (p.id === profileId ? { ...p, whatsapp_verified: nextVal } : p))
+    )
+    setActionMessage(
+      nextVal
+        ? 'Número de WhatsApp certificado como verificado.'
+        : 'Certificación de WhatsApp removida.'
+    )
+  }
+
   const pendingReportsCount = reports.filter((r) => r.status === 'pendiente').length
+
+  const filteredProfiles = profiles.filter((p) => {
+    if (profileFilter === 'activos') return p.status === 'activo'
+    if (profileFilter === 'privados') return p.status === 'oculto'
+    if (profileFilter === 'verificados') return p.whatsapp_verified === true
+    if (profileFilter === 'suspendidos') return p.status === 'suspendido'
+    return true
+  })
 
   return (
     <div className="container py-8 md:py-12 max-w-5xl mx-auto space-y-8">
@@ -116,7 +218,7 @@ export default function Admin() {
         <div>
           <div className="flex items-center gap-2 text-indigo-600 mb-1">
             <ShieldAlert size={20} />
-            <span className="text-xs font-bold uppercase tracking-wider">Panel de Moderación</span>
+            <span className="text-xs font-bold uppercase tracking-wider">Panel de Moderación y Auditoría</span>
           </div>
           <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">
             Administración de LABURANTE
@@ -129,7 +231,7 @@ export default function Admin() {
         <button
           onClick={loadData}
           disabled={loading}
-          className="py-2 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold flex items-center gap-2 transition-colors"
+          className="py-2 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refrescar datos
@@ -137,24 +239,18 @@ export default function Admin() {
       </div>
 
       {actionMessage && (
-        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2 animate-in fade-in">
           <CheckCircle size={16} />
           {actionMessage}
         </div>
       )}
 
       {/* Metrics Bar */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Perfiles registrados</p>
           <p className="font-heading text-2xl font-bold text-[var(--color-laburante-text)] mt-1">
             {profiles.length}
-          </p>
-        </div>
-        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
-          <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Reportes pendientes</p>
-          <p className="font-heading text-2xl font-bold text-rose-600 mt-1">
-            {pendingReportsCount}
           </p>
         </div>
         <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
@@ -163,32 +259,67 @@ export default function Admin() {
             {profiles.filter((p) => p.status === 'activo').length}
           </p>
         </div>
+        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+          <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Privados / Pausados</p>
+          <p className="font-heading text-2xl font-bold text-amber-600 mt-1">
+            {profiles.filter((p) => p.status === 'oculto').length}
+          </p>
+        </div>
+        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+          <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">WhatsApp Verificados</p>
+          <p className="font-heading text-2xl font-bold text-emerald-700 mt-1">
+            {profiles.filter((p) => p.whatsapp_verified).length}
+          </p>
+        </div>
+        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+          <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Bajas registradas</p>
+          <p className="font-heading text-2xl font-bold text-rose-600 mt-1">
+            {deletions.length}
+          </p>
+        </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[var(--color-laburante-border)]">
+      <div className="flex border-b border-[var(--color-laburante-border)] overflow-x-auto">
         <button
           onClick={() => setActiveTab('reports')}
-          className={`pb-3 px-4 font-heading font-semibold text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'reports'
               ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
               : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
           }`}
         >
           <AlertTriangle size={16} />
-          Reportes recibidos ({reports.length})
+          Reportes ({reports.length})
+          {pendingReportsCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
+              {pendingReportsCount}
+            </span>
+          )}
         </button>
 
         <button
           onClick={() => setActiveTab('profiles')}
-          className={`pb-3 px-4 font-heading font-semibold text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'profiles'
               ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
               : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
           }`}
         >
           <Users size={16} />
-          Todos los perfiles ({profiles.length})
+          Perfiles ({profiles.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('deletions')}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'deletions'
+              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
+              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
+          }`}
+        >
+          <Trash2 size={16} />
+          Bajas y Motivos ({deletions.length})
         </button>
       </div>
 
@@ -249,7 +380,7 @@ export default function Admin() {
                   {rep.status === 'pendiente' && (
                     <button
                       onClick={() => handleUpdateReportStatus(rep.id, 'revisado')}
-                      className="py-1.5 px-3 rounded-lg border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-medium"
+                      className="py-1.5 px-3 rounded-lg border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-medium cursor-pointer"
                     >
                       Marcar como revisado
                     </button>
@@ -257,7 +388,7 @@ export default function Admin() {
                   {rep.status !== 'resuelto' && (
                     <button
                       onClick={() => handleUpdateReportStatus(rep.id, 'resuelto')}
-                      className="py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
+                      className="py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
                     >
                       Resolver reporte
                     </button>
@@ -265,7 +396,7 @@ export default function Admin() {
                   {rep.profiles?.id && (
                     <button
                       onClick={() => handleToggleProfileStatus(rep.profiles.id, rep.profiles.status)}
-                      className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1"
+                      className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
                     >
                       <Slash size={12} />
                       {rep.profiles.status === 'suspendido' ? 'Reactivar perfil' : 'Suspender perfil'}
@@ -280,56 +411,197 @@ export default function Admin() {
 
       {/* Tab 2: All Profiles */}
       {activeTab === 'profiles' && (
-        <div className="space-y-3">
-          {profiles.map((p) => (
-            <div
-              key={p.id}
-              className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
-                    {p.name}
-                  </h3>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                      p.status === 'activo'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : p.status === 'suspendido'
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {p.status}
-                  </span>
-                </div>
-                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-0.5">
-                  {p.localidad}, {p.provincia} · Registrado el {new Date(p.created_at).toLocaleDateString()}
-                </p>
-              </div>
+        <div className="space-y-4">
+          {/* Profile Filter pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-[var(--color-laburante-text-muted)] mr-1 flex items-center gap-1">
+              <Filter size={13} /> Filtrar:
+            </span>
+            {(['todos', 'activos', 'privados', 'verificados', 'suspendidos'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setProfileFilter(f)}
+                className={`py-1.5 px-3 rounded-xl text-xs font-semibold transition-colors capitalize cursor-pointer ${
+                  profileFilter === f
+                    ? 'btn-dark'
+                    : 'border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-secondary)]'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
 
-              <div className="flex items-center gap-2">
-                <Link
-                  to={`/p/${p.slug}`}
-                  target="_blank"
-                  className="py-1.5 px-3 rounded-xl border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold flex items-center gap-1"
-                >
-                  <Eye size={14} />
-                  Ver
-                </Link>
-                <button
-                  onClick={() => handleToggleProfileStatus(p.id, p.status)}
-                  className={`py-1.5 px-3 rounded-xl text-xs font-semibold transition-colors ${
-                    p.status === 'suspendido'
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : 'bg-rose-600 hover:bg-rose-700 text-white'
-                  }`}
-                >
-                  {p.status === 'suspendido' ? 'Reactivar' : 'Suspender'}
-                </button>
+          <div className="space-y-3">
+            {filteredProfiles.length === 0 ? (
+              <div className="p-8 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
+                No hay perfiles que coincidan con el filtro seleccionado.
               </div>
+            ) : (
+              filteredProfiles.map((p) => (
+                <div
+                  key={p.id}
+                  className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                        {p.name}
+                      </h3>
+
+                      {/* Status badge */}
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                          p.status === 'activo'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : p.status === 'oculto'
+                            ? 'bg-amber-100 text-amber-800'
+                            : p.status === 'suspendido'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {p.status === 'oculto' ? '🔒 Privado' : p.status}
+                      </span>
+
+                      {/* WhatsApp verification badge */}
+                      {p.whatsapp_verified ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center gap-1">
+                          <ShieldCheck size={11} className="text-emerald-600" />
+                          <span>WhatsApp Verificado</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          Sin verificar
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-[var(--color-laburante-text-secondary)]">
+                      {p.localidad}, {p.provincia} · Registrado el {new Date(p.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      to={`/p/${p.slug}`}
+                      target="_blank"
+                      className="py-1.5 px-3 rounded-xl border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold flex items-center gap-1"
+                    >
+                      <Eye size={13} />
+                      Ver
+                    </Link>
+
+                    {/* WhatsApp verify toggle */}
+                    <button
+                      onClick={() => handleToggleWhatsAppVerified(p.id, p.whatsapp_verified)}
+                      className={`py-1.5 px-3 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
+                        p.whatsapp_verified
+                          ? 'border border-gray-300 hover:bg-gray-100 text-gray-700'
+                          : 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800'
+                      }`}
+                      title={p.whatsapp_verified ? 'Quitar verificación' : 'Certificar número'}
+                    >
+                      <ShieldCheck size={13} />
+                      {p.whatsapp_verified ? 'Quitar Verificado' : 'Certificar WhatsApp'}
+                    </button>
+
+                    {/* Visibility toggle */}
+                    <button
+                      onClick={() => handleToggleProfileVisibility(p.id, p.status)}
+                      className="py-1.5 px-3 rounded-xl border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-medium cursor-pointer"
+                      title={p.status === 'oculto' ? 'Hacer público' : 'Ocultar / Poner Privado'}
+                    >
+                      {p.status === 'oculto' ? 'Hacer Público' : 'Poner Privado'}
+                    </button>
+
+                    {/* Suspend toggle */}
+                    <button
+                      onClick={() => handleToggleProfileStatus(p.id, p.status)}
+                      className={`py-1.5 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                        p.status === 'suspendido'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-rose-600 hover:bg-rose-700 text-white'
+                      }`}
+                    >
+                      {p.status === 'suspendido' ? 'Reactivar' : 'Suspender'}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Account Deletions */}
+      {activeTab === 'deletions' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-rose-50/60 border border-rose-200 text-xs text-rose-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-rose-900">
+              <Trash2 size={15} className="text-rose-600" />
+              Registro de bajas voluntarias de perfiles y cuentas
+            </p>
+            <p className="text-[11px] text-rose-800 leading-relaxed">
+              Acá se auditan los motivos y explicaciones reales que dejaron los usuarios al dar de baja su cuenta de LABURANTE.
+            </p>
+          </div>
+
+          {deletions.length === 0 ? (
+            <div className="p-10 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
+              No hay registros de cuentas eliminadas por el momento.
             </div>
-          ))}
+          ) : (
+            <div className="space-y-3">
+              {deletions.map((del) => (
+                <div
+                  key={del.id}
+                  className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] space-y-3"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-100 text-rose-800">
+                        Baja de cuenta
+                      </span>
+                      <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                        {del.profile_name}
+                      </h4>
+                      {del.profile_slug && (
+                        <span className="text-[11px] text-[var(--color-laburante-text-muted)]">
+                          (@{del.profile_slug})
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-[var(--color-laburante-text-muted)]">
+                      {new Date(del.created_at).toLocaleDateString()} {new Date(del.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-[var(--color-laburante-text-secondary)] space-y-2">
+                    {del.user_email && (
+                      <p>
+                        <strong>Email del usuario:</strong> <span className="font-mono text-[11px]">{del.user_email}</span>
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <strong>Motivo seleccionado:</strong>
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-semibold text-[11px]">
+                        {REASON_LABELS[del.reason] || del.reason}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 pt-1">
+                      <strong className="text-[var(--color-laburante-text)]">Explicación del usuario:</strong>
+                      <div className="p-3.5 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-xs text-[var(--color-laburante-text)] leading-relaxed italic">
+                        "{del.explanation}"
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

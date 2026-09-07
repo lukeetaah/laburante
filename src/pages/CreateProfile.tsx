@@ -4,7 +4,9 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
-import { Plus, Trash2, CheckCircle2, ShieldAlert, ArrowRight, User } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, MessageCircle, AlertTriangle } from 'lucide-react'
+import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
+import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 
 export default function CreateProfile() {
   const { user, loading: authLoading } = useAuthStore()
@@ -18,7 +20,13 @@ export default function CreateProfile() {
   const [zonaTrabajo, setZonaTrabajo] = useState('')
   const [modalidad, setModalidad] = useState<'presencial' | 'remoto' | 'ambas'>('presencial')
   const [disponibilidad, setDisponibilidad] = useState<'disponible' | 'ocupado' | 'no_disponible'>('disponible')
+  const [status, setStatus] = useState<'activo' | 'oculto'>('activo')
+  const [notifyWhatsapp, setNotifyWhatsapp] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
+
+  // Modals state
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   // Dynamic lists
   const [skills, setSkills] = useState<string[]>([''])
@@ -48,6 +56,10 @@ export default function CreateProfile() {
         setZonaTrabajo(existing.zona_trabajo || '')
         setModalidad(existing.modalidad || 'presencial')
         setDisponibilidad(existing.disponibilidad || 'disponible')
+        setStatus(existing.status === 'oculto' ? 'oculto' : 'activo')
+        if (existing.notify_whatsapp !== undefined) {
+          setNotifyWhatsapp(existing.notify_whatsapp)
+        }
         if (existing.skills && existing.skills.length > 0) {
           setSkills(existing.skills)
         }
@@ -169,6 +181,8 @@ export default function CreateProfile() {
       zona_trabajo: zonaTrabajo.trim(),
       modalidad,
       disponibilidad,
+      status,
+      notify_whatsapp: notifyWhatsapp,
       skills: skills.filter((s) => s.trim()),
       services: services.filter((s) => s.title.trim()),
       contact_methods: contactMethods.filter((c) => c.value.trim()),
@@ -362,6 +376,50 @@ export default function CreateProfile() {
               </select>
             </div>
           </div>
+
+          {/* Visibility: Public vs Private */}
+          <div className="pt-3 mt-2 border-t border-[var(--color-laburante-border)]">
+            <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-2">
+              Visibilidad de tu perfil en LABURANTE
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setStatus('activo')}
+                className={`p-3.5 rounded-2xl border text-left transition-colors flex items-start gap-3 cursor-pointer ${
+                  status === 'activo'
+                    ? 'border-emerald-300 bg-emerald-50/70 text-emerald-950 ring-2 ring-emerald-500/20 shadow-2xs'
+                    : 'border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-secondary)]'
+                }`}
+              >
+                <Eye size={18} className={status === 'activo' ? 'text-emerald-600 mt-0.5 shrink-0' : 'text-gray-400 mt-0.5 shrink-0'} />
+                <div>
+                  <p className="font-heading font-bold text-xs">🟢 Público (Activo)</p>
+                  <p className="text-[11px] leading-relaxed mt-0.5 opacity-80">
+                    Aparece en búsquedas y categorías. Nuevos clientes pueden encontrarte y pedirte presupuestos.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatus('oculto')}
+                className={`p-3.5 rounded-2xl border text-left transition-colors flex items-start gap-3 cursor-pointer ${
+                  status === 'oculto'
+                    ? 'border-amber-300 bg-amber-50/70 text-amber-950 ring-2 ring-amber-500/20 shadow-2xs'
+                    : 'border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-secondary)]'
+                }`}
+              >
+                <EyeOff size={18} className={status === 'oculto' ? 'text-amber-600 mt-0.5 shrink-0' : 'text-gray-400 mt-0.5 shrink-0'} />
+                <div>
+                  <p className="font-heading font-bold text-xs">🔒 Privado / Pausado</p>
+                  <p className="text-[11px] leading-relaxed mt-0.5 opacity-80">
+                    Dejás de aparecer en el buscador. Ideal si tenés la agenda llena o estás de vacaciones sin borrar tu cuenta.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
         </section>
 
         {/* Section 2: Skills */}
@@ -509,6 +567,28 @@ export default function CreateProfile() {
                   className="flex-1 w-full px-3.5 py-2 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
                 />
 
+                {/* WhatsApp Verification Status / Action */}
+                {c.type === 'whatsapp' && c.value.trim() && (
+                  <div className="self-end sm:self-center shrink-0">
+                    {myProfile?.whatsapp_verified ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <ShieldCheck size={14} className="text-emerald-600" />
+                        <span>Verificado</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setWhatsappModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors shadow-2xs cursor-pointer"
+                        title="Certificar que este número te pertenece"
+                      >
+                        <ShieldAlert size={14} className="text-amber-600" />
+                        <span>Verificar WhatsApp</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {contactMethods.length > 1 && (
                   <button
                     type="button"
@@ -520,6 +600,28 @@ export default function CreateProfile() {
                 )}
               </div>
             ))}
+          </div>
+
+          {/* WhatsApp Notification Preference */}
+          <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between gap-3 mt-4">
+            <div className="flex items-center gap-2.5 text-xs text-emerald-950">
+              <MessageCircle size={18} className="text-emerald-600 shrink-0" />
+              <div>
+                <p className="font-semibold">Avisarme pedidos de trabajo por WhatsApp</p>
+                <p className="text-[11px] text-emerald-800">
+                  Recibí avisos en tu teléfono cuando una persona te envíe una solicitud o pedido de presupuesto.
+                </p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={notifyWhatsapp}
+                onChange={(e) => setNotifyWhatsapp(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-8 h-4 bg-gray-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
           </div>
 
           {/* CRITICAL CONSENT CHECKBOX */}
@@ -553,7 +655,50 @@ export default function CreateProfile() {
               : 'Publicar mi perfil en LABURANTE'}
           </button>
         </div>
+
+        {/* Danger Zone: Delete Account / Profile */}
+        {isEditing && (
+          <div className="pt-6 border-t border-[var(--color-laburante-border)]">
+            <div className="p-5 sm:p-6 rounded-3xl border border-rose-200 bg-rose-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="font-heading font-bold text-sm text-rose-950 flex items-center gap-1.5">
+                  <AlertTriangle size={15} className="text-rose-600" />
+                  Dar de baja mi perfil y cuenta
+                </h3>
+                <p className="text-xs text-rose-800 leading-relaxed">
+                  Si no vas a ofrecer más servicios en LABURANTE, podés eliminar tu perfil indicando el motivo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteModalOpen(true)}
+                className="py-2.5 px-4 rounded-xl border border-rose-300 bg-white hover:bg-rose-100 text-rose-700 text-xs font-bold transition-colors shrink-0 shadow-2xs cursor-pointer"
+              >
+                Dar de baja mi perfil
+              </button>
+            </div>
+          </div>
+        )}
       </form>
+
+      {/* WhatsApp Verification Modal */}
+      <WhatsAppVerificationModal
+        isOpen={whatsappModalOpen}
+        onClose={() => setWhatsappModalOpen(false)}
+        profileId={myProfile?.id || user.id}
+        phone={contactMethods.find((c) => c.type === 'whatsapp')?.value || ''}
+        profileName={name || myProfile?.name || 'Mi Perfil'}
+      />
+
+      {/* Delete Account Modal */}
+      {myProfile && (
+        <DeleteAccountModal
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
+          profileId={myProfile.id}
+          profileName={myProfile.name}
+        />
+      )}
     </div>
   )
 }

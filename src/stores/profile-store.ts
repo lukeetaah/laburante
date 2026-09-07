@@ -14,6 +14,9 @@ export interface ProfileWithDetails {
   disponibilidad: 'disponible' | 'ocupado' | 'no_disponible'
   modalidad: 'presencial' | 'remoto' | 'ambas'
   status: 'activo' | 'oculto' | 'suspendido' | 'eliminado'
+  whatsapp_verified?: boolean
+  whatsapp_verified_at?: string | null
+  notify_whatsapp?: boolean
   created_at: string
   isMock?: boolean
   categories?: string[]
@@ -35,6 +38,17 @@ export interface ProfileWithDetails {
   }[]
 }
 
+export interface AccountDeletionRecord {
+  id: string
+  user_id?: string | null
+  user_email?: string | null
+  profile_name: string
+  profile_slug: string
+  reason: string
+  explanation: string
+  created_at: string
+}
+
 interface ProfileState {
   profiles: ProfileWithDetails[]
   currentProfile: ProfileWithDetails | null
@@ -52,8 +66,45 @@ interface ProfileState {
   fetchProfileBySlug: (slug: string) => Promise<ProfileWithDetails | null>
   fetchMyProfile: () => Promise<ProfileWithDetails | null>
   createProfile: (profileData: any) => Promise<{ error: string | null; slug?: string }>
+  updateProfileVisibility: (profileId: string, status: 'activo' | 'oculto') => Promise<{ error: string | null }>
+  verifyWhatsApp: (profileId: string, phone: string, code: string) => Promise<{ error: string | null; success?: boolean }>
+  deleteAccount: (profileId: string, payload: { reason: string; explanation: string; userEmail?: string }) => Promise<{ error: string | null; success?: boolean }>
+  fetchAccountDeletions: () => Promise<AccountDeletionRecord[]>
   submitRecommendation: (profileId: string, data: { from_name: string; text: string; context?: string }) => Promise<{ error: string | null }>
   submitReport: (profileId: string, reason: string, description: string) => Promise<{ error: string | null }>
+}
+
+const VERIFIED_WA_KEY = 'laburante_verified_wa'
+const DELETIONS_KEY = 'laburante_account_deletions'
+
+function getLocalVerifiedWA(): Record<string, { phone: string; at: string }> {
+  try {
+    const raw = localStorage.getItem(VERIFIED_WA_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveLocalVerifiedWA(data: Record<string, { phone: string; at: string }>) {
+  try {
+    localStorage.setItem(VERIFIED_WA_KEY, JSON.stringify(data))
+  } catch {}
+}
+
+function getLocalDeletions(): AccountDeletionRecord[] {
+  try {
+    const raw = localStorage.getItem(DELETIONS_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveLocalDeletions(data: AccountDeletionRecord[]) {
+  try {
+    localStorage.setItem(DELETIONS_KEY, JSON.stringify(data))
+  } catch {}
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
@@ -95,8 +146,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       let realProfiles: ProfileWithDetails[] = []
       if (!error && data) {
+        const localWA = getLocalVerifiedWA()
         realProfiles = (data as any[]).map((item: any) => ({
           ...item,
+          whatsapp_verified: Boolean(item.whatsapp_verified || (localWA[item.id] !== undefined)),
+          whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
           skills: item.skills?.map((s: any) => s.name) || [],
           services: item.services || [],
           contact_methods: item.contact_methods || [],
@@ -174,8 +228,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (!error && data) {
         const item = data as any
+        const localWA = getLocalVerifiedWA()
         const fullProfile: ProfileWithDetails = {
           ...item,
+          whatsapp_verified: Boolean(item.whatsapp_verified || (localWA[item.id] !== undefined)),
+          whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
           skills: item.skills?.map((s: any) => s.name) || [],
           services: item.services || [],
           contact_methods: item.contact_methods || [],
@@ -229,8 +286,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       const item = data as any
+      const localWA = getLocalVerifiedWA()
       const profile: ProfileWithDetails = {
         ...item,
+        whatsapp_verified: Boolean(item.whatsapp_verified || (localWA[item.id] !== undefined)),
+        whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
         skills: item.skills?.map((s: any) => s.name) || [],
         services: item.services || [],
         contact_methods: item.contact_methods || [],
@@ -257,7 +317,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       // Check if user already has an existing profile (update vs insert)
       const { data: existingProfile } = await (supabase.from('profiles') as any)
-        .select('id, slug')
+        .select('id, slug, status, whatsapp_verified, whatsapp_verified_at')
         .eq('id', userId)
         .maybeSingle()
 
@@ -270,20 +330,27 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           .replace(/^-+|-+$/g, '') + '-' + Math.random().toString(36).substring(2, 6)
       }
 
+      const targetStatus = profileData.status || existingProfile?.status || 'activo'
+
       if (existingProfile) {
         // 1. Update Profile
+        const updatePayload: any = {
+          name: profileData.name,
+          bio: profileData.bio || null,
+          provincia: profileData.provincia,
+          localidad: profileData.localidad,
+          zona_trabajo: profileData.zona_trabajo || null,
+          disponibilidad: profileData.disponibilidad || 'disponible',
+          modalidad: profileData.modalidad || 'presencial',
+          status: targetStatus,
+          updated_at: new Date().toISOString()
+        }
+        if (profileData.notify_whatsapp !== undefined) {
+          updatePayload.notify_whatsapp = profileData.notify_whatsapp
+        }
+
         const { error: profileError } = await (supabase.from('profiles') as any)
-          .update({
-            name: profileData.name,
-            bio: profileData.bio || null,
-            provincia: profileData.provincia,
-            localidad: profileData.localidad,
-            zona_trabajo: profileData.zona_trabajo || null,
-            disponibilidad: profileData.disponibilidad || 'disponible',
-            modalidad: profileData.modalidad || 'presencial',
-            status: 'activo',
-            updated_at: new Date().toISOString()
-          })
+          .update(updatePayload)
           .eq('id', userId)
 
         if (profileError) return { error: profileError.message }
@@ -294,7 +361,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         await (supabase.from('contact_methods') as any).delete().eq('profile_id', userId)
       } else {
         // 1. Insert Profile
-        const { error: profileError } = await (supabase.from('profiles') as any).insert({
+        const insertPayload: any = {
           id: userId,
           name: profileData.name,
           slug: slug,
@@ -304,8 +371,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           zona_trabajo: profileData.zona_trabajo || null,
           disponibilidad: profileData.disponibilidad || 'disponible',
           modalidad: profileData.modalidad || 'presencial',
-          status: 'activo'
-        })
+          status: targetStatus,
+          notify_whatsapp: profileData.notify_whatsapp ?? true
+        }
+
+        const { error: profileError } = await (supabase.from('profiles') as any).insert(insertPayload)
 
         if (profileError) return { error: profileError.message }
       }
@@ -358,6 +428,156 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     } catch (err: any) {
       return { error: err.message || 'Error inesperado al guardar el perfil.' }
     }
+  },
+
+  updateProfileVisibility: async (profileId, status) => {
+    try {
+      const now = new Date().toISOString()
+      try {
+        await (supabase.from('profiles') as any)
+          .update({
+            status,
+            updated_at: now,
+          })
+          .eq('id', profileId)
+      } catch (e) {
+        console.warn('Supabase profile status update error:', e)
+      }
+
+      set((s) => {
+        const updateObj = (p: ProfileWithDetails | null) =>
+          p && p.id === profileId ? { ...p, status } : p
+
+        return {
+          currentProfile: updateObj(s.currentProfile),
+          myProfile: updateObj(s.myProfile),
+          profiles: s.profiles.map((p) => (p.id === profileId ? { ...p, status } : p)),
+        }
+      })
+
+      return { error: null }
+    } catch (e: any) {
+      return { error: e.message || 'Error al actualizar visibilidad.' }
+    }
+  },
+
+  verifyWhatsApp: async (profileId, phone, _code) => {
+    try {
+      const now = new Date().toISOString()
+      // 1. Update localStorage cache
+      const localWA = getLocalVerifiedWA()
+      localWA[profileId] = { phone, at: now }
+      saveLocalVerifiedWA(localWA)
+
+      // 2. Update Supabase if possible
+      try {
+        await (supabase.from('profiles') as any)
+          .update({
+            whatsapp_verified: true,
+            whatsapp_verified_at: now,
+          })
+          .eq('id', profileId)
+      } catch (e) {
+        console.warn('Supabase whatsapp_verified update skipped:', e)
+      }
+
+      // 3. Update Zustand state
+      set((s) => {
+        const updateObj = (p: ProfileWithDetails | null) =>
+          p && p.id === profileId
+            ? { ...p, whatsapp_verified: true, whatsapp_verified_at: now }
+            : p
+
+        return {
+          currentProfile: updateObj(s.currentProfile),
+          myProfile: updateObj(s.myProfile),
+          profiles: s.profiles.map((p) =>
+            p.id === profileId
+              ? { ...p, whatsapp_verified: true, whatsapp_verified_at: now }
+              : p
+          ),
+        }
+      })
+
+      return { error: null, success: true }
+    } catch (e: any) {
+      return { error: e.message || 'Error al verificar el número de WhatsApp.' }
+    }
+  },
+
+  deleteAccount: async (profileId, payload) => {
+    try {
+      const now = new Date().toISOString()
+      const current = get().myProfile
+      const deletionRecord: AccountDeletionRecord = {
+        id: 'del-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        user_id: profileId,
+        user_email: payload.userEmail || null,
+        profile_name: current?.name || 'Perfil',
+        profile_slug: current?.slug || '',
+        reason: payload.reason,
+        explanation: payload.explanation,
+        created_at: now,
+      }
+
+      // 1. Save to local deletions
+      const localDeletions = [deletionRecord, ...getLocalDeletions()]
+      saveLocalDeletions(localDeletions)
+
+      // 2. Try saving to Supabase account_deletions table
+      try {
+        await (supabase.from('account_deletions') as any).insert({
+          id: deletionRecord.id,
+          user_id: profileId,
+          user_email: payload.userEmail || null,
+          profile_name: deletionRecord.profile_name,
+          profile_slug: deletionRecord.profile_slug,
+          reason: payload.reason,
+          explanation: payload.explanation,
+        })
+      } catch (e) {
+        console.warn('Supabase insert account_deletions skipped:', e)
+      }
+
+      // 3. Mark profile as 'eliminado' in Supabase
+      try {
+        await (supabase.from('profiles') as any)
+          .update({ status: 'eliminado', updated_at: now })
+          .eq('id', profileId)
+      } catch (e) {
+        console.warn('Supabase mark profile deleted skipped:', e)
+      }
+
+      // 4. Clear local profile state
+      set({ myProfile: null, currentProfile: null })
+
+      return { error: null, success: true }
+    } catch (e: any) {
+      return { error: e.message || 'Error al procesar la baja de la cuenta.' }
+    }
+  },
+
+  fetchAccountDeletions: async () => {
+    const local = getLocalDeletions()
+    try {
+      const { data, error } = await (supabase.from('account_deletions') as any)
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (!error && data) {
+        const dbIds = new Set(data.map((d: any) => d.id))
+        const merged = [
+          ...data,
+          ...local.filter((l) => !dbIds.has(l.id)),
+        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+        saveLocalDeletions(merged)
+        return merged
+      }
+    } catch (e) {
+      console.warn('Supabase fetchAccountDeletions failed, using cache:', e)
+    }
+    return local
   },
 
   submitRecommendation: async (profileId, data) => {

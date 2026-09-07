@@ -23,9 +23,19 @@ export default function ProfileCard({ profile }: ProfileCardProps) {
             {profile.name.charAt(0)}
           </div>
           <div className="min-w-0 flex-1 pr-14">
-            <h3 className="font-heading text-lg font-bold text-[var(--color-laburante-text)] truncate group-hover:text-[var(--color-laburante-indigo)] transition-colors">
-              {profile.name}
-            </h3>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="font-heading text-lg font-bold text-[var(--color-laburante-text)] truncate group-hover:text-[var(--color-laburante-indigo)] transition-colors">
+                {profile.name}
+              </h3>
+              {profile.whatsapp_verified && (
+                <span
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  title="Número de WhatsApp verificado por LABURANTE"
+                >
+                  ✓ Verificado
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1.5 text-xs text-[var(--color-laburante-text-secondary)] mt-0.5">
               <MapPin size={13} className="text-[var(--color-laburante-accent)] flex-shrink-0" />
               <span className="truncate">{profile.localidad}, {profile.provincia}</span>

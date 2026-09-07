@@ -17,6 +17,9 @@ export type Database = {
           disponibilidad: 'disponible' | 'ocupado' | 'no_disponible'
           modalidad: 'presencial' | 'remoto' | 'ambas'
           status: 'activo' | 'oculto' | 'suspendido' | 'eliminado'
+          whatsapp_verified?: boolean
+          whatsapp_verified_at?: string | null
+          notify_whatsapp?: boolean
           created_at: string
           updated_at: string
         }
@@ -127,6 +130,34 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['job_requests']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['job_requests']['Insert']>
       }
+      account_deletions: {
+        Row: {
+          id: string
+          user_id: string | null
+          user_email: string | null
+          profile_name: string
+          profile_slug: string
+          reason: string
+          explanation: string
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['account_deletions']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['account_deletions']['Insert']>
+      }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          message: string
+          type: 'job' | 'budget' | 'status' | 'review' | 'system'
+          link: string | null
+          read: boolean
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['notifications']['Insert']>
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -145,3 +176,6 @@ export type Skill = Database['public']['Tables']['skills']['Row']
 export type JobRequest = Database['public']['Tables']['job_requests']['Row']
 export type JobRequestStatus = JobRequest['status']
 export type JobRequestUrgency = JobRequest['urgency']
+export type AccountDeletion = Database['public']['Tables']['account_deletions']['Row']
+export type InAppNotification = Database['public']['Tables']['notifications']['Row']
+

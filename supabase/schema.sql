@@ -343,3 +343,73 @@ CREATE TRIGGER set_job_requests_updated_at
     BEFORE UPDATE ON public.job_requests
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
+
+-- ==========================================================
+-- 10. PROFILES ENHANCEMENTS (WhatsApp verification & notifications)
+-- ==========================================================
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS whatsapp_verified BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS whatsapp_verified_at TIMESTAMPTZ;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notify_whatsapp BOOLEAN NOT NULL DEFAULT true;
+
+-- ==========================================================
+-- 11. ACCOUNT DELETIONS TABLE (Registro de bajas con motivos)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.account_deletions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID,
+    user_email TEXT,
+    profile_name TEXT NOT NULL,
+    profile_slug TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    explanation TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_deletions_created ON public.account_deletions(created_at DESC);
+
+ALTER TABLE public.account_deletions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can insert account deletion" ON public.account_deletions;
+CREATE POLICY "Anyone can insert account deletion"
+    ON public.account_deletions FOR INSERT
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admins can view account deletions" ON public.account_deletions;
+CREATE POLICY "Admins can view account deletions"
+    ON public.account_deletions FOR SELECT
+    USING (true);
+
+-- ==========================================================
+-- 12. NOTIFICATIONS TABLE (Campanita de avisos y alertas)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'job' CHECK (type IN ('job', 'budget', 'status', 'review', 'system')),
+    link TEXT,
+    read BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id, read);
+
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can read their own notifications" ON public.notifications;
+CREATE POLICY "Users can read their own notifications"
+    ON public.notifications FOR SELECT
+    USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
+CREATE POLICY "Users can update their own notifications"
+    ON public.notifications FOR UPDATE
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "System can insert notifications" ON public.notifications;
+CREATE POLICY "System can insert notifications"
+    ON public.notifications FOR INSERT
+    WITH CHECK (true);
+

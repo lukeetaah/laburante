@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText } from 'lucide-react'
+import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
+import { useAuthStore } from '@/stores/auth-store'
 import ContactModal from '@/components/profile/ContactModal'
 import ReportModal from '@/components/profile/ReportModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
@@ -9,6 +10,7 @@ import JobRequestModal from '@/components/jobs/JobRequestModal'
 import { SITE_CONFIG } from '@/lib/constants'
 
 export default function ProfilePage() {
+  const { user } = useAuthStore()
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
   const [rawProfile, setRawProfile] = useState<ProfileWithDetails | null>(null)
@@ -20,6 +22,7 @@ export default function ProfilePage() {
   const [jobRequestOpen, setJobRequestOpen] = useState(false)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
+  const updateProfileVisibility = useProfileStore((s) => s.updateProfileVisibility)
   const currentProfile = useProfileStore((s) => s.currentProfile)
 
   useEffect(() => {
@@ -88,6 +91,41 @@ export default function ProfilePage() {
         Volver a la búsqueda
       </Link>
 
+      {/* Private Profile Banner */}
+      {profile.status === 'oculto' && (
+        user?.id === profile.id ? (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-start sm:items-center gap-3 text-xs sm:text-sm">
+              <EyeOff size={20} className="text-amber-700 shrink-0 mt-0.5 sm:mt-0" />
+              <div>
+                <p className="font-bold text-amber-900">Tu perfil está en modo PRIVADO / PAUSADO</p>
+                <p className="text-amber-800 text-xs mt-0.5">
+                  No aparecés en las búsquedas ni categorías de LABURANTE. Podés reactivarlo cuando quieras para volver a recibir consultas.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await updateProfileVisibility(profile.id, 'activo')
+                fetchProfileBySlug(profile.slug)
+              }}
+              className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-heading font-bold text-xs shrink-0 transition-colors shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Eye size={14} />
+              <span>Hacer público ahora</span>
+            </button>
+          </div>
+        ) : (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gray-50 border border-gray-200 text-gray-800 flex items-center gap-3 text-xs sm:text-sm">
+            <EyeOff size={20} className="text-gray-500 shrink-0" />
+            <p>
+              Este profesional ha <strong>pausado temporalmente su perfil</strong> y no está recibiendo nuevas solicitudes o consultas por el momento.
+            </p>
+          </div>
+        )
+      )}
+
       {/* Main Profile Header Card */}
       <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 md:p-10 shadow-xs relative">
         {profile.isMock && (
@@ -102,9 +140,21 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex-1 min-w-0 space-y-2">
-            <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
-              {profile.name}
-            </h1>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
+                {profile.name}
+              </h1>
+
+              {profile.whatsapp_verified && (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
+                  title="Titularidad de número de WhatsApp certificada por LABURANTE"
+                >
+                  <ShieldCheck size={14} className="text-emerald-600" />
+                  <span>WhatsApp Verificado</span>
+                </span>
+              )}
+            </div>
 
             <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs sm:text-sm text-[var(--color-laburante-text-secondary)]">
               <span className="flex items-center gap-1">
@@ -131,21 +181,25 @@ export default function ProfilePage() {
 
         {/* Action Buttons: Request Budget + Contact + Review + Share */}
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
-          <button
-            onClick={() => setJobRequestOpen(true)}
-            className="btn-dark flex-1 sm:flex-initial py-3.5 px-7 rounded-2xl font-heading font-bold text-sm transition-transform hover:scale-[1.02] shadow-md text-center flex items-center justify-center gap-2"
-            title="Aportá fotos, urgencia y recibí un presupuesto guardado en la app"
-          >
-            <FileText size={16} />
-            Pedir presupuesto directo
-          </button>
+          {profile.status !== 'oculto' && (
+            <>
+              <button
+                onClick={() => setJobRequestOpen(true)}
+                className="btn-dark flex-1 sm:flex-initial py-3.5 px-7 rounded-2xl font-heading font-bold text-sm transition-transform hover:scale-[1.02] shadow-md text-center flex items-center justify-center gap-2"
+                title="Aportá fotos, urgencia y recibí un presupuesto guardado en la app"
+              >
+                <FileText size={16} />
+                Pedir presupuesto directo
+              </button>
 
-          <button
-            onClick={() => setContactOpen(true)}
-            className="py-3.5 px-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors text-center"
-          >
-            Contactar ahora
-          </button>
+              <button
+                onClick={() => setContactOpen(true)}
+                className="py-3.5 px-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors text-center"
+              >
+                Contactar ahora
+              </button>
+            </>
+          )}
 
           <button
             onClick={() => setRecommendationOpen(true)}

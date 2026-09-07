@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase } from 'lucide-react'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -82,8 +83,10 @@ export default function Header() {
           </Link>
         </nav>
 
-        {/* Auth + Admin + Mobile Toggle */}
-        <div className="flex items-center gap-3">
+        {/* Auth + Admin + Notifications + Mobile Toggle */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <NotificationBell />
+
           {isAdmin && (
             <Link
               to="/admin"
