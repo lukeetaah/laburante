@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import LuksonUniverse from '@/components/lukson/LuksonUniverse'
+import ContactForm from '@/components/layout/ContactForm'
 import { SITE_CONFIG } from '@/lib/constants'
 
 export default function Footer() {
@@ -8,18 +9,30 @@ export default function Footer() {
       {/* Main Footer — LABURANTE info */}
       <div className="border-t border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
         <div className="container py-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
             {/* Brand */}
-            <div className="md:col-span-1">
+            <div className="md:col-span-3">
               <span className="font-heading text-lg font-bold">{SITE_CONFIG.name}</span>
               <p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
                 Personas que saben hacer cosas.<br />
                 Personas que necesitan que se hagan.
               </p>
+              <p className="mt-3 text-xs text-[var(--color-laburante-text-muted)]">
+                Una creación de{' '}
+                <a
+                  href={SITE_CONFIG.originUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:text-[var(--color-laburante-text)] font-medium"
+                >
+                  {SITE_CONFIG.origin}
+                </a>
+                .
+              </p>
             </div>
 
             {/* Links */}
-            <div>
+            <div className="md:col-span-2">
               <h4 className="font-heading text-sm font-semibold mb-3">Para vos</h4>
               <ul className="space-y-2 text-sm text-[var(--color-laburante-text-secondary)]">
                 <li><Link to="/como-funciona" className="hover:text-[var(--color-laburante-text)] transition-colors">Cómo funciona</Link></li>
@@ -29,7 +42,8 @@ export default function Footer() {
               </ul>
             </div>
 
-            <div>
+            {/* Legal */}
+            <div className="md:col-span-2">
               <h4 className="font-heading text-sm font-semibold mb-3">Legal</h4>
               <ul className="space-y-2 text-sm text-[var(--color-laburante-text-secondary)]">
                 <li><Link to="/terminos" className="hover:text-[var(--color-laburante-text)] transition-colors">Términos y condiciones</Link></li>
@@ -37,11 +51,9 @@ export default function Footer() {
               </ul>
             </div>
 
-            <div>
-              <h4 className="font-heading text-sm font-semibold mb-3">Contacto</h4>
-              <ul className="space-y-2 text-sm text-[var(--color-laburante-text-secondary)]">
-                <li>{SITE_CONFIG.contact.email}</li>
-              </ul>
+            {/* Contacto / Tu voz (Formspree + opción anónima como en MI MANDATO) */}
+            <div className="md:col-span-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/60 p-5 shadow-xs">
+              <ContactForm />
             </div>
           </div>
 

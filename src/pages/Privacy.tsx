@@ -81,8 +81,8 @@ export default function Privacy() {
             <li><strong>Solicitar la supresión</strong> definitiva de tu cuenta y todos los datos asociados a tu perfil.</li>
           </ul>
           <p>
-            Podés ejercer estos derechos directamente desde tu cuenta o enviando un correo a{' '}
-            <strong className="text-[var(--color-laburante-text)]">contacto@laburante.com.ar</strong> con el asunto "Derechos de Datos Personales".
+            Podés ejercer estos derechos directamente desde tu cuenta o enviando un mensaje a través del{' '}
+            <strong className="text-[var(--color-laburante-text)]">formulario de contacto al pie de página</strong> indicando "Derechos de Datos Personales".
           </p>
         </section>
 

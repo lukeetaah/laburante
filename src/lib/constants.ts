@@ -10,7 +10,7 @@ export const SITE_CONFIG = {
   origin: 'Lukson Arts',
   originUrl: 'https://luksonarts.vercel.app',
   contact: {
-    email: 'contacto@laburante.com.ar',
+    formspreeUrl: 'https://formspree.io/f/mkoyzjoy',
   },
 } as const
 

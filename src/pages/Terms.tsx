@@ -100,8 +100,8 @@ export default function Terms() {
             Estos términos podrán actualizarse para acompañar el crecimiento del proyecto o modificaciones normativas. Las versiones actualizadas estarán siempre disponibles en esta misma sección.
           </p>
           <p>
-            Por consultas o denuncias legales podés escribirnos a:{' '}
-            <strong className="text-[var(--color-laburante-text)]">contacto@laburante.com.ar</strong>
+            Por consultas o inquietudes podés escribirnos directamente a través del{' '}
+            <strong className="text-[var(--color-laburante-text)]">formulario de contacto disponible al pie de página</strong>.
           </p>
         </section>
       </div>
