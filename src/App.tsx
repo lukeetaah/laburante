@@ -15,6 +15,7 @@ import Terms from '@/pages/Terms'
 import Privacy from '@/pages/Privacy'
 import HowItWorks from '@/pages/HowItWorks'
 import NotFound from '@/pages/NotFound'
+import { Analytics } from '@vercel/analytics/react'
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
+      <Analytics />
     </BrowserRouter>
   )
 }
