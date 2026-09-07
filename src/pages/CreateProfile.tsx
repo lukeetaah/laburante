@@ -35,8 +35,19 @@ export default function CreateProfile() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (user?.user_metadata?.name) {
-      setName(user.user_metadata.name)
+    if (user?.user_metadata) {
+      if (user.user_metadata.name && !name) {
+        setName(user.user_metadata.name)
+      }
+      if (user.user_metadata.provincia) {
+        setProvincia(user.user_metadata.provincia)
+      }
+      if (user.user_metadata.localidad && !localidad) {
+        setLocalidad(user.user_metadata.localidad)
+      }
+      if (user.user_metadata.phone && contactMethods.length === 1 && !contactMethods[0].value) {
+        setContactMethods([{ type: 'whatsapp', value: user.user_metadata.phone }])
+      }
     }
   }, [user])
 
@@ -158,6 +169,20 @@ export default function CreateProfile() {
       {error && (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">
           {error}
+        </div>
+      )}
+
+      {typeof window !== 'undefined' && (window.location.search.includes('confirmed=true') || window.location.hash.includes('access_token')) && (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-start gap-3">
+          <CheckCircle2 size={22} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs sm:text-sm space-y-1">
+            <p className="font-bold">
+              ¡Tu correo electrónico ha sido verificado con éxito!
+            </p>
+            <p className="text-emerald-800 leading-relaxed">
+              Ya precargamos los datos iniciales de tu cuenta. Completá tu presentación, habilidades y confirmá el consentimiento de contacto para que tu perfil quede publicado en LABURANTE.
+            </p>
+          </div>
         </div>
       )}
 

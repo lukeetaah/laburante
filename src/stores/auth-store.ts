@@ -47,10 +47,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signUp: async (email, password, metadata) => {
+    const redirectUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/crear-perfil?confirmed=true`
+      : undefined
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo: redirectUrl,
         data: {
           name: metadata.name,
           phone: metadata.phone || '',
