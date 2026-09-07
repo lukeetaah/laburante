@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus } from 'lucide-react'
+import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import ContactModal from '@/components/profile/ContactModal'
 import ReportModal from '@/components/profile/ReportModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
+import JobRequestModal from '@/components/jobs/JobRequestModal'
 import { SITE_CONFIG } from '@/lib/constants'
 
 export default function ProfilePage() {
@@ -16,6 +17,7 @@ export default function ProfilePage() {
   const [contactOpen, setContactOpen] = useState(searchParams.get('contacto') === '1' || searchParams.get('contacto') === 'true')
   const [reportOpen, setReportOpen] = useState(false)
   const [recommendationOpen, setRecommendationOpen] = useState(false)
+  const [jobRequestOpen, setJobRequestOpen] = useState(false)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
   const currentProfile = useProfileStore((s) => s.currentProfile)
@@ -127,30 +129,39 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Action Buttons: Contact + Review + Share */}
+        {/* Action Buttons: Request Budget + Contact + Review + Share */}
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
           <button
+            onClick={() => setJobRequestOpen(true)}
+            className="btn-dark flex-1 sm:flex-initial py-3.5 px-7 rounded-2xl font-heading font-bold text-sm transition-transform hover:scale-[1.02] shadow-md text-center flex items-center justify-center gap-2"
+            title="Aportá fotos, urgencia y recibí un presupuesto guardado en la app"
+          >
+            <FileText size={16} />
+            Pedir presupuesto directo
+          </button>
+
+          <button
             onClick={() => setContactOpen(true)}
-            className="btn-dark flex-1 sm:flex-initial py-3.5 px-8 rounded-2xl font-heading font-bold text-sm transition-transform hover:scale-[1.02] shadow-md text-center"
+            className="py-3.5 px-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors text-center"
           >
             Contactar ahora
           </button>
 
           <button
             onClick={() => setRecommendationOpen(true)}
-            className="py-3.5 px-5 rounded-2xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-amber-900 font-heading font-semibold text-xs sm:text-sm transition-colors flex items-center gap-2"
+            className="py-3.5 px-4 rounded-2xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-amber-900 font-heading font-semibold text-xs transition-colors flex items-center gap-1.5"
             title="Dejar una reseña o recomendación tras finalizar un trabajo"
           >
-            <Star size={16} className="text-amber-500 fill-amber-500" />
+            <Star size={15} className="text-amber-500 fill-amber-500" />
             Dejar reseña
           </button>
 
           <button
             onClick={handleShare}
-            className="py-3.5 px-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors flex items-center gap-2"
+            className="py-3.5 px-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs transition-colors flex items-center gap-1.5"
           >
-            {copied ? <Check size={16} className="text-emerald-600" /> : <Share2 size={16} />}
-            {copied ? '¡Enlace copiado!' : 'Copiar enlace'}
+            {copied ? <Check size={15} className="text-emerald-600" /> : <Share2 size={15} />}
+            {copied ? 'Copiado' : 'Compartir'}
           </button>
 
           <button
@@ -343,6 +354,14 @@ export default function ProfilePage() {
         onClose={() => setRecommendationOpen(false)}
         profileId={profile.id}
         profileName={profile.name}
+      />
+
+      <JobRequestModal
+        isOpen={jobRequestOpen}
+        onClose={() => setJobRequestOpen(false)}
+        profileId={profile.id}
+        profileName={profile.name}
+        profileSlug={profile.slug}
       />
     </div>
   )

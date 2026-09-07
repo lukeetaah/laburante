@@ -14,6 +14,7 @@ import Admin from '@/pages/Admin'
 import Terms from '@/pages/Terms'
 import Privacy from '@/pages/Privacy'
 import HowItWorks from '@/pages/HowItWorks'
+import OrdersDashboard from '@/pages/OrdersDashboard'
 import NotFound from '@/pages/NotFound'
 import { Analytics } from '@vercel/analytics/react'
 
@@ -33,6 +34,8 @@ export default function App() {
           <Route path="p/:slug" element={<ProfilePage />} />
           <Route path="categorias" element={<Categories />} />
           <Route path="categorias/:slug" element={<CategoryPage />} />
+          <Route path="mis-trabajos" element={<OrdersDashboard />} />
+          <Route path="pedidos" element={<OrdersDashboard />} />
           <Route path="ingresar" element={<Login />} />
           <Route path="registrar" element={<Register />} />
           <Route path="crear-perfil" element={<CreateProfile />} />

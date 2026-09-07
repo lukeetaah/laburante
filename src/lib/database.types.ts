@@ -101,6 +101,32 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['reports']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['reports']['Insert']>
       }
+      job_requests: {
+        Row: {
+          id: string
+          client_id: string | null
+          client_name: string
+          client_contact: string
+          client_location: string | null
+          profile_id: string
+          title: string
+          description: string
+          urgency: 'urgente' | 'esta_semana' | 'proximos_dias' | 'a_coordinar'
+          preferred_date: string | null
+          photos: string[]
+          status: 'solicitado' | 'presupuestado' | 'aceptado' | 'en_progreso' | 'completado' | 'cancelado'
+          budget_amount: string | null
+          budget_details: string | null
+          budget_estimated_time: string | null
+          budget_created_at: string | null
+          cancel_reason: string | null
+          cancelled_by: 'cliente' | 'profesional' | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['job_requests']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['job_requests']['Insert']>
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -116,3 +142,6 @@ export type Recommendation = Database['public']['Tables']['recommendations']['Ro
 export type Report = Database['public']['Tables']['reports']['Row']
 export type Service = Database['public']['Tables']['services']['Row']
 export type Skill = Database['public']['Tables']['skills']['Row']
+export type JobRequest = Database['public']['Tables']['job_requests']['Row']
+export type JobRequestStatus = JobRequest['status']
+export type JobRequestUrgency = JobRequest['urgency']

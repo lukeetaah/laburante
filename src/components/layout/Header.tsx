@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
-import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert } from 'lucide-react'
+import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase } from 'lucide-react'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -51,6 +51,17 @@ export default function Header() {
             }`}
           >
             Categorías
+          </Link>
+          <Link
+            to="/mis-trabajos"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isActive('/mis-trabajos') || isActive('/pedidos')
+                ? 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)]'
+                : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]'
+            }`}
+          >
+            <Briefcase size={16} />
+            Mis Trabajos
           </Link>
           <Link
             to="/como-funciona"
@@ -138,6 +149,9 @@ export default function Header() {
           </Link>
           <Link to="/categorias" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             Categorías
+          </Link>
+          <Link to="/mis-trabajos" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
+            <Briefcase size={16} /> Mis Trabajos
           </Link>
           <Link to="/como-funciona" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             Cómo funciona

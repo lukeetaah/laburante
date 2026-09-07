@@ -282,3 +282,64 @@ CREATE TRIGGER set_profiles_updated_at
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
+
+-- ==========================================================
+-- 9. JOB REQUESTS & BUDGETS TABLE (Pedidos y Presupuestos)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.job_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    client_name TEXT NOT NULL,
+    client_contact TEXT NOT NULL,
+    client_location TEXT,
+    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    urgency TEXT NOT NULL DEFAULT 'esta_semana' CHECK (urgency IN ('urgente', 'esta_semana', 'proximos_dias', 'a_coordinar')),
+    preferred_date TEXT,
+    photos TEXT[] DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'solicitado' CHECK (status IN ('solicitado', 'presupuestado', 'aceptado', 'en_progreso', 'completado', 'cancelado')),
+    budget_amount TEXT,
+    budget_details TEXT,
+    budget_estimated_time TEXT,
+    budget_created_at TIMESTAMPTZ,
+    cancel_reason TEXT,
+    cancelled_by TEXT CHECK (cancelled_by IN ('cliente', 'profesional')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- INDEXES FOR JOB REQUESTS
+CREATE INDEX IF NOT EXISTS idx_job_requests_profile ON public.job_requests(profile_id);
+CREATE INDEX IF NOT EXISTS idx_job_requests_client ON public.job_requests(client_id);
+CREATE INDEX IF NOT EXISTS idx_job_requests_status ON public.job_requests(status);
+
+-- RLS FOR JOB REQUESTS
+ALTER TABLE public.job_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Clients read own requests" ON public.job_requests;
+CREATE POLICY "Clients read own requests"
+    ON public.job_requests FOR SELECT
+    USING (auth.uid() = client_id);
+
+DROP POLICY IF EXISTS "Pros read requests for their profile" ON public.job_requests;
+CREATE POLICY "Pros read requests for their profile"
+    ON public.job_requests FOR SELECT
+    USING (auth.uid() = profile_id);
+
+DROP POLICY IF EXISTS "Anyone can insert job request" ON public.job_requests;
+CREATE POLICY "Anyone can insert job request"
+    ON public.job_requests FOR INSERT
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Clients and Pros update own job request" ON public.job_requests;
+CREATE POLICY "Clients and Pros update own job request"
+    ON public.job_requests FOR UPDATE
+    USING (auth.uid() = client_id OR auth.uid() = profile_id)
+    WITH CHECK (auth.uid() = client_id OR auth.uid() = profile_id);
+
+DROP TRIGGER IF EXISTS set_job_requests_updated_at ON public.job_requests;
+CREATE TRIGGER set_job_requests_updated_at
+    BEFORE UPDATE ON public.job_requests
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();

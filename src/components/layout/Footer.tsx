@@ -37,6 +37,7 @@ export default function Footer() {
               <ul className="space-y-2 text-sm text-[var(--color-laburante-text-secondary)]">
                 <li><Link to="/como-funciona" className="hover:text-[var(--color-laburante-text)] transition-colors">Cómo funciona</Link></li>
                 <li><Link to="/buscar" className="hover:text-[var(--color-laburante-text)] transition-colors">Buscar personas</Link></li>
+                <li><Link to="/mis-trabajos" className="hover:text-[var(--color-laburante-text)] transition-colors">Mis Trabajos y Pedidos</Link></li>
                 <li><Link to="/categorias" className="hover:text-[var(--color-laburante-text)] transition-colors">Categorías</Link></li>
                 <li><Link to="/crear-perfil" className="hover:text-[var(--color-laburante-text)] transition-colors">Ofrecer tu trabajo</Link></li>
               </ul>
