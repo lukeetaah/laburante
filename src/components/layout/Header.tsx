@@ -1,11 +1,11 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
-import { Menu, X, Search, UserPlus, LogIn, LogOut, User } from 'lucide-react'
+import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert } from 'lucide-react'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { user, signOut } = useAuthStore()
+  const { user, isAdmin, signOut } = useAuthStore()
   const location = useLocation()
 
   const isActive = (path: string) => location.pathname === path
@@ -52,17 +52,28 @@ export default function Header() {
           </Link>
         </nav>
 
-        {/* Auth + Mobile Toggle */}
+        {/* Auth + Admin + Mobile Toggle */}
         <div className="flex items-center gap-3">
+          {isAdmin && (
+            <Link
+              to="/admin"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+            >
+              <ShieldAlert size={14} />
+              Admin
+            </Link>
+          )}
+
           {user ? (
             <div className="hidden md:flex items-center gap-3">
-              <Link to="/crear-perfil" className="flex items-center gap-2 text-sm text-[var(--color-laburante-text-secondary)]">
+              <Link to="/crear-perfil" className="flex items-center gap-2 text-sm text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]">
                 <User size={16} />
                 Mi perfil
               </Link>
               <button
                 onClick={() => signOut()}
                 className="flex items-center gap-2 text-sm text-[var(--color-laburante-text-muted)] hover:text-[var(--color-laburante-text)]"
+                title="Cerrar sesión"
               >
                 <LogOut size={16} />
               </button>
@@ -76,6 +87,7 @@ export default function Header() {
               Ingresar
             </Link>
           )}
+
           <button
             onClick={() => setMenuOpen(!menuOpen)}
             className="md:hidden p-2 rounded-lg hover:bg-[var(--color-laburante-surface-alt)]"
@@ -98,6 +110,11 @@ export default function Header() {
           <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-accent)] font-medium">
             <UserPlus size={16} /> Ofrecer mi trabajo
           </Link>
+          {isAdmin && (
+            <Link to="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-indigo-700 font-bold bg-indigo-50/70">
+              <ShieldAlert size={16} /> Panel de Administración
+            </Link>
+          )}
           <hr className="border-[var(--color-laburante-border)]" />
           {user ? (
             <>

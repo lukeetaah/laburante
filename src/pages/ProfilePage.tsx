@@ -124,7 +124,7 @@ export default function ProfilePage() {
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
           <button
             onClick={() => setContactOpen(true)}
-            className="flex-1 sm:flex-initial py-3.5 px-8 rounded-2xl bg-[var(--color-laburante-text)] text-white font-heading font-bold text-sm hover:bg-black transition-transform hover:scale-[1.02] shadow-md text-center"
+            className="btn-dark flex-1 sm:flex-initial py-3.5 px-8 rounded-2xl font-heading font-bold text-sm transition-transform hover:scale-[1.02] shadow-md text-center"
           >
             Contactar ahora
           </button>

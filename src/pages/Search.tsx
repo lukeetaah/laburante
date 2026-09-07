@@ -168,7 +168,7 @@ export default function Search() {
             <button
               type="button"
               onClick={() => handleApplyFilters()}
-              className="w-full py-2.5 px-4 rounded-xl bg-[var(--color-laburante-text)] text-white font-heading font-semibold text-xs hover:bg-black transition-colors"
+              className="btn-dark w-full py-2.5 px-4 rounded-xl font-heading font-semibold text-xs shadow-xs"
             >
               Aplicar filtros
             </button>
@@ -260,7 +260,7 @@ export default function Search() {
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link
                   to="/crear-perfil"
-                  className="px-5 py-2.5 rounded-xl bg-[var(--color-laburante-text)] text-white text-xs font-heading font-semibold hover:bg-black transition-colors"
+                  className="btn-dark px-5 py-2.5 rounded-xl text-xs font-heading font-semibold shadow-xs"
                 >
                   Ofrecer mi trabajo gratis
                 </Link>
@@ -339,7 +339,7 @@ export default function Search() {
               <button
                 type="button"
                 onClick={() => handleApplyFilters()}
-                className="flex-1 py-3 rounded-xl bg-[var(--color-laburante-text)] text-white text-sm font-semibold"
+                className="btn-dark flex-1 py-3 rounded-xl text-sm font-semibold shadow-xs"
               >
                 Aplicar
               </button>

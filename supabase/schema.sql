@@ -224,10 +224,31 @@ CREATE POLICY "Anyone can create recommendation"
     ON public.recommendations FOR INSERT
     WITH CHECK (true);
 
--- Reports: Anyone can submit a report; read only for authorized roles
+-- Reports: Anyone can submit a report; read and update only for administrators
 CREATE POLICY "Anyone can submit report"
     ON public.reports FOR INSERT
     WITH CHECK (true);
+
+CREATE POLICY "Admins can read all reports"
+    ON public.reports FOR SELECT
+    USING (
+        (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
+        (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    );
+
+CREATE POLICY "Admins can update reports"
+    ON public.reports FOR UPDATE
+    USING (
+        (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
+        (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    );
+
+CREATE POLICY "Admins can update any profile"
+    ON public.profiles FOR UPDATE
+    USING (
+        (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
+        (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    );
 
 -- Trigger for updating updated_at timestamp
 CREATE OR REPLACE FUNCTION public.handle_updated_at()

@@ -77,9 +77,9 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 rounded-xl bg-[var(--color-laburante-text)] text-white font-heading font-semibold text-sm hover:bg-black transition-colors disabled:opacity-50"
+            className="btn-dark w-full py-3.5 px-4 rounded-xl font-heading font-bold text-sm transition-all hover:scale-[1.01] shadow-md disabled:opacity-50"
           >
-            {loading ? 'Ingresando...' : 'Ingresar'}
+            {loading ? 'Ingresando...' : 'Ingresar a mi cuenta'}
           </button>
         </form>
 

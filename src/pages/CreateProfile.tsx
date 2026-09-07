@@ -176,7 +176,7 @@ export default function CreateProfile() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ej: Lucas Correa o Taller Morales"
+              placeholder="ej: Juan Pérez o Taller San Martín"
               required
               className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent focus:ring-2 focus:ring-[var(--color-laburante-indigo)]"
             />
@@ -452,7 +452,7 @@ export default function CreateProfile() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-4 px-6 rounded-2xl bg-[var(--color-laburante-text)] text-white font-heading font-bold text-base hover:bg-black transition-all shadow-md disabled:opacity-50"
+            className="btn-dark w-full py-4 px-6 rounded-2xl font-heading font-bold text-base transition-all shadow-md disabled:opacity-50"
           >
             {submitting ? 'Publicando perfil...' : 'Publicar mi perfil en LABURANTE'}
           </button>

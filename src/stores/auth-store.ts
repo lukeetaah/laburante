@@ -2,32 +2,63 @@ import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
 
+export interface SignUpMetadata {
+  name: string
+  phone?: string
+  provincia?: string
+  localidad?: string
+  intent?: 'ofrecer' | 'buscar' | 'ambas'
+  role?: string
+}
+
 interface AuthState {
   user: User | null
   session: Session | null
   loading: boolean
+  isAdmin: boolean
   setSession: (session: Session | null) => void
-  signUp: (email: string, password: string, name: string) => Promise<{ error: string | null }>
+  signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: string | null }>
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   initialize: () => Promise<void>
+}
+
+const checkIsAdmin = (user: User | null): boolean => {
+  if (!user) return false
+  const userRole = user.user_metadata?.role
+  const appRole = (user as any).app_metadata?.role
+  return userRole === 'admin' || appRole === 'admin'
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   session: null,
   loading: true,
+  isAdmin: false,
 
   setSession: (session) => {
-    set({ session, user: session?.user ?? null, loading: false })
+    const user = session?.user ?? null
+    set({
+      session,
+      user,
+      isAdmin: checkIsAdmin(user),
+      loading: false,
+    })
   },
 
-  signUp: async (email, password, name) => {
+  signUp: async (email, password, metadata) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { name },
+        data: {
+          name: metadata.name,
+          phone: metadata.phone || '',
+          provincia: metadata.provincia || '',
+          localidad: metadata.localidad || '',
+          intent: metadata.intent || 'ofrecer',
+          role: 'user', // Default role; user can upgrade to 'admin' in Supabase dashboard
+        },
       },
     })
     if (error) return { error: error.message }
@@ -42,15 +73,27 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signOut: async () => {
     await supabase.auth.signOut()
-    set({ user: null, session: null })
+    set({ user: null, session: null, isAdmin: false })
   },
 
   initialize: async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    set({ session, user: session?.user ?? null, loading: false })
+    const user = session?.user ?? null
+    set({
+      session,
+      user,
+      isAdmin: checkIsAdmin(user),
+      loading: false,
+    })
 
     supabase.auth.onAuthStateChange((_event, session) => {
-      set({ session, user: session?.user ?? null, loading: false })
+      const u = session?.user ?? null
+      set({
+        session,
+        user: u,
+        isAdmin: checkIsAdmin(u),
+        loading: false,
+      })
     })
   },
 }))

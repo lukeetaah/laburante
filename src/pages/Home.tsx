@@ -42,7 +42,7 @@ export default function Home() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
             <Link
               to="/buscar"
-              className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-[var(--color-laburante-text)] text-white font-heading font-semibold text-base shadow-lg hover:bg-black transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+              className="btn-dark w-full sm:w-auto px-8 py-4 rounded-2xl font-heading font-bold text-base shadow-lg transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
             >
               Estoy buscando a alguien
               <ArrowRight size={18} />
