@@ -152,55 +152,66 @@ ALTER TABLE public.recommendations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: Public can read active profiles; owners can read/update their own
+DROP POLICY IF EXISTS "Public read active profiles" ON public.profiles;
 CREATE POLICY "Public read active profiles"
     ON public.profiles FOR SELECT
     USING (status = 'activo' OR auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile"
     ON public.profiles FOR INSERT
     WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
     ON public.profiles FOR UPDATE
     USING (auth.uid() = id)
     WITH CHECK (auth.uid() = id);
 
 -- Categories: Anyone can read categories
+DROP POLICY IF EXISTS "Public read categories" ON public.categories;
 CREATE POLICY "Public read categories"
     ON public.categories FOR SELECT
     USING (true);
 
 -- Profile Categories: Anyone can read; owners can modify
+DROP POLICY IF EXISTS "Public read profile_categories" ON public.profile_categories;
 CREATE POLICY "Public read profile_categories"
     ON public.profile_categories FOR SELECT
     USING (true);
 
+DROP POLICY IF EXISTS "Owner manage profile_categories" ON public.profile_categories;
 CREATE POLICY "Owner manage profile_categories"
     ON public.profile_categories FOR ALL
     USING (auth.uid() = profile_id)
     WITH CHECK (auth.uid() = profile_id);
 
 -- Skills: Anyone can read; owners can modify
+DROP POLICY IF EXISTS "Public read skills" ON public.skills;
 CREATE POLICY "Public read skills"
     ON public.skills FOR SELECT
     USING (true);
 
+DROP POLICY IF EXISTS "Owner manage skills" ON public.skills;
 CREATE POLICY "Owner manage skills"
     ON public.skills FOR ALL
     USING (auth.uid() = profile_id)
     WITH CHECK (auth.uid() = profile_id);
 
 -- Services: Anyone can read; owners can modify
+DROP POLICY IF EXISTS "Public read services" ON public.services;
 CREATE POLICY "Public read services"
     ON public.services FOR SELECT
     USING (true);
 
+DROP POLICY IF EXISTS "Owner manage services" ON public.services;
 CREATE POLICY "Owner manage services"
     ON public.services FOR ALL
     USING (auth.uid() = profile_id)
     WITH CHECK (auth.uid() = profile_id);
 
 -- Contact Methods: Only public if is_public = true AND profile is active; owner can read and edit all
+DROP POLICY IF EXISTS "Public read public contact methods" ON public.contact_methods;
 CREATE POLICY "Public read public contact methods"
     ON public.contact_methods FOR SELECT
     USING (
@@ -210,25 +221,30 @@ CREATE POLICY "Public read public contact methods"
         OR auth.uid() = profile_id
     );
 
+DROP POLICY IF EXISTS "Owner manage contact methods" ON public.contact_methods;
 CREATE POLICY "Owner manage contact methods"
     ON public.contact_methods FOR ALL
     USING (auth.uid() = profile_id)
     WITH CHECK (auth.uid() = profile_id);
 
 -- Recommendations: Anyone can read visible recommendations
+DROP POLICY IF EXISTS "Public read visible recommendations" ON public.recommendations;
 CREATE POLICY "Public read visible recommendations"
     ON public.recommendations FOR SELECT
     USING (status = 'visible');
 
+DROP POLICY IF EXISTS "Anyone can create recommendation" ON public.recommendations;
 CREATE POLICY "Anyone can create recommendation"
     ON public.recommendations FOR INSERT
     WITH CHECK (true);
 
 -- Reports: Anyone can submit a report; read and update only for administrators
+DROP POLICY IF EXISTS "Anyone can submit report" ON public.reports;
 CREATE POLICY "Anyone can submit report"
     ON public.reports FOR INSERT
     WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Admins can read all reports" ON public.reports;
 CREATE POLICY "Admins can read all reports"
     ON public.reports FOR SELECT
     USING (
@@ -236,6 +252,7 @@ CREATE POLICY "Admins can read all reports"
         (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     );
 
+DROP POLICY IF EXISTS "Admins can update reports" ON public.reports;
 CREATE POLICY "Admins can update reports"
     ON public.reports FOR UPDATE
     USING (
@@ -243,6 +260,7 @@ CREATE POLICY "Admins can update reports"
         (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     );
 
+DROP POLICY IF EXISTS "Admins can update any profile" ON public.profiles;
 CREATE POLICY "Admins can update any profile"
     ON public.profiles FOR UPDATE
     USING (
