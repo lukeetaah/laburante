@@ -68,9 +68,19 @@ export default function Admin() {
       if (reportsData) setReports(reportsData)
 
       // 2. Fetch all Profiles
-      const { data: profilesData } = await (supabase.from('profiles') as any)
+      let profilesData: any[] | null = null
+      const resProfiles = await (supabase.from('profiles') as any)
         .select('id, name, slug, provincia, localidad, status, disponibilidad, created_at, whatsapp_verified, whatsapp_verified_at')
         .order('created_at', { ascending: false })
+
+      if (resProfiles.error) {
+        const resFallback = await (supabase.from('profiles') as any)
+          .select('id, name, slug, provincia, localidad, status, disponibilidad, created_at')
+          .order('created_at', { ascending: false })
+        profilesData = resFallback.data
+      } else {
+        profilesData = resProfiles.data
+      }
 
       // Local WhatsApp cache hydration
       let localWA: Record<string, any> = {}

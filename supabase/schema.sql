@@ -416,9 +416,13 @@ CREATE POLICY "System can insert notifications"
 -- ==========================================================
 -- 13. WHATSAPP VERIFICATION REQUESTS TABLE (Verificaciones reales)
 -- ==========================================================
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS whatsapp_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS whatsapp_verified_at TIMESTAMPTZ;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notify_whatsapp BOOLEAN DEFAULT FALSE;
+
 CREATE TABLE IF NOT EXISTS public.whatsapp_verification_requests (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profile_id UUID NOT NULL,
     profile_name TEXT NOT NULL,
     profile_slug TEXT NOT NULL,
     phone_declared TEXT NOT NULL,
@@ -447,5 +451,6 @@ DROP POLICY IF EXISTS "Admins and system can update verification requests" ON pu
 CREATE POLICY "Admins and system can update verification requests"
     ON public.whatsapp_verification_requests FOR UPDATE
     USING (true);
+
 
 

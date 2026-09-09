@@ -141,6 +141,17 @@ function saveLocalWARequests(data: WhatsAppVerificationRequest[]) {
   } catch {}
 }
 
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
   currentProfile: null,
@@ -543,7 +554,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     try {
       const codeDigits = Math.floor(100000 + Math.random() * 900000).toString()
       const code = `LAB-${codeDigits}`
-      const requestId = 'wareq-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
+      const requestId = generateUUID()
       const now = new Date().toISOString()
 
       const newReq: WhatsAppVerificationRequest = {
@@ -566,7 +577,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       // 2. Try Supabase
       try {
-        await (supabase.from('whatsapp_verification_requests') as any).insert({
+        const { data: inserted, error: insErr } = await (supabase.from('whatsapp_verification_requests') as any).insert({
           id: requestId,
           profile_id: profileId,
           profile_name: profileName,
@@ -575,7 +586,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           code,
           status: 'pendiente',
           created_at: now,
-        })
+        }).select().maybeSingle()
+
+        if (insErr) {
+          console.warn('Supabase insert whatsapp_verification_requests notice:', insErr.message)
+        } else if (inserted?.id) {
+          newReq.id = inserted.id
+        }
       } catch (e) {
         console.warn('Supabase insert whatsapp_verification_requests skipped:', e)
       }
@@ -584,7 +601,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         error: null,
         code,
         officialPhone: SITE_CONFIG.officialWhatsApp,
-        requestId,
+        requestId: newReq.id,
       }
     } catch (e: any) {
       return {
