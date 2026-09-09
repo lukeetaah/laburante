@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import { DEV_MOCK_PROFILES } from '@/lib/mock-fixtures'
+import type { WhatsAppVerificationRequest } from '@/lib/database.types'
+import { SITE_CONFIG } from '@/lib/constants'
 
 export interface ProfileWithDetails {
   id: string
@@ -68,6 +70,21 @@ interface ProfileState {
   createProfile: (profileData: any) => Promise<{ error: string | null; slug?: string }>
   updateProfileVisibility: (profileId: string, status: 'activo' | 'oculto') => Promise<{ error: string | null }>
   verifyWhatsApp: (profileId: string, phone: string, code: string) => Promise<{ error: string | null; success?: boolean }>
+  requestWhatsAppVerification: (
+    profileId: string,
+    profileName: string,
+    profileSlug: string,
+    phoneDeclared: string
+  ) => Promise<{ error: string | null; code?: string; officialPhone: string; requestId?: string }>
+  fetchPendingWhatsAppVerifications: () => Promise<WhatsAppVerificationRequest[]>
+  adminApproveWhatsAppVerification: (
+    requestId: string,
+    profileId: string,
+    phone: string
+  ) => Promise<{ error: string | null }>
+  adminRejectWhatsAppVerification: (
+    requestId: string
+  ) => Promise<{ error: string | null }>
   deleteAccount: (profileId: string, payload: { reason: string; explanation: string; userEmail?: string }) => Promise<{ error: string | null; success?: boolean }>
   fetchAccountDeletions: () => Promise<AccountDeletionRecord[]>
   submitRecommendation: (profileId: string, data: { from_name: string; text: string; context?: string }) => Promise<{ error: string | null }>
@@ -104,6 +121,23 @@ function getLocalDeletions(): AccountDeletionRecord[] {
 function saveLocalDeletions(data: AccountDeletionRecord[]) {
   try {
     localStorage.setItem(DELETIONS_KEY, JSON.stringify(data))
+  } catch {}
+}
+
+const WA_REQUESTS_KEY = 'laburante_wa_verification_requests'
+
+function getLocalWARequests(): WhatsAppVerificationRequest[] {
+  try {
+    const raw = localStorage.getItem(WA_REQUESTS_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveLocalWARequests(data: WhatsAppVerificationRequest[]) {
+  try {
+    localStorage.setItem(WA_REQUESTS_KEY, JSON.stringify(data))
   } catch {}
 }
 
@@ -502,6 +536,183 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       return { error: null, success: true }
     } catch (e: any) {
       return { error: e.message || 'Error al verificar el número de WhatsApp.' }
+    }
+  },
+
+  requestWhatsAppVerification: async (profileId, profileName, profileSlug, phoneDeclared) => {
+    try {
+      const codeDigits = Math.floor(100000 + Math.random() * 900000).toString()
+      const code = `LAB-${codeDigits}`
+      const requestId = 'wareq-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
+      const now = new Date().toISOString()
+
+      const newReq: WhatsAppVerificationRequest = {
+        id: requestId,
+        profile_id: profileId,
+        profile_name: profileName,
+        profile_slug: profileSlug,
+        phone_declared: phoneDeclared,
+        code,
+        status: 'pendiente',
+        reviewed_at: null,
+        created_at: now,
+      }
+
+      // 1. Save local
+      const existing = getLocalWARequests().filter(
+        (r) => !(r.profile_id === profileId && r.status === 'pendiente')
+      )
+      saveLocalWARequests([newReq, ...existing])
+
+      // 2. Try Supabase
+      try {
+        await (supabase.from('whatsapp_verification_requests') as any).insert({
+          id: requestId,
+          profile_id: profileId,
+          profile_name: profileName,
+          profile_slug: profileSlug,
+          phone_declared: phoneDeclared,
+          code,
+          status: 'pendiente',
+          created_at: now,
+        })
+      } catch (e) {
+        console.warn('Supabase insert whatsapp_verification_requests skipped:', e)
+      }
+
+      return {
+        error: null,
+        code,
+        officialPhone: SITE_CONFIG.officialWhatsApp,
+        requestId,
+      }
+    } catch (e: any) {
+      return {
+        error: e.message || 'Error al iniciar la solicitud de verificación.',
+        officialPhone: SITE_CONFIG.officialWhatsApp,
+      }
+    }
+  },
+
+  fetchPendingWhatsAppVerifications: async () => {
+    const local = getLocalWARequests()
+    try {
+      const { data, error } = await (supabase.from('whatsapp_verification_requests') as any)
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (!error && data) {
+        const dbIds = new Set(data.map((d: any) => d.id))
+        const merged = [
+          ...data,
+          ...local.filter((l) => !dbIds.has(l.id)),
+        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+        saveLocalWARequests(merged)
+        return merged
+      }
+    } catch (e) {
+      console.warn('Supabase fetchPendingWhatsAppVerifications failed, using local:', e)
+    }
+    return local
+  },
+
+  adminApproveWhatsAppVerification: async (requestId, profileId, phone) => {
+    try {
+      const now = new Date().toISOString()
+
+      // 1. Update local requests
+      const local = getLocalWARequests().map((r) =>
+        r.id === requestId || (r.profile_id === profileId && r.status === 'pendiente')
+          ? { ...r, status: 'aprobado' as const, reviewed_at: now }
+          : r
+      )
+      saveLocalWARequests(local)
+
+      // 2. Update local verified WA
+      const localWA = getLocalVerifiedWA()
+      localWA[profileId] = { phone, at: now }
+      saveLocalVerifiedWA(localWA)
+
+      // 3. Update Supabase request
+      try {
+        await (supabase.from('whatsapp_verification_requests') as any)
+          .update({ status: 'aprobado', reviewed_at: now })
+          .eq('id', requestId)
+      } catch (e) {
+        console.warn('Supabase update request skipped:', e)
+      }
+
+      // 4. Update Supabase profile
+      try {
+        await (supabase.from('profiles') as any)
+          .update({
+            whatsapp_verified: true,
+            whatsapp_verified_at: now,
+          })
+          .eq('id', profileId)
+      } catch (e) {
+        console.warn('Supabase update profile skipped:', e)
+      }
+
+      // 5. Update Zustand store
+      set((s) => {
+        const updateObj = (p: ProfileWithDetails | null) =>
+          p && p.id === profileId
+            ? { ...p, whatsapp_verified: true, whatsapp_verified_at: now }
+            : p
+
+        return {
+          currentProfile: updateObj(s.currentProfile),
+          myProfile: updateObj(s.myProfile),
+          profiles: s.profiles.map((p) =>
+            p.id === profileId
+              ? { ...p, whatsapp_verified: true, whatsapp_verified_at: now }
+              : p
+          ),
+        }
+      })
+
+      // 6. Send in-app notification to the professional
+      try {
+        const { useNotificationStore } = await import('@/stores/notification-store')
+        useNotificationStore.getState().addNotification({
+          userId: profileId,
+          title: '¡WhatsApp Verificado por Administración!',
+          message: `El administrador certificó tu número ${phone}. Tu perfil ahora cuenta con el sello oficial verificado.`,
+          type: 'system',
+        })
+      } catch (e) {
+        console.warn('Notification send failed:', e)
+      }
+
+      return { error: null }
+    } catch (e: any) {
+      return { error: e.message || 'Error al aprobar la verificación.' }
+    }
+  },
+
+  adminRejectWhatsAppVerification: async (requestId) => {
+    try {
+      const now = new Date().toISOString()
+      const local = getLocalWARequests().map((r) =>
+        r.id === requestId
+          ? { ...r, status: 'rechazado' as const, reviewed_at: now }
+          : r
+      )
+      saveLocalWARequests(local)
+
+      try {
+        await (supabase.from('whatsapp_verification_requests') as any)
+          .update({ status: 'rechazado', reviewed_at: now })
+          .eq('id', requestId)
+      } catch (e) {
+        console.warn('Supabase reject request skipped:', e)
+      }
+
+      return { error: null }
+    } catch (e: any) {
+      return { error: e.message || 'Error al rechazar verificación.' }
     }
   },
 

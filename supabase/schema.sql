@@ -413,3 +413,39 @@ CREATE POLICY "System can insert notifications"
     ON public.notifications FOR INSERT
     WITH CHECK (true);
 
+-- ==========================================================
+-- 13. WHATSAPP VERIFICATION REQUESTS TABLE (Verificaciones reales)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.whatsapp_verification_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    profile_name TEXT NOT NULL,
+    profile_slug TEXT NOT NULL,
+    phone_declared TEXT NOT NULL,
+    code TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'aprobado', 'rechazado')),
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_verif_profile ON public.whatsapp_verification_requests(profile_id);
+CREATE INDEX IF NOT EXISTS idx_wa_verif_status ON public.whatsapp_verification_requests(status);
+
+ALTER TABLE public.whatsapp_verification_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can insert verification request" ON public.whatsapp_verification_requests;
+CREATE POLICY "Anyone can insert verification request"
+    ON public.whatsapp_verification_requests FOR INSERT
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anyone can read verification requests" ON public.whatsapp_verification_requests;
+CREATE POLICY "Anyone can read verification requests"
+    ON public.whatsapp_verification_requests FOR SELECT
+    USING (true);
+
+DROP POLICY IF EXISTS "Admins and system can update verification requests" ON public.whatsapp_verification_requests;
+CREATE POLICY "Admins and system can update verification requests"
+    ON public.whatsapp_verification_requests FOR UPDATE
+    USING (true);
+
+

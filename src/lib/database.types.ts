@@ -158,6 +158,21 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['notifications']['Insert']>
       }
+      whatsapp_verification_requests: {
+        Row: {
+          id: string
+          profile_id: string
+          profile_name: string
+          profile_slug: string
+          phone_declared: string
+          code: string
+          status: 'pendiente' | 'aprobado' | 'rechazado'
+          reviewed_at: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['whatsapp_verification_requests']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['whatsapp_verification_requests']['Insert']>
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -178,4 +193,6 @@ export type JobRequestStatus = JobRequest['status']
 export type JobRequestUrgency = JobRequest['urgency']
 export type AccountDeletion = Database['public']['Tables']['account_deletions']['Row']
 export type InAppNotification = Database['public']['Tables']['notifications']['Row']
+export type WhatsAppVerificationRequest = Database['public']['Tables']['whatsapp_verification_requests']['Row']
+
 

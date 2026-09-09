@@ -688,6 +688,7 @@ export default function CreateProfile() {
         profileId={myProfile?.id || user.id}
         phone={contactMethods.find((c) => c.type === 'whatsapp')?.value || ''}
         profileName={name || myProfile?.name || 'Mi Perfil'}
+        profileSlug={myProfile?.slug || (name ? name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '')}
       />
 
       {/* Delete Account Modal */}

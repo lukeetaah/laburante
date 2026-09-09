@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore, type AccountDeletionRecord } from '@/stores/profile-store'
+import type { WhatsAppVerificationRequest } from '@/lib/database.types'
+import { SITE_CONFIG } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 import {
   ShieldAlert,
@@ -16,7 +18,11 @@ import {
   EyeOff,
   Trash2,
   Filter,
-  MessageCircle
+  MessageCircle,
+  ExternalLink,
+  Check,
+  XCircle,
+  Clock,
 } from 'lucide-react'
 
 const REASON_LABELS: Record<string, string> = {
@@ -30,13 +36,20 @@ const REASON_LABELS: Record<string, string> = {
 
 export default function Admin() {
   const { user, isAdmin, loading: authLoading } = useAuthStore()
-  const { fetchAccountDeletions, updateProfileVisibility } = useProfileStore()
+  const {
+    fetchAccountDeletions,
+    updateProfileVisibility,
+    fetchPendingWhatsAppVerifications,
+    adminApproveWhatsAppVerification,
+    adminRejectWhatsAppVerification,
+  } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'reports' | 'profiles' | 'deletions'>('reports')
+  const [activeTab, setActiveTab] = useState<'verifications' | 'reports' | 'profiles' | 'deletions'>('verifications')
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos'>('todos')
   const [reports, setReports] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
   const [deletions, setDeletions] = useState<AccountDeletionRecord[]>([])
+  const [waRequests, setWaRequests] = useState<WhatsAppVerificationRequest[]>([])
   const [loading, setLoading] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
 
@@ -77,6 +90,10 @@ export default function Admin() {
       // 3. Fetch Deletions
       const delList = await fetchAccountDeletions()
       setDeletions(delList)
+
+      // 4. Fetch WhatsApp verification requests
+      const waReqs = await fetchPendingWhatsAppVerifications()
+      setWaRequests(waReqs)
     } catch (err) {
       console.warn('Error loading admin data:', err)
     }
@@ -202,6 +219,7 @@ export default function Admin() {
   }
 
   const pendingReportsCount = reports.filter((r) => r.status === 'pendiente').length
+  const pendingWaCount = waRequests.filter((r) => r.status === 'pendiente').length
 
   const filteredProfiles = profiles.filter((p) => {
     if (profileFilter === 'activos') return p.status === 'activo'
@@ -210,6 +228,23 @@ export default function Admin() {
     if (profileFilter === 'suspendidos') return p.status === 'suspendido'
     return true
   })
+
+  const handleApproveWA = async (req: WhatsAppVerificationRequest) => {
+    const res = await adminApproveWhatsAppVerification(req.id, req.profile_id, req.phone_declared)
+    if (!res.error) {
+      setWaRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: 'aprobado' as const, reviewed_at: new Date().toISOString() } : r))
+      setProfiles((prev) => prev.map((p) => p.id === req.profile_id ? { ...p, whatsapp_verified: true } : p))
+      setActionMessage(`✅ WhatsApp de ${req.profile_name} (${req.phone_declared}) certificado y aprobado.`)
+    }
+  }
+
+  const handleRejectWA = async (req: WhatsAppVerificationRequest) => {
+    const res = await adminRejectWhatsAppVerification(req.id)
+    if (!res.error) {
+      setWaRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: 'rechazado' as const, reviewed_at: new Date().toISOString() } : r))
+      setActionMessage(`Solicitud de ${req.profile_name} rechazada.`)
+    }
+  }
 
   return (
     <div className="container py-8 md:py-12 max-w-5xl mx-auto space-y-8">
@@ -246,7 +281,7 @@ export default function Admin() {
       )}
 
       {/* Metrics Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Perfiles registrados</p>
           <p className="font-heading text-2xl font-bold text-[var(--color-laburante-text)] mt-1">
@@ -272,6 +307,12 @@ export default function Admin() {
           </p>
         </div>
         <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+          <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Verificaciones pendientes</p>
+          <p className="font-heading text-2xl font-bold text-indigo-600 mt-1">
+            {pendingWaCount}
+          </p>
+        </div>
+        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Bajas registradas</p>
           <p className="font-heading text-2xl font-bold text-rose-600 mt-1">
             {deletions.length}
@@ -281,6 +322,23 @@ export default function Admin() {
 
       {/* Tabs */}
       <div className="flex border-b border-[var(--color-laburante-border)] overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('verifications')}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'verifications'
+              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
+              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
+          }`}
+        >
+          <ShieldCheck size={16} />
+          Verificaciones WA
+          {pendingWaCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
+              {pendingWaCount}
+            </span>
+          )}
+        </button>
+
         <button
           onClick={() => setActiveTab('reports')}
           className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
@@ -292,7 +350,7 @@ export default function Admin() {
           <AlertTriangle size={16} />
           Reportes ({reports.length})
           {pendingReportsCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
               {pendingReportsCount}
             </span>
           )}
@@ -322,6 +380,107 @@ export default function Admin() {
           Bajas y Motivos ({deletions.length})
         </button>
       </div>
+
+      {/* Tab: WhatsApp Verification Requests */}
+      {activeTab === 'verifications' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-indigo-900">
+              <ShieldCheck size={15} className="text-indigo-600" />
+              Solicitudes de verificación de WhatsApp
+            </p>
+            <p className="text-[11px] text-indigo-800 leading-relaxed">
+              Los profesionales envían un mensaje con un código único a tu línea oficial (<strong>{SITE_CONFIG.officialWhatsAppFormatted}</strong>). Comprobá que el remitente coincida con el número declarado y aprobá.
+            </p>
+          </div>
+
+          {waRequests.length === 0 ? (
+            <div className="p-10 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
+              No hay solicitudes de verificación por el momento.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {waRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className={`p-5 rounded-2xl border bg-[var(--color-laburante-surface)] space-y-3 ${
+                    req.status === 'pendiente' ? 'border-indigo-300' : 'border-[var(--color-laburante-border)]'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          req.status === 'pendiente'
+                            ? 'bg-amber-100 text-amber-800'
+                            : req.status === 'aprobado'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {req.status === 'pendiente' ? '⏳ Pendiente' : req.status === 'aprobado' ? '✅ Aprobada' : '❌ Rechazada'}
+                      </span>
+                      <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                        {req.profile_name}
+                      </h4>
+                      {req.profile_slug && (
+                        <Link to={`/p/${req.profile_slug}`} target="_blank" className="text-[11px] text-[var(--color-laburante-indigo)] hover:underline">
+                          @{req.profile_slug}
+                        </Link>
+                      )}
+                    </div>
+                    <span className="text-xs text-[var(--color-laburante-text-muted)]">
+                      {new Date(req.created_at).toLocaleDateString()} {new Date(req.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <span className="text-[var(--color-laburante-text-muted)]">Número declarado:</span>
+                      <p className="font-bold text-[var(--color-laburante-text)]">{req.phone_declared}</p>
+                    </div>
+                    <div>
+                      <span className="text-[var(--color-laburante-text-muted)]">Código:</span>
+                      <p className="font-mono font-bold text-indigo-800">{req.code}</p>
+                    </div>
+                    <div className="flex items-end">
+                      <a
+                        href={`https://wa.me/${req.phone_declared.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 transition-colors"
+                      >
+                        <MessageCircle size={13} />
+                        Abrir chat con el profesional
+                        <ExternalLink size={11} />
+                      </a>
+                    </div>
+                  </div>
+
+                  {req.status === 'pendiente' && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      <button
+                        onClick={() => handleApproveWA(req)}
+                        className="py-1.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Check size={14} />
+                        Aprobar y Certificar ✓
+                      </button>
+                      <button
+                        onClick={() => handleRejectWA(req)}
+                        className="py-1.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <XCircle size={14} />
+                        Rechazar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tab 1: Reports */}
       {activeTab === 'reports' && (
