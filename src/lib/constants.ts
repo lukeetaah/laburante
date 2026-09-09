@@ -9,8 +9,8 @@ export const SITE_CONFIG = {
   url: import.meta.env.VITE_SITE_URL || 'https://laburante.vercel.app',
   origin: 'Lukson Arts',
   originUrl: 'https://luksonarts.vercel.app',
-  officialWhatsApp: import.meta.env.VITE_OFFICIAL_WHATSAPP || '5491165464326',
-  officialWhatsAppFormatted: '+54 9 11 6546-4326',
+  officialWhatsApp: import.meta.env.VITE_OFFICIAL_WHATSAPP || '5491178202409',
+  officialWhatsAppFormatted: '+54 9 11 7820-2409',
   contact: {
     formspreeUrl: 'https://formspree.io/f/mkoyzjoy',
   },
