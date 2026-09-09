@@ -14,6 +14,7 @@ import {
   ChevronUp,
 } from 'lucide-react'
 import { useProfileStore } from '@/stores/profile-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { useNotificationStore } from '@/stores/notification-store'
 import { SITE_CONFIG } from '@/lib/constants'
 
@@ -34,7 +35,8 @@ export default function WhatsAppVerificationModal({
   profileName,
   profileSlug,
 }: WhatsAppVerificationModalProps) {
-  const { requestWhatsAppVerification, verifyWhatsApp } = useProfileStore()
+  const { requestWhatsAppVerification, verifyWhatsApp, adminApproveWhatsAppVerification } = useProfileStore()
+  const { isAdmin } = useAuthStore()
   const { addNotification } = useNotificationStore()
 
   const [verificationCode, setVerificationCode] = useState('')
@@ -125,6 +127,21 @@ export default function WhatsAppVerificationModal({
       setStep('success')
     } else {
       setError('Aún no se ha completado la aprobación. Asegurate de haber presionado "Enviar" en el chat de WhatsApp con nuestra línea oficial.')
+    }
+  }
+
+  const handleAdminDirectApprove = async () => {
+    setLoading(true)
+    setError(null)
+    const res = await adminApproveWhatsAppVerification(requestId, profileId, phone)
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+    } else {
+      setStep('success')
+      setTimeout(() => {
+        onClose()
+      }, 1800)
     }
   }
 
@@ -253,7 +270,31 @@ export default function WhatsAppVerificationModal({
               </div>
             </div>
 
-            {/* Re-open WA button if needed */}
+            {/* Admin Fast-Track Card */}
+            {isAdmin && (
+              <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="space-y-0.5">
+                  <p className="font-bold flex items-center gap-1.5 text-indigo-900">
+                    <ShieldCheck size={16} className="text-indigo-600" />
+                    Acceso de Administrador activo
+                  </p>
+                  <p className="text-[11px] text-indigo-800">
+                    Como ya recibiste el mensaje en tu WhatsApp oficial, podés aprobar esta cuenta en 1 clic:
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAdminDirectApprove}
+                  disabled={loading}
+                  className="btn-dark py-2 px-4 rounded-xl text-xs font-bold shrink-0 cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  {loading ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  <span>Aprobar y Certificar ahora ✓</span>
+                </button>
+              </div>
+            )}
+
+            {/* Re-open WA & Check Status buttons */}
             <div className="flex flex-col sm:flex-row gap-2">
               <button
                 type="button"
@@ -275,43 +316,42 @@ export default function WhatsAppVerificationModal({
               </button>
             </div>
 
-            {/* Collapsible Manual PIN validation */}
-            <div className="pt-2 border-t border-[var(--color-laburante-border)]">
-              <button
-                type="button"
-                onClick={() => setShowManualPin(!showManualPin)}
-                className="text-xs text-[var(--color-laburante-text-muted)] hover:text-[var(--color-laburante-text)] flex items-center gap-1 font-medium transition-colors cursor-pointer"
-              >
-                <span>¿Querés ingresar el código PIN manualmente?</span>
-                {showManualPin ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-
-              {showManualPin && (
-                <div className="mt-3 p-3.5 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] space-y-2.5 animate-in fade-in">
-                  <p className="text-[11px] text-[var(--color-laburante-text-secondary)]">
-                    Ingresá los 6 dígitos del código ({verificationCode.replace(/[^0-9]/g, '')}):
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={inputPin}
-                      onChange={(e) => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
-                      placeholder="000000"
-                      className="w-36 text-center font-mono text-base font-bold py-2 px-3 rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleManualPinVerify}
-                      disabled={loading || inputPin.length !== 6}
-                      className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
-                    >
-                      {loading ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                      <span>Validar PIN</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+            {/* Direct PIN validation */}
+            <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[var(--color-laburante-text)]">
+                  ¿Ya enviaste el mensaje? Validar código:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setInputPin(verificationCode.replace(/[^0-9]/g, ''))}
+                  className="text-[11px] text-[var(--color-laburante-indigo)] font-semibold hover:underline cursor-pointer"
+                >
+                  Autocompletar ({verificationCode.replace(/[^0-9]/g, '')})
+                </button>
+              </div>
+              <p className="text-[11px] text-[var(--color-laburante-text-secondary)]">
+                Ingresá los 6 dígitos del código para activar inmediatamente tu sello oficial:
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={inputPin}
+                  onChange={(e) => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder={verificationCode.replace(/[^0-9]/g, '') || '000000'}
+                  className="w-36 text-center font-mono text-base font-bold py-2.5 px-3 rounded-xl border border-[var(--color-laburante-border)] bg-transparent focus:ring-2 focus:ring-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleManualPinVerify}
+                  disabled={loading || inputPin.length !== 6}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
+                >
+                  {loading ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  <span>Validar PIN y Activar</span>
+                </button>
+              </div>
             </div>
           </div>
         ) : (
