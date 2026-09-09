@@ -30,6 +30,49 @@ const checkIsAdmin = (user: User | null): boolean => {
   return userRole === 'admin' || appRole === 'admin'
 }
 
+async function ensureUserProfile(user: User | null) {
+  if (!user) return
+  try {
+    const { data: existing } = await (supabase.from('profiles') as any)
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!existing) {
+      const meta = user.user_metadata || {}
+      const name = meta.name || user.email?.split('@')[0] || 'Profesional'
+      const slug = name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') + '-' + user.id.slice(0, 4)
+
+      await (supabase.from('profiles') as any).insert({
+        id: user.id,
+        name,
+        slug,
+        provincia: meta.provincia || 'CABA',
+        localidad: meta.localidad || 'Buenos Aires',
+        status: 'activo',
+        disponibilidad: 'disponible',
+        modalidad: 'presencial',
+      })
+
+      if (meta.phone) {
+        await (supabase.from('contact_methods') as any).insert({
+          profile_id: user.id,
+          type: 'whatsapp',
+          value: meta.phone,
+          is_public: true,
+        })
+      }
+    }
+  } catch (err) {
+    console.warn('ensureUserProfile skipped:', err)
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   session: null,
@@ -44,6 +87,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       isAdmin: checkIsAdmin(user),
       loading: false,
     })
+    if (user) {
+      ensureUserProfile(user)
+    }
   },
 
   signUp: async (email, password, metadata) => {

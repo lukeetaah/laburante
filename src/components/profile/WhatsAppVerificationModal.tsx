@@ -7,11 +7,8 @@ import {
   ExternalLink,
   Smartphone,
   RefreshCw,
-  Clock,
   Send,
   AlertCircle,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react'
 import { useProfileStore } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
@@ -47,14 +44,12 @@ export default function WhatsAppVerificationModal({
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [showManualPin, setShowManualPin] = useState(false)
 
   // Initialize or request verification code when opened
   useEffect(() => {
     if (isOpen) {
       setError(null)
       setInputPin('')
-      setShowManualPin(false)
       setStep('send')
 
       const slug = profileSlug || profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
@@ -96,7 +91,6 @@ export default function WhatsAppVerificationModal({
   const verificationText = `Hola LABURANTE! Envío este mensaje desde mi WhatsApp para certificar la titularidad de mi número (+${cleanPhone}) en mi perfil "${profileName}". Código de verificación: ${verificationCode}`
 
   const handleOpenWhatsApp = () => {
-    // Open WhatsApp directed STRICTLY to Lucas's official WhatsApp number
     const url = `https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent(verificationText)}`
     window.open(url, '_blank')
     setStep('waiting')
@@ -126,7 +120,7 @@ export default function WhatsAppVerificationModal({
     if (req?.status === 'aprobado') {
       setStep('success')
     } else {
-      setError('Aún no se ha completado la aprobación. Asegurate de haber presionado "Enviar" en el chat de WhatsApp con nuestra línea oficial.')
+      setError('Aún no se registró la aprobación. Si ya enviaste el mensaje, podés ingresar tu código abajo para activarlo.')
     }
   }
 
@@ -156,7 +150,7 @@ export default function WhatsAppVerificationModal({
     }
 
     if (cleanInput !== expectedDigits) {
-      setError('El PIN ingresado no coincide con el código generado para tu perfil.')
+      setError('El código ingresado no coincide con el asignado a tu perfil.')
       return
     }
 
@@ -171,7 +165,7 @@ export default function WhatsAppVerificationModal({
       addNotification({
         userId: profileId,
         title: '¡WhatsApp Verificado con éxito!',
-        message: `Tu número ${phone} fue certificado. Ahora tu perfil tiene el sello oficial de autenticidad.`,
+        message: `Tu número ${phone} fue certificado con éxito. Tu perfil ahora cuenta con el sello oficial.`,
         type: 'system',
         link: `/p/${profileSlug || profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
       })
@@ -184,7 +178,7 @@ export default function WhatsAppVerificationModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 shadow-2xl space-y-6">
-        {/* Close button */}
+        {/* Botón cerrar */}
         <button
           onClick={onClose}
           className="absolute top-5 right-5 p-2 rounded-xl text-[var(--color-laburante-text-muted)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)] transition-colors cursor-pointer"
@@ -193,17 +187,17 @@ export default function WhatsAppVerificationModal({
           <X size={20} />
         </button>
 
-        {/* Modal Header */}
+        {/* Encabezado */}
         <div className="flex items-start gap-4">
           <div className="h-12 w-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
             <ShieldCheck size={26} />
           </div>
           <div>
             <h2 className="font-heading text-xl font-bold text-[var(--color-laburante-text)]">
-              Certificar titularidad de WhatsApp
+              Verificar número de WhatsApp
             </h2>
             <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-0.5">
-              Comprobación auténtica contra la línea oficial de administración de LABURANTE.
+              Certificá la titularidad de tu línea para obtener el sello oficial de confianza.
             </p>
           </div>
         </div>
@@ -221,10 +215,10 @@ export default function WhatsAppVerificationModal({
               <CheckCircle2 size={36} />
             </div>
             <h3 className="font-heading text-xl font-bold text-emerald-950">
-              ¡WhatsApp Certificado y Verificado!
+              ¡WhatsApp Verificado con éxito!
             </h3>
             <p className="text-xs text-emerald-800 max-w-sm mx-auto">
-              Tu número <strong className="font-semibold">{phone}</strong> ha sido comprobado exitosamente. Ahora tu perfil cuenta con el sello oficial de confianza.
+              Tu número <strong className="font-semibold">{phone}</strong> fue certificado. Tu perfil ya luce el sello oficial en las búsquedas.
             </p>
             <div className="pt-3">
               <button
@@ -237,90 +231,46 @@ export default function WhatsAppVerificationModal({
             </div>
           </div>
         ) : step === 'waiting' ? (
-          /* Step WAITING: user clicked send and is waiting for review/confirmation */
+          /* PASO 2: Confirmación */
           <div className="space-y-5">
-            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-2">
-              <div className="flex items-center gap-2 font-bold text-amber-900">
-                <Clock size={16} className="text-amber-700 animate-pulse" />
-                <span>Solicitud enviada a la línea oficial</span>
-              </div>
-              <p className="text-[11px] leading-relaxed text-amber-900">
-                Se abrió tu WhatsApp con el mensaje preformateado hacia nuestra línea oficial{' '}
-                <strong className="font-bold text-amber-950">{SITE_CONFIG.officialWhatsAppFormatted}</strong>.
+            <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 space-y-1.5">
+              <p className="font-bold text-emerald-900 flex items-center gap-1.5">
+                <MessageCircle size={15} className="text-emerald-700" />
+                Mensaje preparado para enviar
               </p>
-              <p className="text-[11px] leading-relaxed text-amber-800">
-                Asegurate de presionar <strong>Enviar</strong> en WhatsApp. Al recibirlo, nuestro administrador verificará que el remitente coincida con tu número ({phone}) y activará tu sello.
+              <p className="text-[11px] leading-relaxed text-emerald-800">
+                Se abrió WhatsApp con tu código asignado hacia la Línea Oficial de LABURANTE. Al enviarlo desde tu teléfono, se comprueba que el remitente coincida con tu número ({phone}).
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] space-y-2 text-xs">
-              <div className="flex justify-between items-center text-[11px] text-[var(--color-laburante-text-secondary)]">
-                <span>Línea oficial destinataria:</span>
-                <strong className="text-[var(--color-laburante-text)]">{SITE_CONFIG.officialWhatsAppFormatted}</strong>
-              </div>
-              <div className="flex justify-between items-center text-[11px] text-[var(--color-laburante-text-secondary)]">
-                <span>Tu número declarado:</span>
-                <strong className="text-[var(--color-laburante-text)]">{phone}</strong>
-              </div>
-              <div className="flex justify-between items-center text-[11px] text-[var(--color-laburante-text-secondary)]">
-                <span>Código asignado:</span>
-                <strong className="font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                  {verificationCode}
-                </strong>
-              </div>
-            </div>
-
-            {/* Admin Fast-Track Card */}
+            {/* Tarjeta exclusiva para administrador */}
             {isAdmin && (
-              <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-0.5">
-                  <p className="font-bold flex items-center gap-1.5 text-indigo-900">
-                    <ShieldCheck size={16} className="text-indigo-600" />
-                    Acceso de Administrador activo
+                  <p className="font-bold flex items-center gap-1 text-indigo-900">
+                    <ShieldCheck size={15} className="text-indigo-600" />
+                    Sesión de Administrador activa
                   </p>
                   <p className="text-[11px] text-indigo-800">
-                    Como ya recibiste el mensaje en tu WhatsApp oficial, podés aprobar esta cuenta en 1 clic:
+                    Podés certificar esta cuenta en 1 clic:
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleAdminDirectApprove}
                   disabled={loading}
-                  className="btn-dark py-2 px-4 rounded-xl text-xs font-bold shrink-0 cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                  className="btn-dark py-2 px-4 rounded-xl text-xs font-bold shrink-0 cursor-pointer shadow-xs"
                 >
-                  {loading ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={14} />}
-                  <span>Aprobar y Certificar ahora ✓</span>
+                  {loading ? <RefreshCw size={13} className="animate-spin" /> : 'Aprobar como Administrador ✓'}
                 </button>
               </div>
             )}
 
-            {/* Re-open WA & Check Status buttons */}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                onClick={handleOpenWhatsApp}
-                className="flex-1 py-3 px-4 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <MessageCircle size={15} />
-                <span>Reabrir chat de WhatsApp</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleCheckStatus}
-                disabled={checking}
-                className="flex-1 btn-dark py-3 px-4 rounded-xl font-heading font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
-              >
-                <RefreshCw size={14} className={checking ? 'animate-spin' : ''} />
-                <span>Comprobar aprobación</span>
-              </button>
-            </div>
-
-            {/* Direct PIN validation */}
+            {/* Confirmación con código asignado */}
             <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-[var(--color-laburante-text)]">
-                  ¿Ya enviaste el mensaje? Validar código:
+                  ¿Ya enviaste el mensaje? Confirmá tu código:
                 </span>
                 <button
                   type="button"
@@ -330,9 +280,6 @@ export default function WhatsAppVerificationModal({
                   Autocompletar ({verificationCode.replace(/[^0-9]/g, '')})
                 </button>
               </div>
-              <p className="text-[11px] text-[var(--color-laburante-text-secondary)]">
-                Ingresá los 6 dígitos del código para activar inmediatamente tu sello oficial:
-              </p>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -340,41 +287,59 @@ export default function WhatsAppVerificationModal({
                   value={inputPin}
                   onChange={(e) => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder={verificationCode.replace(/[^0-9]/g, '') || '000000'}
-                  className="w-36 text-center font-mono text-base font-bold py-2.5 px-3 rounded-xl border border-[var(--color-laburante-border)] bg-transparent focus:ring-2 focus:ring-emerald-500"
+                  className="w-36 text-center font-mono text-base font-bold py-2.5 px-3 rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
                 />
                 <button
                   type="button"
                   onClick={handleManualPinVerify}
                   disabled={loading || inputPin.length !== 6}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer shadow-xs transition-colors"
                 >
                   {loading ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                  <span>Validar PIN y Activar</span>
+                  <span>Activar Sello Oficial</span>
                 </button>
               </div>
             </div>
+
+            {/* Botones secundarios */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={handleOpenWhatsApp}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-secondary)] text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <MessageCircle size={14} />
+                <span>Reabrir WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCheckStatus}
+                disabled={checking}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-secondary)] text-xs font-medium flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer"
+              >
+                <RefreshCw size={14} className={checking ? 'animate-spin' : ''} />
+                <span>Comprobar estado</span>
+              </button>
+            </div>
           </div>
         ) : (
-          /* Step SEND: Initial view */
+          /* PASO 1: Envío inicial */
           <div className="space-y-5">
-            {/* Explanation of genuine ownership check */}
-            <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-xs text-[var(--color-laburante-text-secondary)] space-y-2">
+            <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-xs text-[var(--color-laburante-text-secondary)] space-y-1.5">
               <p className="font-semibold text-[var(--color-laburante-text)] flex items-center gap-1.5">
                 <Smartphone size={15} className="text-emerald-600 shrink-0" />
-                Comprobación auténtica de titularidad
+                Comprobación directa de titularidad
               </p>
               <p className="text-[11px] leading-relaxed">
-                Para garantizar que el número <strong className="text-[var(--color-laburante-text)]">{phone}</strong> realmente te pertenece, el sistema enviará un mensaje directo a nuestra línea oficial de administración (<strong>{SITE_CONFIG.officialWhatsAppFormatted}</strong>).
-              </p>
-              <p className="text-[11px] leading-relaxed text-[var(--color-laburante-text-muted)]">
-                Al recibir el mensaje emitido desde tu dispositivo con tu código único, se certifica tu número y se activa el sello oficial de verificación en tu perfil.
+                Al presionar el botón, se abrirá WhatsApp con un mensaje oficial y tu código único. Al enviarlo desde tu dispositivo, se confirma que el número <strong className="text-[var(--color-laburante-text)]">{phone}</strong> te pertenece exclusivamente.
               </p>
             </div>
 
-            {/* Verification Code Box */}
+            {/* Código generado */}
             <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-2">
               <p className="text-xs font-semibold text-emerald-900 uppercase tracking-wider">
-                Código de certificación generado
+                Tu código asignado
               </p>
               <div className="flex items-center justify-center gap-2">
                 <span className="font-mono text-2xl sm:text-3xl font-extrabold tracking-widest text-emerald-950 px-4 py-1.5 rounded-xl bg-white border border-emerald-300 shadow-2xs">
@@ -389,12 +354,9 @@ export default function WhatsAppVerificationModal({
                   {copied ? '¡Copiado!' : 'Copiar'}
                 </button>
               </div>
-              <p className="text-[11px] text-emerald-800">
-                Destino del mensaje: <strong className="font-bold">{SITE_CONFIG.officialWhatsAppFormatted}</strong>
-              </p>
             </div>
 
-            {/* Action button */}
+            {/* Botón principal */}
             <div className="space-y-2">
               <button
                 type="button"
@@ -403,19 +365,16 @@ export default function WhatsAppVerificationModal({
                 className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-heading font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Send size={16} />
-                <span>Enviar mensaje a la línea oficial por WhatsApp</span>
+                <span>Abrir WhatsApp y enviar mensaje</span>
                 <ExternalLink size={14} />
               </button>
-              <p className="text-[10px] text-center text-[var(--color-laburante-text-muted)]">
-                Se abrirá WhatsApp directamente con la línea oficial {SITE_CONFIG.officialWhatsAppFormatted} y el mensaje listo para enviar.
-              </p>
             </div>
 
             <div className="pt-2 flex justify-end">
               <button
                 type="button"
                 onClick={onClose}
-                className="py-2.5 px-5 rounded-xl border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold text-[var(--color-laburante-text-secondary)] cursor-pointer"
+                className="py-2 px-4 rounded-xl border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold text-[var(--color-laburante-text-secondary)] cursor-pointer"
               >
                 Hacerlo más tarde
               </button>
@@ -426,4 +385,3 @@ export default function WhatsAppVerificationModal({
     </div>
   )
 }
-

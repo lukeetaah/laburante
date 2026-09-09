@@ -82,6 +82,46 @@ export default function Admin() {
         profilesData = resProfiles.data
       }
 
+      // 3. Fetch WhatsApp verification requests
+      const waReqs = await fetchPendingWhatsAppVerifications()
+      setWaRequests(waReqs)
+
+      // Ensure any profile with a verification request is visible in the profiles list
+      const profileIds = new Set((profilesData || []).map((p: any) => p.id))
+      const extraProfiles: any[] = []
+      for (const req of waReqs) {
+        if (!profileIds.has(req.profile_id)) {
+          profileIds.add(req.profile_id)
+          extraProfiles.push({
+            id: req.profile_id,
+            name: req.profile_name,
+            slug: req.profile_slug,
+            provincia: 'Buenos Aires',
+            localidad: 'Zona Norte',
+            status: 'activo',
+            disponibilidad: 'disponible',
+            created_at: req.created_at,
+            whatsapp_verified: req.status === 'aprobado',
+            whatsapp_verified_at: req.reviewed_at,
+          })
+          // Also automatically upsert to public.profiles in Supabase in background
+          try {
+            (supabase.from('profiles') as any).upsert({
+              id: req.profile_id,
+              name: req.profile_name,
+              slug: req.profile_slug,
+              provincia: 'Buenos Aires',
+              localidad: 'Zona Norte',
+              status: 'activo',
+              disponibilidad: 'disponible',
+              modalidad: 'presencial',
+              whatsapp_verified: req.status === 'aprobado',
+              whatsapp_verified_at: req.reviewed_at,
+            }, { onConflict: 'id' }).then(() => {})
+          } catch {}
+        }
+      }
+
       // Local WhatsApp cache hydration
       let localWA: Record<string, any> = {}
       try {
@@ -89,21 +129,18 @@ export default function Admin() {
         if (raw) localWA = JSON.parse(raw)
       } catch {}
 
-      if (profilesData) {
-        const hydrated = profilesData.map((p: any) => ({
+      const allCombined = [...(profilesData || []), ...extraProfiles]
+      if (allCombined.length > 0) {
+        const hydrated = allCombined.map((p: any) => ({
           ...p,
           whatsapp_verified: Boolean(p.whatsapp_verified || (localWA[p.id] !== undefined)),
         }))
         setProfiles(hydrated)
       }
 
-      // 3. Fetch Deletions
+      // 4. Fetch Deletions
       const delList = await fetchAccountDeletions()
       setDeletions(delList)
-
-      // 4. Fetch WhatsApp verification requests
-      const waReqs = await fetchPendingWhatsAppVerifications()
-      setWaRequests(waReqs)
     } catch (err) {
       console.warn('Error loading admin data:', err)
     }
@@ -400,7 +437,7 @@ export default function Admin() {
               Solicitudes de verificación de WhatsApp
             </p>
             <p className="text-[11px] text-indigo-800 leading-relaxed">
-              Los profesionales envían un mensaje con un código único a tu línea oficial (<strong>{SITE_CONFIG.officialWhatsAppFormatted}</strong>). Comprobá que el remitente coincida con el número declarado y aprobá.
+              Los profesionales envían un mensaje con su código único a la Línea Oficial de WhatsApp. Comprobá que el remitente coincida con el número declarado y aprobá.
             </p>
           </div>
 
