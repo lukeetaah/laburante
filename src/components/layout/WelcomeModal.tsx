@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
-import { CheckCircle2, ArrowRight, Sparkles, UserCheck, MapPin, Phone } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Sparkles, UserCheck, MapPin, Phone, Building2 } from 'lucide-react'
 
 export default function WelcomeModal() {
   const { user } = useAuthStore()
@@ -34,13 +34,14 @@ export default function WelcomeModal() {
   const metadata = user?.user_metadata || {}
   const userName = metadata.name || 'Trabajador'
   const userPhone = metadata.phone || ''
+  const isCompany = metadata.account_type === 'empresa'
   const userLocation = metadata.localidad
     ? `${metadata.localidad}, ${metadata.provincia || 'Argentina'}`
     : metadata.provincia || 'Argentina'
 
   const handleGoToProfile = () => {
     setIsOpen(false)
-    navigate('/crear-perfil?confirmed=true')
+    navigate(isCompany ? '/empresa' : '/crear-perfil?confirmed=true')
   }
 
   const handleClose = () => {
@@ -71,11 +72,11 @@ export default function WelcomeModal() {
         {/* Next steps explanation card */}
         <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-left space-y-2.5">
           <div className="flex items-center gap-2 font-heading font-bold text-xs text-[var(--color-laburante-text)]">
-            <UserCheck size={16} className="text-[var(--color-laburante-indigo)]" />
+            {isCompany ? <Building2 size={16} className="text-[var(--color-laburante-indigo)]" /> : <UserCheck size={16} className="text-[var(--color-laburante-indigo)]" />}
             ¿Qué tenés que hacer ahora?
           </div>
           <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
-            Para que personas de tu zona puedan encontrarte y contactarte directamente por trabajo, el paso siguiente es <strong>publicar tu perfil de servicios</strong>.
+            {isCompany ? <>Tu cuenta Empresa ya está activa. El próximo paso es <strong>buscar LABURANTEs, guardar perfiles y organizar proyectos</strong>.</> : <>Para que personas de tu zona puedan encontrarte y contactarte directamente por trabajo, el paso siguiente es <strong>publicar tu perfil de servicios</strong>.</>}
           </p>
           <div className="pt-2 border-t border-[var(--color-laburante-border)]/70 text-[11px] text-[var(--color-laburante-text-muted)] space-y-1">
             <p className="font-semibold text-[var(--color-laburante-text-secondary)]">
@@ -100,7 +101,7 @@ export default function WelcomeModal() {
             onClick={handleGoToProfile}
             className="btn-dark w-full py-4 px-6 rounded-2xl font-heading font-bold text-sm shadow-md transition-all hover:scale-[1.01] flex items-center justify-center gap-2"
           >
-            Completar y publicar mi perfil ahora
+            {isCompany ? 'Ir a mi espacio Empresa' : 'Completar y publicar mi perfil ahora'}
             <ArrowRight size={16} />
           </button>
 

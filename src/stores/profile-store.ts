@@ -96,8 +96,8 @@ interface ProfileState {
   submitReport: (profileId: string, reason: string, description: string) => Promise<{ error: string | null }>
 }
 
-const VERIFIED_WA_KEY = 'laburante_verified_wa'
-const DELETIONS_KEY = 'laburante_account_deletions'
+const VERIFIED_WA_KEY = 'laburante_v2_verified_wa'
+const DELETIONS_KEY = 'laburante_v2_account_deletions'
 
 function getLocalVerifiedWA(): Record<string, { phone: string; at: string }> {
   try {
@@ -129,7 +129,7 @@ function saveLocalDeletions(data: AccountDeletionRecord[]) {
   } catch {}
 }
 
-const WA_REQUESTS_KEY = 'laburante_wa_verification_requests'
+const WA_REQUESTS_KEY = 'laburante_v2_wa_verification_requests'
 
 function getLocalWARequests(): WhatsAppVerificationRequest[] {
   try {

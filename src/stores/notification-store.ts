@@ -51,9 +51,6 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   setWhatsappAlertsEnabled: (enabled) => {
     set({ whatsappAlertsEnabled: enabled })
-    try {
-      localStorage.setItem('laburante_notify_whatsapp:pending', enabled ? '1' : '0')
-    } catch {}
   },
 
   fetchNotifications: async () => {

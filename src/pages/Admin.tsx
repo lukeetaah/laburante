@@ -126,7 +126,7 @@ export default function Admin() {
       // Local WhatsApp cache hydration
       let localWA: Record<string, any> = {}
       try {
-        const raw = localStorage.getItem('laburante_verified_wa')
+        const raw = localStorage.getItem('laburante_v2_verified_wa')
         if (raw) localWA = JSON.parse(raw)
       } catch {}
 
@@ -246,14 +246,14 @@ export default function Admin() {
     }
 
     try {
-      const raw = localStorage.getItem('laburante_verified_wa')
+      const raw = localStorage.getItem('laburante_v2_verified_wa')
       const parsed = raw ? JSON.parse(raw) : {}
       if (nextVal) {
         parsed[profileId] = { phone: 'admin-override', at: now }
       } else {
         delete parsed[profileId]
       }
-      localStorage.setItem('laburante_verified_wa', JSON.stringify(parsed))
+      localStorage.setItem('laburante_v2_verified_wa', JSON.stringify(parsed))
     } catch {}
 
     setProfiles((prev) =>

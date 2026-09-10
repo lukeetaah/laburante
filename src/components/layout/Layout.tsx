@@ -4,6 +4,7 @@ import Footer from './Footer'
 import AuthNotifier from './AuthNotifier'
 import WelcomeModal from './WelcomeModal'
 import ScrollToTop from './ScrollToTop'
+import HelpRibbon from './HelpRibbon'
 
 export default function Layout() {
   return (
@@ -11,6 +12,7 @@ export default function Layout() {
       <ScrollToTop />
       <Header />
       <AuthNotifier />
+      <HelpRibbon />
       <WelcomeModal />
       <main className="flex-1">
         <Outlet />

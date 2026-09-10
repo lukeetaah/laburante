@@ -24,10 +24,16 @@ CREATE TABLE IF NOT EXISTS public.company_saved_profiles (
 ALTER TABLE public.company_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.company_saved_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admins read all profiles" ON public.profiles;
+CREATE POLICY "Admins read all profiles" ON public.profiles FOR SELECT USING (
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
+  (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+);
+
 DROP POLICY IF EXISTS "Companies manage own projects" ON public.company_projects;
-CREATE POLICY "Companies manage own projects" ON public.company_projects FOR ALL USING (auth.uid() = company_id) WITH CHECK (auth.uid() = company_id);
+CREATE POLICY "Companies manage own projects" ON public.company_projects FOR ALL USING (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa') WITH CHECK (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa');
 DROP POLICY IF EXISTS "Companies manage own saved profiles" ON public.company_saved_profiles;
-CREATE POLICY "Companies manage own saved profiles" ON public.company_saved_profiles FOR ALL USING (auth.uid() = company_id) WITH CHECK (auth.uid() = company_id);
+CREATE POLICY "Companies manage own saved profiles" ON public.company_saved_profiles FOR ALL USING (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa') WITH CHECK (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa');
 
 INSERT INTO storage.buckets (id, name, public) VALUES ('profile-assets', 'profile-assets', true) ON CONFLICT (id) DO NOTHING;
 DROP POLICY IF EXISTS "Public read profile assets" ON storage.objects;
