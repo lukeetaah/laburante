@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { PROVINCES } from '@/data/provinces'
@@ -23,12 +23,47 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successEmail, setSuccessEmail] = useState<string | null>(null)
+  const [retryAt, setRetryAt] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
 
   const signUp = useAuthStore((s) => s.signUp)
   const navigate = useNavigate()
+  const retryStorageKey = email.trim() ? `laburante_signup_retry:${email.trim().toLowerCase()}` : ''
+
+  useEffect(() => {
+    if (!retryStorageKey) { setRetryAt(null); return }
+    const stored = Number(localStorage.getItem(retryStorageKey) || 0)
+    setRetryAt(stored > Date.now() ? stored : null)
+  }, [retryStorageKey])
+
+  useEffect(() => {
+    if (!retryAt) return
+    const interval = window.setInterval(() => {
+      const current = Date.now()
+      setNow(current)
+      if (current >= retryAt) {
+        setRetryAt(null)
+        if (retryStorageKey) localStorage.removeItem(retryStorageKey)
+      }
+    }, 1000)
+    return () => window.clearInterval(interval)
+  }, [retryAt, retryStorageKey])
+
+  const isRateLimitError = (message: string) => /rate|limit|too many|demasiad|esperá|espera|seconds|segundos|429/i.test(message)
+  const secondsFromError = (message: string) => {
+    const match = message.match(/(\d+)\s*(?:seconds?|segundos?)/i)
+    return match ? Math.max(10, Number(match[1])) : 60
+  }
+  const remainingSeconds = retryAt ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : 0
+  const formattedWait = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (retryAt && Date.now() < retryAt) {
+      setError(`La creación está temporalmente limitada por Supabase. Esperá ${formattedWait} antes de intentar de nuevo.`)
+      return
+    }
 
     if (!name.trim()) {
       setError('Por favor ingresá tu nombre completo o profesional.')
@@ -74,9 +109,16 @@ export default function Register() {
 
     if (res.error) {
       setError(res.error)
+      if (isRateLimitError(res.error)) {
+        const nextRetryAt = Date.now() + secondsFromError(res.error) * 1000
+        setRetryAt(nextRetryAt)
+        if (retryStorageKey) localStorage.setItem(retryStorageKey, String(nextRetryAt))
+      }
     } else if (res.needsEmailConfirmation) {
+      if (retryStorageKey) localStorage.removeItem(retryStorageKey)
       setSuccessEmail(email.trim())
     } else {
+      if (retryStorageKey) localStorage.removeItem(retryStorageKey)
       if (isCompany) {
         navigate('/empresa')
       } else if (intent === 'ofrecer' || intent === 'ambas') {
@@ -147,11 +189,22 @@ export default function Register() {
               ? 'Empezá a encontrar profesionales con herramientas pensadas para equipos.'
               : 'Registro gratuito para ofrecer servicios o buscar trabajadores en todo el país.'}
           </p>
+          <div className="mx-auto mt-3 max-w-md rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-[11px] leading-relaxed text-emerald-900">
+            <strong>Alta gratuita para vos.</strong> Cada registro consume capacidad operativa de autenticación y verificación; por eso Supabase puede aplicar una espera técnica temporal para cuidar el servicio.
+          </div>
         </div>
 
         {error && (
           <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">
             {error}
+          </div>
+        )}
+
+        {retryAt && remainingSeconds > 0 && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-center text-amber-950">
+            <p className="text-[10px] font-bold uppercase tracking-widest">Espera técnica de alta</p>
+            <p className="mt-1 font-heading text-3xl font-extrabold tabular-nums">{formattedWait}</p>
+            <p className="mt-1 text-[11px] leading-relaxed">El alta sigue siendo gratuita. Si el servidor recibe otro intento mientras esperás, puede extender el tiempo al próximo intento. Actualizá la página cuando el contador llegue a cero.</p>
           </div>
         )}
 
@@ -368,10 +421,10 @@ export default function Register() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || Boolean(retryAt && remainingSeconds > 0)}
             className="btn-dark w-full py-3.5 px-4 rounded-xl font-heading font-bold text-sm transition-all hover:scale-[1.01] shadow-md disabled:opacity-50 mt-2"
           >
-            {loading ? 'Registrando cuenta...' : 'Crear mi cuenta gratuita'}
+            {loading ? 'Registrando cuenta...' : retryAt && remainingSeconds > 0 ? `Esperar ${formattedWait}` : 'Crear mi cuenta gratuita'}
           </button>
         </form>
 
