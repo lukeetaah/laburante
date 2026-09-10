@@ -16,6 +16,7 @@ import Privacy from '@/pages/Privacy'
 import HowItWorks from '@/pages/HowItWorks'
 import OrdersDashboard from '@/pages/OrdersDashboard'
 import NotFound from '@/pages/NotFound'
+import Companies from '@/pages/Companies'
 import { Analytics } from '@vercel/analytics/react'
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="buscar" element={<Search />} />
+          <Route path="empresas" element={<Companies />} />
           <Route path="p/:slug" element={<ProfilePage />} />
           <Route path="categorias" element={<Categories />} />
           <Route path="categorias/:slug" element={<CategoryPage />} />

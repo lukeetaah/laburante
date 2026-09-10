@@ -1,16 +1,18 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { PROVINCES } from '@/data/provinces'
-import { ShieldCheck, Mail, CheckCircle2, ArrowRight } from 'lucide-react'
+import { Mail, CheckCircle2, ArrowRight, Building2 } from 'lucide-react'
 
 export default function Register() {
+  const [searchParams] = useSearchParams()
+  const isCompany = searchParams.get('tipo') === 'empresa'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [provincia, setProvincia] = useState('CABA')
   const [localidad, setLocalidad] = useState('')
-  const [intent, setIntent] = useState<'ofrecer' | 'buscar' | 'ambas'>('ofrecer')
+  const [intent, setIntent] = useState<'ofrecer' | 'buscar' | 'ambas'>(isCompany ? 'buscar' : 'ofrecer')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
@@ -59,6 +61,7 @@ export default function Register() {
       provincia,
       localidad: localidad.trim(),
       intent,
+      accountType: isCompany ? 'empresa' : 'persona',
     })
 
     setLoading(false)
@@ -129,10 +132,12 @@ export default function Register() {
       <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-6 shadow-xs">
         <div className="text-center space-y-1">
           <h1 className="font-heading text-2xl font-extrabold text-[var(--color-laburante-text)]">
-            Crear cuenta en LABURANTE
+            {isCompany ? 'Crear cuenta para mi empresa' : 'Crear cuenta en LABURANTE'}
           </h1>
           <p className="text-xs text-[var(--color-laburante-text-secondary)]">
-            Registro gratuito para ofrecer servicios o buscar trabajadores en todo el país.
+            {isCompany
+              ? 'Empezá a encontrar profesionales con herramientas pensadas para equipos.'
+              : 'Registro gratuito para ofrecer servicios o buscar trabajadores en todo el país.'}
           </p>
         </div>
 
@@ -145,13 +150,13 @@ export default function Register() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">
-              Nombre completo o denominación profesional <span className="text-rose-500">*</span>
+              {isCompany ? 'Nombre de la empresa' : 'Nombre completo o denominación profesional'} <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ej: Martín Fernández o Reparaciones San Martín"
+              placeholder={isCompany ? 'ej: Constructora del Sur' : 'ej: Martín Fernández o Reparaciones San Martín'}
               required
               className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent focus:ring-2 focus:ring-[var(--color-laburante-indigo)]"
             />
@@ -217,7 +222,14 @@ export default function Register() {
             </div>
           </div>
 
-          <div>
+          {isCompany && (
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900">
+              <Building2 size={18} className="mt-0.5 shrink-0" />
+              <p>Tu cuenta empieza con búsquedas avanzadas y un espacio preparado para sumar integrantes y beneficios pagos más adelante.</p>
+            </div>
+          )}
+
+          {!isCompany && <div>
             <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1.5">
               ¿Cuál es tu intención principal?
             </label>
@@ -256,7 +268,7 @@ export default function Register() {
                 Ambas cosas
               </button>
             </div>
-          </div>
+          </div>}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

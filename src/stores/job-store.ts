@@ -47,18 +47,20 @@ interface JobState {
 
 const LOCAL_STORAGE_KEY = 'laburante_job_requests_cache'
 
-function getLocalCache(): JobRequestWithDetails[] {
+function getLocalCache(userId?: string | null): JobRequestWithDetails[] {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
+    const key = userId ? `${LOCAL_STORAGE_KEY}:${userId}` : `${LOCAL_STORAGE_KEY}:guest`
+    const raw = localStorage.getItem(key)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
   }
 }
 
-function saveLocalCache(list: JobRequestWithDetails[]) {
+function saveLocalCache(list: JobRequestWithDetails[], userId?: string | null) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list))
+    const key = userId ? `${LOCAL_STORAGE_KEY}:${userId}` : `${LOCAL_STORAGE_KEY}:guest`
+    localStorage.setItem(key, JSON.stringify(list))
   } catch (e) {
     console.warn('Could not save to localStorage', e)
   }
@@ -72,10 +74,12 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   fetchMyRequests: async () => {
     set({ loading: true, error: null })
+    let currentUserId: string | null = null
     try {
       const { data: userData } = await supabase.auth.getUser()
       const userId = userData?.user?.id
-      const localItems = getLocalCache()
+      currentUserId = userId || null
+      const localItems = getLocalCache(userId)
 
       if (userId) {
         const { data, error } = await (supabase.from('job_requests') as any)
@@ -105,7 +109,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       set({ clientRequests: filtered, loading: false })
     } catch (err: any) {
       console.warn('fetchMyRequests error, using cache:', err)
-      set({ clientRequests: getLocalCache(), loading: false })
+      set({ clientRequests: getLocalCache(currentUserId), loading: false })
     }
   },
 
@@ -131,7 +135,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       }
 
       // Check local cache if matching profile_id
-      const local = getLocalCache().filter((i) => i.profile_id === userId)
+      const local = getLocalCache(userId).filter((i) => i.profile_id === userId)
       set({ proJobs: local, loading: false })
     } catch (err: any) {
       console.warn('fetchMyJobs error:', err)
@@ -194,8 +198,8 @@ export const useJobStore = create<JobState>((set, get) => ({
       }
 
       // Always save to local cache for instant UI feedback
-      const local = getLocalCache()
-      saveLocalCache([record, ...local])
+      const local = getLocalCache(userId)
+      saveLocalCache([record, ...local], userId)
 
       set((s) => ({
         clientRequests: [record, ...s.clientRequests],
@@ -228,10 +232,11 @@ export const useJobStore = create<JobState>((set, get) => ({
       }
 
       // Update local cache
-      const local = getLocalCache().map((item) =>
+      const { data: userData } = await supabase.auth.getUser()
+      const local = getLocalCache(userData.user?.id).map((item) =>
         item.id === requestId ? { ...item, ...updateData } : item
       )
-      saveLocalCache(local as JobRequestWithDetails[])
+      saveLocalCache(local as JobRequestWithDetails[], userData.user?.id)
 
       // Update Zustand state
       set((s) => ({
@@ -269,10 +274,11 @@ export const useJobStore = create<JobState>((set, get) => ({
         console.warn('Supabase update skipped, updating local state:', e)
       }
 
-      const local = getLocalCache().map((item) =>
+      const { data: userData } = await supabase.auth.getUser()
+      const local = getLocalCache(userData.user?.id).map((item) =>
         item.id === requestId ? { ...item, ...updateData } : item
       )
-      saveLocalCache(local as JobRequestWithDetails[])
+      saveLocalCache(local as JobRequestWithDetails[], userData.user?.id)
 
       set((s) => ({
         proJobs: s.proJobs.map((item) =>
@@ -307,10 +313,11 @@ export const useJobStore = create<JobState>((set, get) => ({
         console.warn('Supabase update skipped, updating local state:', e)
       }
 
-      const local = getLocalCache().map((item) =>
+      const { data: userData } = await supabase.auth.getUser()
+      const local = getLocalCache(userData.user?.id).map((item) =>
         item.id === requestId ? { ...item, ...updateData } : item
       )
-      saveLocalCache(local as JobRequestWithDetails[])
+      saveLocalCache(local as JobRequestWithDetails[], userData.user?.id)
 
       set((s) => ({
         proJobs: s.proJobs.map((item) =>

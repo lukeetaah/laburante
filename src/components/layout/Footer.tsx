@@ -40,6 +40,7 @@ export default function Footer() {
                 <li><Link to="/mis-trabajos" className="hover:text-[var(--color-laburante-text)] transition-colors">Mis Trabajos y Pedidos</Link></li>
                 <li><Link to="/categorias" className="hover:text-[var(--color-laburante-text)] transition-colors">Categorías</Link></li>
                 <li><Link to="/crear-perfil" className="hover:text-[var(--color-laburante-text)] transition-colors">Ofrecer tu trabajo</Link></li>
+                <li><Link to="/empresas" className="hover:text-[var(--color-laburante-text)] transition-colors">Empresas</Link></li>
               </ul>
             </div>
 

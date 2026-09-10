@@ -9,6 +9,7 @@ export interface SignUpMetadata {
   localidad?: string
   intent?: 'ofrecer' | 'buscar' | 'ambas'
   role?: string
+  accountType?: 'persona' | 'empresa'
 }
 
 interface AuthState {
@@ -109,6 +110,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           localidad: metadata.localidad || '',
           intent: metadata.intent || 'ofrecer',
           role: 'user', // Default role; user can upgrade to 'admin' in Supabase dashboard
+          account_type: metadata.accountType || 'persona',
         },
       },
     })

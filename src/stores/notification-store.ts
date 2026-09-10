@@ -4,18 +4,20 @@ import type { InAppNotification } from '@/lib/database.types'
 
 const LOCAL_NOTIFS_KEY = 'laburante_notifications_cache'
 
-function getLocalNotifications(): InAppNotification[] {
+function getLocalNotifications(userId?: string | null): InAppNotification[] {
   try {
-    const raw = localStorage.getItem(LOCAL_NOTIFS_KEY)
+    const key = userId ? `${LOCAL_NOTIFS_KEY}:${userId}` : `${LOCAL_NOTIFS_KEY}:guest`
+    const raw = localStorage.getItem(key)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
   }
 }
 
-function saveLocalNotifications(notifs: InAppNotification[]) {
+function saveLocalNotifications(notifs: InAppNotification[], userId?: string | null) {
   try {
-    localStorage.setItem(LOCAL_NOTIFS_KEY, JSON.stringify(notifs))
+    const key = userId ? `${LOCAL_NOTIFS_KEY}:${userId}` : `${LOCAL_NOTIFS_KEY}:guest`
+    localStorage.setItem(key, JSON.stringify(notifs))
   } catch (e) {
     console.warn('Could not save notifications to localStorage:', e)
   }
@@ -50,17 +52,16 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   setWhatsappAlertsEnabled: (enabled) => {
     set({ whatsappAlertsEnabled: enabled })
     try {
-      localStorage.setItem('laburante_notify_whatsapp', enabled ? '1' : '0')
+      localStorage.setItem('laburante_notify_whatsapp:pending', enabled ? '1' : '0')
     } catch {}
   },
 
   fetchNotifications: async () => {
     set({ loading: true })
-    const local = getLocalNotifications()
-
     try {
       const { data: userData } = await supabase.auth.getUser()
       const userId = userData?.user?.id
+      const local = getLocalNotifications(userId)
 
       if (userId) {
         const { data, error } = await (supabase.from('notifications') as any)
@@ -75,7 +76,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
             ...local.filter((n) => !dbIds.has(n.id) && n.user_id === userId),
           ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-          saveLocalNotifications(merged)
+          saveLocalNotifications(merged, userId)
           set({
             notifications: merged,
             unreadCount: merged.filter((n) => !n.read).length,
@@ -88,6 +89,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       console.warn('Supabase notifications fetch failed, using cache:', e)
     }
 
+    const { data: guestData } = await supabase.auth.getUser()
+    const local = getLocalNotifications(guestData?.user?.id)
     set({
       notifications: local,
       unreadCount: local.filter((n) => !n.read).length,
@@ -99,7 +102,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const updated = get().notifications.map((n) =>
       n.id === id ? { ...n, read: true } : n
     )
-    saveLocalNotifications(updated)
+    const { data } = await supabase.auth.getUser()
+    saveLocalNotifications(updated, data.user?.id)
     set({
       notifications: updated,
       unreadCount: updated.filter((n) => !n.read).length,
@@ -116,7 +120,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   markAllAsRead: async () => {
     const updated = get().notifications.map((n) => ({ ...n, read: true }))
-    saveLocalNotifications(updated)
+    const { data } = await supabase.auth.getUser()
+    saveLocalNotifications(updated, data.user?.id)
     set({
       notifications: updated,
       unreadCount: 0,
@@ -149,8 +154,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       created_at: new Date().toISOString(),
     }
 
-    const local = [newNotif, ...getLocalNotifications()]
-    saveLocalNotifications(local)
+    const local = [newNotif, ...getLocalNotifications(userData.user?.id)]
+    saveLocalNotifications(local, userData.user?.id)
 
     set((s) => {
       const merged = [newNotif, ...s.notifications]

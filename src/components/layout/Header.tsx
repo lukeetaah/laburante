@@ -1,12 +1,15 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
-import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase } from 'lucide-react'
+import { useProfileStore } from '@/stores/profile-store'
+import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2 } from 'lucide-react'
 import NotificationBell from '@/components/notifications/NotificationBell'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { user, isAdmin, signOut } = useAuthStore()
+  const { myProfile, fetchMyProfile } = useProfileStore()
+  const [profileChecked, setProfileChecked] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -19,6 +22,20 @@ export default function Header() {
   }
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Mi cuenta'
+  const showOfferLink = !user || (profileChecked && !myProfile)
+
+  useEffect(() => {
+    let active = true
+    if (!user) {
+      setProfileChecked(true)
+      return
+    }
+    setProfileChecked(false)
+    fetchMyProfile().finally(() => {
+      if (active) setProfileChecked(true)
+    })
+    return () => { active = false }
+  }, [user, fetchMyProfile])
 
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]/95 backdrop-blur-md">
@@ -75,12 +92,23 @@ export default function Header() {
             Cómo funciona
           </Link>
           <Link
+            to="/empresas"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isActive('/empresas')
+                ? 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)]'
+                : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]'
+            }`}
+          >
+            <Building2 size={16} />
+            Empresas
+          </Link>
+          {showOfferLink && <Link
             to="/crear-perfil"
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-laburante-accent)] hover:bg-amber-50 transition-colors"
           >
             <UserPlus size={16} />
             Ofrecer mi trabajo
-          </Link>
+          </Link>}
         </nav>
 
         {/* Auth + Admin + Notifications + Mobile Toggle */}
@@ -159,9 +187,12 @@ export default function Header() {
           <Link to="/como-funciona" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             Cómo funciona
           </Link>
-          <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-accent)] font-medium">
-            <UserPlus size={16} /> Ofrecer mi trabajo
+          <Link to="/empresas" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
+            <Building2 size={16} /> Empresas
           </Link>
+          {showOfferLink && <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-accent)] font-medium">
+            <UserPlus size={16} /> Ofrecer mi trabajo
+          </Link>}
           {isAdmin && (
             <Link to="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-indigo-700 font-bold bg-indigo-50/70">
               <ShieldAlert size={16} /> Panel de Administración
