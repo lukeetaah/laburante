@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { X, DollarSign, Clock, FileText, CheckCircle2, ShieldCheck } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { X, DollarSign, Clock, FileText, CheckCircle2, ShieldCheck, HelpCircle, Calculator } from 'lucide-react'
 import { useJobStore } from '@/stores/job-store'
 
 interface BudgetModalProps {
@@ -26,6 +26,31 @@ export default function BudgetModal({
   const [estimatedTime, setEstimatedTime] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [calculatorOpen, setCalculatorOpen] = useState(false)
+  const [hourlyRate, setHourlyRate] = useState('')
+  const [hours, setHours] = useState('')
+  const [materials, setMaterials] = useState('')
+  const [travel, setTravel] = useState('')
+  const [otherCosts, setOtherCosts] = useState('')
+  const [floatPercent, setFloatPercent] = useState('10')
+
+  const calculation = useMemo(() => {
+    const number = (value: string) => Number(value.replace(',', '.')) || 0
+    const labor = number(hourlyRate) * number(hours)
+    const base = labor + number(materials) + number(travel) + number(otherCosts)
+    const floatAmount = base * (number(floatPercent) / 100)
+    return { labor, base, floatAmount, minimum: base + floatAmount }
+  }, [hourlyRate, hours, materials, travel, otherCosts, floatPercent])
+
+  const money = (value: number) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(Math.round(value))
+  const calculatorFields: { key: string; label: string; value: string; set: (value: string) => void }[] = [
+    { key: 'hourlyRate', label: 'Valor por hora', value: hourlyRate, set: setHourlyRate },
+    { key: 'hours', label: 'Horas estimadas', value: hours, set: setHours },
+    { key: 'materials', label: 'Materiales', value: materials, set: setMaterials },
+    { key: 'travel', label: 'Traslado', value: travel, set: setTravel },
+    { key: 'otherCosts', label: 'Otros costos', value: otherCosts, set: setOtherCosts },
+    { key: 'floatPercent', label: 'Flotación %', value: floatPercent, set: setFloatPercent },
+  ]
 
   if (!isOpen) return null
 
@@ -88,9 +113,14 @@ export default function BudgetModal({
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">
-                Monto o valor del trabajo ($) <span className="text-rose-500">*</span>
-              </label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-semibold text-[var(--color-laburante-text)]">
+                  Monto o valor del trabajo ($) <span className="text-rose-500">*</span>
+                </label>
+                <button type="button" onClick={() => setCalculatorOpen(true)} className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 hover:underline" title="Abrir calculadora de presupuesto">
+                  <HelpCircle size={14} /> Ayuda para calcular
+                </button>
+              </div>
               <div className="relative">
                 <span className="absolute left-3.5 top-2.5 text-sm font-bold text-[var(--color-laburante-text-muted)]">
                   $
@@ -105,6 +135,17 @@ export default function BudgetModal({
                 />
               </div>
             </div>
+
+            {calculatorOpen && (
+              <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-indigo-950">
+                <div className="flex items-start justify-between gap-3"><div><p className="flex items-center gap-1.5 text-xs font-bold"><Calculator size={15} /> Calculadora orientativa</p><p className="mt-1 text-[11px] leading-relaxed">Calculá un piso para no olvidarte de costos. No fija el precio ni reemplaza tu criterio.</p></div><button type="button" onClick={() => setCalculatorOpen(false)} aria-label="Cerrar calculadora"><X size={15} /></button></div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {calculatorFields.map((field) => <label key={field.key} className="text-[10px] font-semibold">{field.label}<input type="number" min="0" step="any" value={field.value} onChange={(event) => field.set(event.target.value)} className="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2.5 py-2 text-xs" /></label>)}
+                </div>
+                <div className="mt-3 space-y-1 rounded-xl bg-white/80 p-3 text-xs"><p>Mano de obra: <strong>${money(calculation.labor)}</strong></p><p>Costos base: <strong>${money(calculation.base)}</strong></p><p className="text-indigo-800">Flotación sugerida: <strong>${money(calculation.floatAmount)}</strong></p><p className="border-t border-indigo-100 pt-2 text-sm font-extrabold">Piso orientativo: ${money(calculation.minimum)}</p></div>
+                <button type="button" disabled={calculation.minimum <= 0} onClick={() => { setAmount(money(calculation.minimum)); setCalculatorOpen(false) }} className="mt-3 w-full rounded-xl bg-indigo-700 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-50">Usar este piso como presupuesto</button>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">
