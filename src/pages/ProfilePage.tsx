@@ -53,12 +53,6 @@ export default function ProfilePage() {
     }
   }
 
-  const handleWhatsAppShare = () => {
-    const url = `${window.location.origin}/p/${profile?.slug}`
-    const text = `Te comparto el perfil de ${profile?.name} en LABURANTE: ${url}`
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
-  }
-
   const copyContact = async (value: string, type: string) => {
     await navigator.clipboard?.writeText(value)
     setCopiedContact(type)
@@ -236,12 +230,6 @@ export default function ProfilePage() {
             {copied ? 'Copiado' : 'Compartir'}
           </button>
 
-          <button
-            onClick={handleWhatsAppShare}
-            className="py-3.5 px-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-emerald-50 text-emerald-700 font-heading font-semibold text-xs transition-colors flex items-center gap-1.5"
-          >
-            WhatsApp
-          </button>
         </div>
         <CompanyProfileActions profileId={profile.id} profileName={profile.name} />
         {(profile.contact_methods || []).some((method) => (method.type === 'web' || method.type === 'portfolio') && method.is_public) && (
