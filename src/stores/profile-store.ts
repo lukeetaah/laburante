@@ -11,6 +11,7 @@ export interface ProfileWithDetails {
   slug: string
   photo_url: string | null
   account_type?: 'persona' | 'empresa'
+  company_plan?: 'gratis' | 'pago'
   resume_url?: string | null
   resume_name?: string | null
   bio: string | null
@@ -164,7 +165,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     try {
       let query = (supabase.from('profiles') as any)
         .select(`
-          id, name, slug, photo_url, account_type, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
+          id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
           disponibilidad, modalidad, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
@@ -246,7 +247,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       // Check Supabase first
       let { data, error } = await (supabase.from('profiles') as any)
         .select(`
-          id, name, slug, photo_url, account_type, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
+          id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
           disponibilidad, modalidad, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
@@ -303,7 +304,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       const userId = userData.user.id
       let { data, error } = await (supabase.from('profiles') as any)
         .select(`
-          id, name, slug, photo_url, account_type, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
+          id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
           disponibilidad, modalidad, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),

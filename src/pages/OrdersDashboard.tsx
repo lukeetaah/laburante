@@ -30,12 +30,14 @@ import OutcomeModal from '@/components/jobs/OutcomeModal'
 import type { JobRequestStatus } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
 import { useNotificationStore } from '@/stores/notification-store'
+import { isCompanyAccount } from '@/lib/account'
 
 const isArchivedInquiry = (item: any) => Boolean(item?.archived_at) || item?.status === 'cerrada'
 
 export default function OrdersDashboard() {
   const { user } = useAuthStore()
   const { myProfile, fetchMyProfile } = useProfileStore()
+  const companyAccount = isCompanyAccount(user, myProfile)
   const {
     clientRequests,
     proJobs,
@@ -67,7 +69,7 @@ export default function OrdersDashboard() {
     if (user) {
       fetchMyProfile()
       fetchMyJobs()
-      if (user.user_metadata?.account_type !== 'empresa') {
+      if (!companyAccount) {
         ;(async () => {
           const { data } = await (supabase.from('company_candidate_inquiries') as any)
             .select('*').eq('profile_id', user.id).order('created_at', { ascending: false })
@@ -85,7 +87,7 @@ export default function OrdersDashboard() {
         })()
       }
     }
-  }, [user, fetchMyRequests, fetchMyJobs, fetchMyProfile])
+  }, [user, companyAccount, fetchMyRequests, fetchMyJobs, fetchMyProfile])
 
   // If user has a profile, default to professional tab if they have received jobs
   useEffect(() => {

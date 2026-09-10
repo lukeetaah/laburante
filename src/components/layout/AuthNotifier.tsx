@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProfileStore } from '@/stores/profile-store'
+import { isCompanyAccount } from '@/lib/account'
 import { CheckCircle2, ArrowRight, X, Sparkles } from 'lucide-react'
 
 export default function AuthNotifier() {
   const { user } = useAuthStore()
+  const myProfile = useProfileStore((state) => state.myProfile)
   const location = useLocation()
   const navigate = useNavigate()
   const [showConfirmedNotice, setShowConfirmedNotice] = useState(false)
@@ -31,7 +34,7 @@ export default function AuthNotifier() {
       // If user came from signup confirmation and is on home page, prompt or guide to /crear-perfil
       if (location.pathname === '/') {
         const intent = user?.user_metadata?.intent
-        const isCompany = user?.user_metadata?.account_type === 'empresa'
+        const isCompany = isCompanyAccount(user, myProfile)
         if (isCompany) {
           navigate('/empresa')
         } else if (intent === 'ofrecer' || intent === 'ambas') {
@@ -40,7 +43,7 @@ export default function AuthNotifier() {
         }
       }
     }
-  }, [user, location.pathname, navigate])
+  }, [user, myProfile, location.pathname, navigate])
 
   useEffect(() => {
     if (user?.user_metadata?.name) {
@@ -63,11 +66,11 @@ export default function AuthNotifier() {
         <div className="flex items-center gap-3 flex-shrink-0">
           {location.pathname !== '/crear-perfil' && location.pathname !== '/empresa' && (
             <Link
-              to={user?.user_metadata?.account_type === 'empresa' ? '/empresa' : '/crear-perfil?confirmed=true'}
+              to={isCompanyAccount(user, myProfile) ? '/empresa' : '/crear-perfil?confirmed=true'}
               onClick={() => setShowConfirmedNotice(false)}
               className="py-1.5 px-4 rounded-xl bg-white text-emerald-950 font-heading font-bold text-xs hover:bg-emerald-50 transition-colors shadow-xs flex items-center gap-1.5"
             >
-              {user?.user_metadata?.account_type === 'empresa' ? 'Ir a mi espacio Empresa' : 'Completar mi perfil de trabajo'}
+              {isCompanyAccount(user, myProfile) ? 'Ir a mi espacio Empresa' : 'Completar mi perfil de trabajo'}
               <ArrowRight size={13} />
             </Link>
           )}

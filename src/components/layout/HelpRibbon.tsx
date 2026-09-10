@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, CircleHelp, Search, UserRound, Building2, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProfileStore } from '@/stores/profile-store'
+import { isCompanyAccount } from '@/lib/account'
 
 export default function HelpRibbon() {
   const { user, isAdmin } = useAuthStore()
+  const myProfile = useProfileStore((state) => state.myProfile)
   const location = useLocation()
   const [open, setOpen] = useState(false)
   if (location.pathname === '/como-funciona') return null
 
-  const isCompany = user?.user_metadata?.account_type === 'empresa'
+  const isCompany = isCompanyAccount(user, myProfile)
   const context = isAdmin ? 'admin' : isCompany ? 'empresa' : user ? 'laburante' : 'visitante'
   const content = {
     visitante: { icon: Search, title: '¿Cómo funciona LABURANTE?', text: 'Describí lo que necesitás, pedí un presupuesto y coordiná después de recibir respuesta.', link: '/buscar', cta: 'Empezar a buscar' },

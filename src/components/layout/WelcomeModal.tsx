@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProfileStore } from '@/stores/profile-store'
+import { isCompanyAccount } from '@/lib/account'
 import { CheckCircle2, ArrowRight, Sparkles, UserCheck, MapPin, Phone, Building2 } from 'lucide-react'
 
 export default function WelcomeModal() {
   const { user } = useAuthStore()
+  const myProfile = useProfileStore((state) => state.myProfile)
   const navigate = useNavigate()
   const location = useLocation()
   const [isOpen, setIsOpen] = useState(false)
@@ -34,7 +37,7 @@ export default function WelcomeModal() {
   const metadata = user?.user_metadata || {}
   const userName = metadata.name || 'Trabajador'
   const userPhone = metadata.phone || ''
-  const isCompany = metadata.account_type === 'empresa'
+  const isCompany = isCompanyAccount(user, myProfile)
   const userLocation = metadata.localidad
     ? `${metadata.localidad}, ${metadata.provincia || 'Argentina'}`
     : metadata.provincia || 'Argentina'

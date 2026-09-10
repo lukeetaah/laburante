@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProfileStore } from '@/stores/profile-store'
+import { isCompanyAccount } from '@/lib/account'
 import { LogIn, ArrowRight } from 'lucide-react'
 
 export default function Login() {
@@ -10,6 +12,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
 
   const signIn = useAuthStore((s) => s.signIn)
+  const fetchMyProfile = useProfileStore((s) => s.fetchMyProfile)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,7 +26,8 @@ export default function Login() {
     if (res.error) {
       setError(res.error)
     } else {
-      navigate(useAuthStore.getState().user?.user_metadata?.account_type === 'empresa' ? '/empresa' : '/crear-perfil')
+      const profile = await fetchMyProfile()
+      navigate(isCompanyAccount(useAuthStore.getState().user, profile) ? '/empresa' : '/crear-perfil')
     }
   }
 

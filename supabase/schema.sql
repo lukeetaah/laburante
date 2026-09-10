@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     zona_trabajo TEXT,
     disponibilidad job_disponibilidad NOT NULL DEFAULT 'disponible',
     modalidad job_modalidad NOT NULL DEFAULT 'presencial',
+    company_plan TEXT NOT NULL DEFAULT 'gratis' CHECK (company_plan IN ('gratis', 'pago')),
     status profile_status NOT NULL DEFAULT 'activo',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -210,15 +211,19 @@ CREATE POLICY "Owner manage services"
     USING (auth.uid() = profile_id)
     WITH CHECK (auth.uid() = profile_id);
 
--- Contact Methods: Only public if is_public = true AND profile is active; owner can read and edit all
+-- Contact Methods: portfolio/web are public; direct channels require a responded request.
 DROP POLICY IF EXISTS "Public read public contact methods" ON public.contact_methods;
 CREATE POLICY "Public read public contact methods"
     ON public.contact_methods FOR SELECT
     USING (
-        (is_public = true AND EXISTS (
-            SELECT 1 FROM public.profiles p WHERE p.id = contact_methods.profile_id AND p.status = 'activo'
-        ))
-        OR auth.uid() = profile_id
+        auth.uid() = profile_id
+        OR (
+            is_public = true
+            AND type IN ('web', 'portfolio')
+            AND EXISTS (
+                SELECT 1 FROM public.profiles p WHERE p.id = contact_methods.profile_id AND p.status = 'activo'
+            )
+        )
     );
 
 DROP POLICY IF EXISTS "Owner manage contact methods" ON public.contact_methods;
@@ -344,6 +349,30 @@ CREATE TRIGGER set_job_requests_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
 
+-- Extend contact visibility after job_requests exists in the schema.
+DROP POLICY IF EXISTS "Public read public contact methods" ON public.contact_methods;
+CREATE POLICY "Public read public contact methods"
+    ON public.contact_methods FOR SELECT
+    USING (
+        auth.uid() = profile_id
+        OR (
+            is_public = true
+            AND type IN ('web', 'portfolio')
+            AND EXISTS (
+                SELECT 1 FROM public.profiles p WHERE p.id = contact_methods.profile_id AND p.status = 'activo'
+            )
+        )
+        OR (
+            is_public = true
+            AND EXISTS (
+                SELECT 1 FROM public.job_requests j
+                WHERE j.profile_id = contact_methods.profile_id
+                  AND j.client_id = auth.uid()
+                  AND j.status IN ('presupuestado', 'aceptado', 'en_progreso', 'completado')
+            )
+        )
+    );
+
 -- ==========================================================
 -- 10. PROFILES ENHANCEMENTS (WhatsApp verification & notifications)
 -- ==========================================================
@@ -451,6 +480,3 @@ DROP POLICY IF EXISTS "Admins and system can update verification requests" ON pu
 CREATE POLICY "Admins and system can update verification requests"
     ON public.whatsapp_verification_requests FOR UPDATE
     USING (true);
-
-
-

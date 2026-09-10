@@ -36,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_company_candidate_inquiries_archive ON public.com
 
 DROP POLICY IF EXISTS "Companies create candidate inquiries" ON public.company_candidate_inquiries;
 CREATE POLICY "Companies create candidate inquiries" ON public.company_candidate_inquiries FOR INSERT
-  WITH CHECK (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa');
+  WITH CHECK (auth.uid() = company_id AND EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.account_type = 'empresa'));
 
 DROP POLICY IF EXISTS "Participants read candidate inquiries" ON public.company_candidate_inquiries;
 CREATE POLICY "Participants read candidate inquiries" ON public.company_candidate_inquiries FOR SELECT

@@ -3,11 +3,14 @@ import { Bookmark, Check, FolderPlus, Heart, Plus, Send, X } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { supabase } from '@/lib/supabase'
 import { useNotificationStore } from '@/stores/notification-store'
+import { useProfileStore } from '@/stores/profile-store'
+import { isCompanyAccount } from '@/lib/account'
 
 interface Props { profileId: string; profileName: string }
 
 export default function CompanyProfileActions({ profileId, profileName }: Props) {
   const user = useAuthStore((state) => state.user)
+  const myProfile = useProfileStore((state) => state.myProfile)
   const [saved, setSaved] = useState(false)
   const [open, setOpen] = useState(false)
   const [projects, setProjects] = useState<string[]>([])
@@ -17,7 +20,7 @@ export default function CompanyProfileActions({ profileId, profileName }: Props)
   const [feedback, setFeedback] = useState('')
   const [existingInquiry, setExistingInquiry] = useState<any | null>(null)
   const [refreshAvailable, setRefreshAvailable] = useState(false)
-  const isCompany = user?.user_metadata?.account_type === 'empresa'
+  const isCompany = isCompanyAccount(user, myProfile)
 
   useEffect(() => {
     if (!isCompany || !user) return

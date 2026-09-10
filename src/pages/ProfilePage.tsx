@@ -8,6 +8,7 @@ import RecommendationModal from '@/components/profile/RecommendationModal'
 import JobRequestModal from '@/components/jobs/JobRequestModal'
 import { SITE_CONFIG } from '@/lib/constants'
 import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
+import { isCompanyAccount } from '@/lib/account'
 
 export default function ProfilePage() {
   const { user } = useAuthStore()
@@ -25,6 +26,7 @@ export default function ProfilePage() {
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
   const updateProfileVisibility = useProfileStore((s) => s.updateProfileVisibility)
   const currentProfile = useProfileStore((s) => s.currentProfile)
+  const myProfile = useProfileStore((s) => s.myProfile)
 
   useEffect(() => {
     if (!slug) return
@@ -88,7 +90,7 @@ export default function ProfilePage() {
   }
 
   const isOwnProfile = user?.id === profile.id
-  const isCompanyViewer = user?.user_metadata?.account_type === 'empresa'
+  const isCompanyViewer = isCompanyAccount(user, myProfile)
 
   return (
     <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">

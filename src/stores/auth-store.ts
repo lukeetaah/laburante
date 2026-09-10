@@ -62,6 +62,7 @@ async function ensureUserProfile(user: User | null) {
         disponibilidad: 'disponible',
         modalidad: 'presencial',
         account_type: meta.account_type === 'empresa' ? 'empresa' : 'persona',
+        company_plan: meta.account_type === 'empresa' && meta.company_plan === 'pago' ? 'pago' : 'gratis',
         status: meta.account_type === 'empresa' ? 'oculto' : 'activo',
       })
 

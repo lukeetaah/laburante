@@ -48,7 +48,7 @@ export default function Companies() {
               ))}
             </div>
             <p className="mt-8 border-t border-[var(--color-laburante-border)] pt-5 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">
-              La cuenta Gratis no vence ni cobra comisión. El plan Pago cuesta ARS $39.900 por mes y se activa con confirmación comercial; no se cobra nada sin tu autorización.
+              La cuenta Gratis no vence ni cobra comisión. El plan Pago cuesta ARS $39.900 por mes y se activa con confirmación comercial y habilitación administrativa; no se cobra nada sin tu autorización.
             </p>
           </div>
         </div>

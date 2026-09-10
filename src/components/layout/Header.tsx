@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
+import { isCompanyAccount } from '@/lib/account'
 import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2 } from 'lucide-react'
 import NotificationBell from '@/components/notifications/NotificationBell'
 
@@ -22,10 +23,9 @@ export default function Header() {
   }
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Mi cuenta'
-  const metadataAccountType = user?.user_metadata?.account_type || user?.user_metadata?.accountType
-  const isCompanyAccount = metadataAccountType === 'empresa' || (myProfile?.id === user?.id && myProfile?.account_type === 'empresa')
-  const showOfferLink = !isCompanyAccount && (!user || (profileChecked && !myProfile))
-  const accountPath = isCompanyAccount ? '/empresa' : '/crear-perfil'
+  const companyAccount = isCompanyAccount(user, myProfile)
+  const showOfferLink = !companyAccount && (!user || (profileChecked && !myProfile))
+  const accountPath = companyAccount ? '/empresa' : '/crear-perfil'
 
   useEffect(() => {
     let active = true
@@ -73,7 +73,7 @@ export default function Header() {
           >
             Categorías
           </Link>
-          {isCompanyAccount ? (
+          {companyAccount ? (
             <Link
               to="/empresa"
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -108,7 +108,7 @@ export default function Header() {
           >
             Cómo funciona
           </Link>
-          {!isCompanyAccount && <Link
+          {!companyAccount && <Link
             to="/empresas"
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               isActive('/empresas')
@@ -198,7 +198,7 @@ export default function Header() {
           <Link to="/categorias" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             Categorías
           </Link>
-          {isCompanyAccount ? (
+          {companyAccount ? (
             <Link to="/empresa" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
               <Building2 size={16} /> Espacio Empresa
             </Link>
@@ -210,7 +210,7 @@ export default function Header() {
           <Link to="/como-funciona" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             Cómo funciona
           </Link>
-          {!isCompanyAccount && <Link to="/empresas" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
+          {!companyAccount && <Link to="/empresas" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             <Building2 size={16} /> Empresas
           </Link>}
           {showOfferLink && <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-accent)] font-medium">
@@ -228,7 +228,7 @@ export default function Header() {
                 Conectado como: <span className="text-[var(--color-laburante-text)]">{displayName}</span>
               </div>
               <Link to={accountPath} onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                <User size={16} /> {isCompanyAccount ? 'Espacio Empresa' : 'Mi perfil profesional'}
+                <User size={16} /> {companyAccount ? 'Espacio Empresa' : 'Mi perfil profesional'}
               </Link>
               <button onClick={handleSignOut} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-rose-600 hover:bg-rose-50 w-full text-left font-medium">
                 <LogOut size={16} /> Cerrar sesión

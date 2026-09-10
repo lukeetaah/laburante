@@ -31,9 +31,9 @@ CREATE POLICY "Admins read all profiles" ON public.profiles FOR SELECT USING (
 );
 
 DROP POLICY IF EXISTS "Companies manage own projects" ON public.company_projects;
-CREATE POLICY "Companies manage own projects" ON public.company_projects FOR ALL USING (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa') WITH CHECK (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa');
+CREATE POLICY "Companies manage own projects" ON public.company_projects FOR ALL USING (auth.uid() = company_id AND EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.account_type = 'empresa')) WITH CHECK (auth.uid() = company_id AND EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.account_type = 'empresa'));
 DROP POLICY IF EXISTS "Companies manage own saved profiles" ON public.company_saved_profiles;
-CREATE POLICY "Companies manage own saved profiles" ON public.company_saved_profiles FOR ALL USING (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa') WITH CHECK (auth.uid() = company_id AND (auth.jwt() -> 'user_metadata' ->> 'account_type') = 'empresa');
+CREATE POLICY "Companies manage own saved profiles" ON public.company_saved_profiles FOR ALL USING (auth.uid() = company_id AND EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.account_type = 'empresa')) WITH CHECK (auth.uid() = company_id AND EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.account_type = 'empresa'));
 
 INSERT INTO storage.buckets (id, name, public) VALUES ('profile-assets', 'profile-assets', true) ON CONFLICT (id) DO NOTHING;
 DROP POLICY IF EXISTS "Public read profile assets" ON storage.objects;

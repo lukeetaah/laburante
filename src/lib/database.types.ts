@@ -11,6 +11,7 @@ export type Database = {
           slug: string
           photo_url: string | null
           account_type?: 'persona' | 'empresa'
+          company_plan?: 'gratis' | 'pago'
           resume_url?: string | null
           resume_name?: string | null
           bio: string | null

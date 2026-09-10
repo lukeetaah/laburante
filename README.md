@@ -97,6 +97,10 @@ laburante/
 El script SQL completo con todas las tablas, índices y políticas RLS está disponible en:
 `supabase/schema.sql`.
 
+Para una instalación existente, aplicar las migraciones de Empresa y oportunidades (`migration_companies_documents.sql`, `migration_opportunities_languages.sql`, `migration_company_opportunity_budget.sql` y `migration_company_candidate_inquiries.sql`) y luego `supabase/migration_company_plans.sql`.
+Esa migración agrega el plan persistente de las cuentas Empresa y la operación protegida
+que permite al administrador activar o quitar el plan Pago desde el panel.
+
 ---
 
 ## Licencia y Créditos

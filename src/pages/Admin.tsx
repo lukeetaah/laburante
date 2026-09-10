@@ -78,12 +78,12 @@ export default function Admin() {
       // 2. Fetch all Profiles
       let profilesData: any[] | null = null
       const resProfiles = await (supabase.from('profiles') as any)
-        .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, created_at, whatsapp_verified, whatsapp_verified_at')
+        .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, company_plan, created_at, whatsapp_verified, whatsapp_verified_at')
         .order('created_at', { ascending: false })
 
       if (resProfiles.error) {
         const resFallback = await (supabase.from('profiles') as any)
-          .select('id, name, slug, provincia, localidad, status, disponibilidad, created_at')
+          .select('id, name, slug, provincia, localidad, status, disponibilidad, account_type, created_at')
           .order('created_at', { ascending: false })
         profilesData = resFallback.data
       } else {
@@ -193,6 +193,34 @@ export default function Admin() {
       )
       setActionMessage(`Estado del perfil actualizado a: ${nextStatus.toUpperCase()}.`)
     }
+  }
+
+  const handleSetCompanyPlan = async (profile: any, plan: 'gratis' | 'pago') => {
+    if (profile.account_type !== 'empresa') return
+    setActionMessage(null)
+    let { error } = await (supabase.rpc as any)('admin_set_company_plan', {
+      target_user_id: profile.id,
+      target_plan: plan,
+    })
+
+    // Permite operar con la política de admin si la función todavía no fue
+    // creada, sin abrir el update a cuentas no administrativas.
+    if (error) {
+      const fallback = await (supabase.from('profiles') as any)
+        .update({ company_plan: plan, updated_at: new Date().toISOString() })
+        .eq('id', profile.id)
+        .eq('account_type', 'empresa')
+        .select('id, company_plan')
+        .maybeSingle()
+      error = fallback.error || (!fallback.data ? { message: 'No se actualizó ninguna cuenta Empresa.' } : null)
+    }
+
+    if (error) {
+      setActionMessage(`No se pudo cambiar el plan de ${profile.name}: ${error.message}. Aplicá migration_company_plans.sql en Supabase.`)
+      return
+    }
+    setProfiles((prev) => prev.map((item) => item.id === profile.id ? { ...item, company_plan: plan } : item))
+    setActionMessage(`${profile.name} quedó en plan ${plan === 'pago' ? 'Pago' : 'Gratis'}.`)
   }
 
   const handleToggleProfileVisibility = async (profileId: string, currentStatus: string) => {
@@ -846,14 +874,15 @@ export default function Admin() {
         <div className="space-y-4">
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-xs text-indigo-950">
             <p className="font-bold">Cuentas Empresa</p>
-            <p className="mt-1 leading-relaxed">Acá aparecen las cuentas que buscan profesionales. Sus perfiles internos quedan ocultos del buscador público y se administran desde este panel.</p>
+            <p className="mt-1 leading-relaxed">Acá aparecen las cuentas que buscan profesionales. Sus perfiles internos quedan ocultos del buscador público y se administran desde este panel. Desde Plan podés activar o quitar Pago; eso habilita publicar y derivar oportunidades.</p>
           </div>
           {profiles.filter((p) => p.account_type === 'empresa').length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">Todavía no hay cuentas Empresa sincronizadas. Verificá la migración de Supabase y refrescá los datos.</div>
           ) : profiles.filter((p) => p.account_type === 'empresa').map((company) => (
             <div key={company.id} className="flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-[var(--color-laburante-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div><div className="flex items-center gap-2"><Building2 size={17} className="text-indigo-600" /><h3 className="font-heading font-bold text-sm">{company.name}</h3><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">EMPRESA</span></div><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{company.localidad}, {company.provincia} · Alta {new Date(company.created_at).toLocaleDateString()}</p></div>
+              <div><div className="flex flex-wrap items-center gap-2"><Building2 size={17} className="text-indigo-600" /><h3 className="font-heading font-bold text-sm">{company.name}</h3><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">EMPRESA</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${company.company_plan === 'pago' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{company.company_plan === 'pago' ? 'PLAN PAGO' : 'PLAN GRATIS'}</span></div><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{company.localidad}, {company.provincia} · Alta {new Date(company.created_at).toLocaleDateString()}</p></div>
               <div className="flex flex-wrap gap-2">
+                <label className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">Plan<select value={company.company_plan || 'gratis'} onChange={(event) => handleSetCompanyPlan(company, event.target.value as 'gratis' | 'pago')} className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs font-bold text-amber-900"><option value="gratis">Gratis</option><option value="pago">Pago</option></select></label>
                 <button onClick={() => openProfileEditor(company)} className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800"><Pencil size={13} /> Editar</button>
                 <button onClick={() => handleToggleProfileStatus(company.id, company.status)} className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">{company.status === 'suspendido' ? 'Reactivar cuenta' : 'Suspender cuenta'}</button>
                 <button onClick={() => handleDeleteAccount(company)} className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800"><Trash2 size={13} /> Eliminar</button>
