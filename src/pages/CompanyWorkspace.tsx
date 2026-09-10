@@ -14,6 +14,7 @@ export default function CompanyWorkspace() {
   const companyName = user?.user_metadata?.name || 'Tu empresa'
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [incoming, setIncoming] = useState<any[]>([])
+  const [candidateInquiries, setCandidateInquiries] = useState<any[]>([])
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [originPlatform, setOriginPlatform] = useState('')
@@ -25,12 +26,19 @@ export default function CompanyWorkspace() {
 
   const loadOpportunities = async () => {
     if (!user) return
-    const [own, shared] = await Promise.all([
+    const [own, shared, inquiries] = await Promise.all([
       (supabase.from('company_opportunities') as any).select('*').eq('source_company_id', user.id).order('created_at', { ascending: false }),
       (supabase.from('company_opportunity_shares') as any).select('id, source_company_id, status, match_reason, created_at, company_opportunities(title, description, budget_amount, estimated_time, origin_platform, origin_note, localidad, provincia)').eq('recipient_company_id', user.id).order('created_at', { ascending: false }),
+      (supabase.from('company_candidate_inquiries') as any).select('*').eq('company_id', user.id).order('created_at', { ascending: false }),
     ])
     if (!own.error) setOpportunities(own.data || [])
     if (!shared.error) setIncoming(shared.data || [])
+    if (!inquiries.error) {
+      const profileIds = (inquiries.data || []).map((item: any) => item.profile_id)
+      const { data: profiles } = profileIds.length ? await (supabase.from('profiles') as any).select('id, name, slug, localidad, provincia').in('id', profileIds) : { data: [] }
+      const byId = new Map((profiles || []).map((profile: any) => [profile.id, profile]))
+      setCandidateInquiries((inquiries.data || []).map((item: any) => ({ ...item, profile: byId.get(item.profile_id) })))
+    }
   }
 
   useEffect(() => { loadOpportunities() }, [user])
@@ -88,7 +96,8 @@ export default function CompanyWorkspace() {
   return <div className="container py-10 md:py-16 space-y-8">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]"><Building2 size={15} /> Espacio Empresa</p><h1 className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">Hola, {companyName}</h1><p className="mt-1 text-sm text-[var(--color-laburante-text-secondary)]">Tu cuenta está lista para buscar profesionales.</p></div><Link to="/buscar" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"><Search size={16} /> Empezar a buscar</Link></div>
     <div className="grid gap-5 md:grid-cols-3"><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Search className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Búsqueda real</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Usá la búsqueda pública y revisá también los idiomas declarados en cada perfil.</p></article><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Users className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Red de empresas</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Cuando una búsqueda no encuentra respuesta, podés derivarla a empresas similares.</p></article><article className="rounded-2xl border border-amber-300 bg-amber-50/50 p-6"><Check className="text-emerald-600" size={22} /><h2 className="mt-4 font-heading font-bold">Sin spam</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Solo se comparte el pedido entre cuentas Empresa, sin exponer contactos ni datos privados.</p></article></div>
-    {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{message}</div>}
+     {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{message}</div>}
+     {candidateInquiries.length > 0 && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5"><div className="flex items-center gap-2"><Users size={18} className="text-indigo-700" /><div><h2 className="font-heading text-xl font-bold text-indigo-950">Procesos de selección</h2><p className="mt-1 text-xs text-indigo-900/75">Acá encontrás todas las propuestas enviadas a LABURANTEs y sus respuestas.</p></div></div><div className="mt-4 space-y-3">{candidateInquiries.map((item) => <article key={item.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{item.profile?.name || 'LABURANTE'} · {item.process_type === 'entrevista' ? 'Entrevista' : 'Contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">Enviada el {new Date(item.created_at).toLocaleDateString('es-AR')} · {item.profile?.localidad || item.profile?.provincia || 'Ubicación no informada'}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${item.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : item.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{item.status}</span></div>{item.message && <p className="mt-2 text-xs text-[var(--color-laburante-text-secondary)]">{item.message}</p>}{item.status === 'aceptada' && <p className="mt-3 rounded-lg bg-emerald-50 p-2 text-xs font-semibold text-emerald-800">La persona aceptó conversar. Podés coordinar la entrevista y completar el alta de proveedor y la orden de compra según tu circuito.</p>}</article>)}</div></section>}
     <section className="grid gap-6 lg:grid-cols-[1.05fr_.95fr]">
       <form onSubmit={publishOpportunity} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 space-y-4">
         <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-700"><Send size={15} /> Publicar una idea o necesidad</p><h2 className="mt-2 font-heading text-xl font-bold">Que la oportunidad siga circulando</h2><p className="mt-1 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">Describí qué necesitás, qué podés pagar y para cuándo. LABURANTE lo ofrece a personas y empresas similares por zona.</p></div>

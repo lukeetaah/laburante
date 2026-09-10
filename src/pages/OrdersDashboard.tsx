@@ -54,6 +54,7 @@ export default function OrdersDashboard() {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
   const [outcomeModal, setOutcomeModal] = useState<{ job: JobRequestWithDetails; role: 'cliente' | 'profesional'; blocking?: boolean } | null>(null)
   const [companyInquiries, setCompanyInquiries] = useState<any[]>([])
+  const [selectedCompanyInquiry, setSelectedCompanyInquiry] = useState<any | null>(null)
 
   useEffect(() => {
     fetchMyRequests()
@@ -61,7 +62,16 @@ export default function OrdersDashboard() {
       fetchMyProfile()
       fetchMyJobs()
       if (user.user_metadata?.account_type !== 'empresa') {
-        ;(supabase.from('company_candidate_inquiries') as any).select('*').eq('profile_id', user.id).eq('status', 'pendiente').order('created_at', { ascending: false }).then(({ data }: any) => setCompanyInquiries(data || []))
+        ;(async () => {
+          const { data } = await (supabase.from('company_candidate_inquiries') as any)
+            .select('*').eq('profile_id', user.id).order('created_at', { ascending: false })
+          const companyIds = (data || []).map((item: any) => item.company_id)
+          const { data: companies } = companyIds.length
+            ? await (supabase.from('profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', companyIds)
+            : { data: [] }
+          const companyById = new Map((companies || []).map((company: any) => [company.id, company]))
+          setCompanyInquiries((data || []).map((item: any) => ({ ...item, company: companyById.get(item.company_id) })))
+        })()
       }
     }
   }, [user, fetchMyRequests, fetchMyJobs, fetchMyProfile])
@@ -107,7 +117,8 @@ export default function OrdersDashboard() {
     if (!user) return
     const { error } = await (supabase.from('company_candidate_inquiries') as any).update({ status, updated_at: new Date().toISOString() }).eq('id', inquiry.id).eq('profile_id', user.id)
     if (error) return
-    setCompanyInquiries((items) => items.filter((item) => item.id !== inquiry.id))
+    setCompanyInquiries((items) => items.map((item) => item.id === inquiry.id ? { ...item, status } : item))
+    setSelectedCompanyInquiry(null)
     await useNotificationStore.getState().addNotification({
       userId: inquiry.company_id,
       title: status === 'aceptada' ? 'Aceptaron tu propuesta' : 'No avanzarán con tu propuesta',
@@ -158,7 +169,9 @@ export default function OrdersDashboard() {
         </div>
       </div>
 
-      {companyInquiries.length > 0 && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Propuestas de Empresas</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">No son pedidos de presupuesto: son invitaciones a entrevista o conversación de contratación. Respondé para que la Empresa sepa cómo seguir.</p></div>{companyInquiries.map((inquiry) => <article key={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p>{inquiry.message && <p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => respondToCompanyInquiry(inquiry, 'aceptada')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Aceptar propuesta</button><button type="button" onClick={() => respondToCompanyInquiry(inquiry, 'rechazada')} className="rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">No avanzar</button></div></article>)}</section>}
+      {companyInquiries.length > 0 && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Selección Empresa</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">Acá quedan guardadas todas las propuestas de entrevista o contratación. Abrí cada una para revisar la Empresa, el proyecto y el mensaje antes de responder.</p></div>{companyInquiries.map((inquiry) => <article key={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.company?.name || 'Empresa'} · {new Date(inquiry.created_at).toLocaleDateString('es-AR')}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiry.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : inquiry.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{inquiry.status}</span></div>{inquiry.message && <p className="mt-2 line-clamp-2 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<button type="button" onClick={() => setSelectedCompanyInquiry(inquiry)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Ver propuesta y datos <ChevronRight size={14} /></button></article>)}</section>}
+
+      {selectedCompanyInquiry && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Detalle de selección Empresa</p><h2 className="mt-1 font-heading text-xl font-bold">{selectedCompanyInquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</h2></div><button type="button" onClick={() => setSelectedCompanyInquiry(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Cerrar"><XCircle size={18} /></button></div><div className="mt-5 space-y-3 text-sm"><div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4"><p className="font-bold text-indigo-950">{selectedCompanyInquiry.company?.name || 'Empresa'}</p><p className="mt-1 text-xs text-indigo-900/75">{[selectedCompanyInquiry.company?.localidad, selectedCompanyInquiry.company?.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}</p>{selectedCompanyInquiry.company?.slug && <Link to={`/p/${selectedCompanyInquiry.company.slug}`} onClick={() => setSelectedCompanyInquiry(null)} className="mt-2 inline-flex text-xs font-semibold text-indigo-700">Ver perfil de la Empresa <ExternalLink size={13} className="ml-1" /></Link>}</div><div><p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Mensaje de la Empresa</p><p className="mt-1 whitespace-pre-line text-sm text-gray-800">{selectedCompanyInquiry.message || 'La Empresa no agregó un mensaje adicional.'}</p></div><p className="text-xs text-gray-500">Recibida el {new Date(selectedCompanyInquiry.created_at).toLocaleString('es-AR')}</p></div>{selectedCompanyInquiry.status === 'pendiente' ? <div className="mt-6 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => respondToCompanyInquiry(selectedCompanyInquiry, 'rechazada')} className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-semibold">No avanzar</button><button type="button" onClick={() => respondToCompanyInquiry(selectedCompanyInquiry, 'aceptada')} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white">Aceptar y conversar</button></div> : <div className="mt-6 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">Ya respondiste esta propuesta como <strong>{selectedCompanyInquiry.status}</strong>. La Empresa recibió tu decisión.</div>}</div></div>}
 
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[var(--color-laburante-border)]">
