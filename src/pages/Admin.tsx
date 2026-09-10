@@ -88,6 +88,7 @@ export default function Admin() {
       }
 
       // 3. Fetch WhatsApp verification requests
+      await (supabase.rpc as any)('admin_cleanup_orphan_verifications')
       const waReqs = await fetchPendingWhatsAppVerifications()
       setWaRequests(waReqs)
 

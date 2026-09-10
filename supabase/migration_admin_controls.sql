@@ -38,6 +38,25 @@ $$;
 REVOKE ALL ON FUNCTION public.admin_delete_account(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.admin_delete_account(UUID) TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.admin_cleanup_orphan_verifications()
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  IF COALESCE(auth.jwt() -> 'user_metadata' ->> 'role', '') <> 'admin'
+     AND COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
+    RAISE EXCEPTION 'Solo un administrador puede limpiar verificaciones';
+  END IF;
+  DELETE FROM public.whatsapp_verification_requests AS requests
+  WHERE NOT EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = requests.profile_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.admin_cleanup_orphan_verifications() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.admin_cleanup_orphan_verifications() TO authenticated;
+
 DROP POLICY IF EXISTS "Admins can manage categories" ON public.categories;
 CREATE POLICY "Admins can manage categories"
   ON public.categories FOR ALL

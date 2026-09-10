@@ -692,8 +692,16 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           ...local.filter((l) => !dbIds.has(l.id)),
         ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-        saveLocalWARequests(merged)
-        return merged
+        const profileIds = Array.from(new Set(merged.map((request) => request.profile_id)))
+        if (!profileIds.length) return []
+        const { data: existingProfiles, error: profileError } = await (supabase.from('profiles') as any)
+          .select('id')
+          .in('id', profileIds)
+        if (profileError) return merged
+        const existingIds = new Set((existingProfiles || []).map((profile: any) => profile.id))
+        const validRequests = merged.filter((request) => existingIds.has(request.profile_id))
+        saveLocalWARequests(validRequests)
+        return validRequests
       }
     } catch (e) {
       console.warn('Supabase fetchPendingWhatsAppVerifications failed, using local:', e)
