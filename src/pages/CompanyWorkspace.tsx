@@ -4,6 +4,7 @@ import { ArrowRight, Building2, Check, Inbox, Search, Send, Users } from 'lucide
 import { useAuthStore } from '@/stores/auth-store'
 import { SITE_CONFIG } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
+import { useNotificationStore } from '@/stores/notification-store'
 
 type Opportunity = { id: string; title: string; description: string; status: string; created_at: string }
 
@@ -26,7 +27,7 @@ export default function CompanyWorkspace() {
     if (!user) return
     const [own, shared] = await Promise.all([
       (supabase.from('company_opportunities') as any).select('*').eq('source_company_id', user.id).order('created_at', { ascending: false }),
-      (supabase.from('company_opportunity_shares') as any).select('id, status, match_reason, created_at, company_opportunities(title, description, budget_amount, estimated_time, origin_platform, origin_note, localidad, provincia)').eq('recipient_company_id', user.id).order('created_at', { ascending: false }),
+      (supabase.from('company_opportunity_shares') as any).select('id, source_company_id, status, match_reason, created_at, company_opportunities(title, description, budget_amount, estimated_time, origin_platform, origin_note, localidad, provincia)').eq('recipient_company_id', user.id).order('created_at', { ascending: false }),
     ])
     if (!own.error) setOpportunities(own.data || [])
     if (!shared.error) setIncoming(shared.data || [])
@@ -54,14 +55,34 @@ export default function CompanyWorkspace() {
       match_reason: company.provincia === user.user_metadata?.provincia ? 'Empresa de la misma provincia' : 'Empresa dentro de la red LABURANTE',
     }))
     if (recipients.length) await (supabase.from('company_opportunity_shares') as any).upsert(recipients, { onConflict: 'opportunity_id,recipient_company_id' })
+    await Promise.all(recipients.map((recipient: any) => useNotificationStore.getState().addNotification({
+      userId: recipient.recipient_company_id,
+      title: 'Nueva oportunidad en tu red',
+      message: `${title.trim()} fue derivada a tu empresa porque puede ser relevante para tu zona o actividad.${budgetAmount.trim() ? ` Presupuesto informado: ${budgetAmount.trim()}.` : ''}`,
+      type: 'job',
+      link: '/empresa',
+    })))
     setTitle(''); setDescription(''); setOriginPlatform(''); setOriginNote(''); setBudgetAmount(''); setEstimatedTime(''); setLoading(false)
     setMessage(recipients.length ? `Oportunidad publicada y enviada a ${recipients.length} empresas similares.` : 'Oportunidad publicada. Se ofrecerá a nuevas empresas similares cuando entren a la red.')
     loadOpportunities()
   }
 
   const updateIncoming = async (id: string, status: 'vista' | 'interesada' | 'descartada') => {
-    await (supabase.from('company_opportunity_shares') as any).update({ status }).eq('id', id)
+    const item = incoming.find((candidate) => candidate.id === id)
+    const { error } = await (supabase.from('company_opportunity_shares') as any).update({ status }).eq('id', id)
+    if (error) return setMessage('No se pudo actualizar la oportunidad. Intentá nuevamente.')
     setIncoming((items) => items.map((item) => item.id === id ? { ...item, status } : item))
+    if (item?.source_company_id && item.source_company_id !== user.id && status !== 'vista') {
+      await useNotificationStore.getState().addNotification({
+        userId: item.source_company_id,
+        title: status === 'interesada' ? 'Una empresa mostró interés' : 'Una empresa descartó tu oportunidad',
+        message: status === 'interesada'
+          ? `La empresa recibió “${item.company_opportunities?.title || 'tu oportunidad'}” y quiere evaluarla.`
+          : `La empresa no avanzó con “${item.company_opportunities?.title || 'tu oportunidad'}”. La red puede seguir encontrando empresas similares.`,
+        type: 'status',
+        link: '/empresa',
+      })
+    }
   }
 
   return <div className="container py-10 md:py-16 space-y-8">

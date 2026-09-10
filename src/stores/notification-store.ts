@@ -138,7 +138,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   addNotification: async (payload) => {
     const { data: userData } = await supabase.auth.getUser()
-    const userId = payload.userId || userData?.user?.id || 'anonymous'
+    const currentUserId = userData?.user?.id
+    const userId = payload.userId || currentUserId || 'anonymous'
 
     const newNotif: InAppNotification = {
       id: 'notif-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
@@ -151,20 +152,21 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       created_at: new Date().toISOString(),
     }
 
-    const local = [newNotif, ...getLocalNotifications(userData.user?.id)]
-    saveLocalNotifications(local, userData.user?.id)
+    const local = [newNotif, ...getLocalNotifications(userId)]
+    saveLocalNotifications(local, userId)
 
-    set((s) => {
-      const merged = [newNotif, ...s.notifications]
-      return {
-        notifications: merged,
-        unreadCount: merged.filter((n) => !n.read).length,
-      }
-    })
+    // Solo actualizamos la campanita de la sesión actual. Los avisos para
+    // terceros quedan persistidos para que los vea su propia cuenta.
+    if (userId === currentUserId) {
+      set((s) => {
+        const merged = [newNotif, ...s.notifications.filter((n) => n.id !== newNotif.id)]
+        return { notifications: merged, unreadCount: merged.filter((n) => !n.read).length }
+      })
+    }
 
     try {
       if (userId !== 'anonymous') {
-        await (supabase.from('notifications') as any).insert({
+        const { error } = await (supabase.from('notifications') as any).insert({
           id: newNotif.id,
           user_id: userId,
           title: newNotif.title,
@@ -173,6 +175,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           link: newNotif.link,
           read: false,
         })
+        if (error) console.warn('Could not persist notification:', error.message)
       }
     } catch (e) {
       console.warn('Could not insert notification into Supabase:', e)

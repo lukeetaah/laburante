@@ -34,6 +34,9 @@ export default function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications()
+    if (!user) return
+    const refresh = window.setInterval(fetchNotifications, 15000)
+    return () => window.clearInterval(refresh)
   }, [user, fetchNotifications])
 
   // Close when clicking outside

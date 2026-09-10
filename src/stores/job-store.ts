@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { JobRequest, JobRequestStatus, JobRequestUrgency } from '@/lib/database.types'
+import { useNotificationStore } from '@/stores/notification-store'
 
 export interface JobRequestWithDetails extends JobRequest {
   pro_name?: string
@@ -218,6 +219,16 @@ export const useJobStore = create<JobState>((set, get) => ({
         clientRequests: [record, ...s.clientRequests],
       }))
 
+      if (userId && userId !== payload.profile_id) {
+        await useNotificationStore.getState().addNotification({
+          userId: payload.profile_id,
+          title: 'Nuevo pedido de presupuesto',
+          message: `${record.client_name} necesita ayuda con: ${record.title}. Revisá el pedido y decidí si querés enviar un presupuesto.`,
+          type: 'job',
+          link: '/pedidos',
+        })
+      }
+
       return { error: null, request: record }
     } catch (e: any) {
       return { error: e.message || 'Error al enviar la solicitud.' }
@@ -226,6 +237,9 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   sendBudget: async (requestId, budget) => {
     try {
+      const { data: userData } = await supabase.auth.getUser()
+      const actorId = userData.user?.id
+      const job = [...get().proJobs, ...get().clientRequests].find((item) => item.id === requestId)
       const now = new Date().toISOString()
       const updateData: Partial<JobRequest> & { updated_at: string } = {
         status: 'presupuestado' as JobRequestStatus,
@@ -237,15 +251,15 @@ export const useJobStore = create<JobState>((set, get) => ({
       }
 
       try {
-        await (supabase.from('job_requests') as any)
+        const { error } = await (supabase.from('job_requests') as any)
           .update(updateData)
           .eq('id', requestId)
+        if (error) return { error: error.message || 'No se pudo guardar el presupuesto.' }
       } catch (e) {
         console.warn('Supabase update skipped, updating local state:', e)
       }
 
       // Update local cache
-      const { data: userData } = await supabase.auth.getUser()
       const local = getLocalCache(userData.user?.id).map((item) =>
         item.id === requestId ? { ...item, ...updateData } : item
       )
@@ -261,6 +275,16 @@ export const useJobStore = create<JobState>((set, get) => ({
         ),
       }))
 
+      if (job?.client_id && job.client_id !== actorId) {
+        await useNotificationStore.getState().addNotification({
+          userId: job.client_id,
+          title: 'Recibiste un presupuesto',
+          message: `Ya podés revisar el presupuesto para “${job.title}” y decidir cómo seguir.`,
+          type: 'budget',
+          link: '/pedidos',
+        })
+      }
+
       return { error: null }
     } catch (e: any) {
       return { error: e.message || 'Error al enviar el presupuesto.' }
@@ -273,6 +297,9 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   updateJobStatus: async (requestId, newStatus) => {
     try {
+      const { data: userData } = await supabase.auth.getUser()
+      const actorId = userData.user?.id
+      const job = [...get().proJobs, ...get().clientRequests].find((item) => item.id === requestId)
       const now = new Date().toISOString()
       const updateData: Partial<JobRequest> & { updated_at: string } = {
         status: newStatus,
@@ -280,14 +307,14 @@ export const useJobStore = create<JobState>((set, get) => ({
       }
 
       try {
-        await (supabase.from('job_requests') as any)
+        const { error } = await (supabase.from('job_requests') as any)
           .update(updateData)
           .eq('id', requestId)
+        if (error) return { error: error.message || 'No se pudo actualizar el estado.' }
       } catch (e) {
         console.warn('Supabase update skipped, updating local state:', e)
       }
 
-      const { data: userData } = await supabase.auth.getUser()
       const local = getLocalCache(userData.user?.id).map((item) =>
         item.id === requestId ? { ...item, ...updateData } : item
       )
@@ -301,6 +328,22 @@ export const useJobStore = create<JobState>((set, get) => ({
           item.id === requestId ? { ...item, ...updateData } : item
         ),
       }))
+
+      const recipientId = actorId === job?.client_id ? job?.profile_id : job?.client_id
+      if (recipientId && recipientId !== actorId) {
+        const messages: Record<string, string> = {
+          aceptado: 'Aceptaron tu presupuesto. Ya pueden coordinar el trabajo.',
+          en_progreso: 'El trabajo pasó a estado en progreso.',
+          completado: 'El trabajo fue marcado como completado. Revisá el resultado y dejá tu devolución.',
+        }
+        await useNotificationStore.getState().addNotification({
+          userId: recipientId,
+          title: newStatus === 'aceptado' ? 'Presupuesto aceptado' : 'Actualización de tu solicitud',
+          message: messages[newStatus] || `La solicitud “${job?.title || 'de trabajo'}” cambió a ${newStatus}.`,
+          type: newStatus === 'aceptado' ? 'budget' : 'status',
+          link: '/pedidos',
+        })
+      }
 
       return { error: null }
     } catch (e: any) {
@@ -310,6 +353,9 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   cancelJob: async (requestId, reason, cancelledBy) => {
     try {
+      const { data: userData } = await supabase.auth.getUser()
+      const actorId = userData.user?.id
+      const job = [...get().proJobs, ...get().clientRequests].find((item) => item.id === requestId)
       const now = new Date().toISOString()
       const updateData: Partial<JobRequest> & { updated_at: string } = {
         status: 'cancelado' as JobRequestStatus,
@@ -319,14 +365,14 @@ export const useJobStore = create<JobState>((set, get) => ({
       }
 
       try {
-        await (supabase.from('job_requests') as any)
+        const { error } = await (supabase.from('job_requests') as any)
           .update(updateData)
           .eq('id', requestId)
+        if (error) return { error: error.message || 'No se pudo cancelar la solicitud.' }
       } catch (e) {
         console.warn('Supabase update skipped, updating local state:', e)
       }
 
-      const { data: userData } = await supabase.auth.getUser()
       const local = getLocalCache(userData.user?.id).map((item) =>
         item.id === requestId ? { ...item, ...updateData } : item
       )
@@ -340,6 +386,17 @@ export const useJobStore = create<JobState>((set, get) => ({
           item.id === requestId ? { ...item, ...updateData } : item
         ),
       }))
+
+      const recipientId = actorId === job?.client_id ? job?.profile_id : job?.client_id
+      if (recipientId && recipientId !== actorId) {
+        await useNotificationStore.getState().addNotification({
+          userId: recipientId,
+          title: 'Solicitud cancelada',
+          message: `La solicitud “${job?.title || 'de trabajo'}” fue cancelada. Motivo: ${reason.trim() || 'sin detalle'}.`,
+          type: 'status',
+          link: '/pedidos',
+        })
+      }
 
       return { error: null }
     } catch (e: any) {
