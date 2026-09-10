@@ -72,35 +72,12 @@ export default function HowItWorks() {
         </div>
       </section>
 
-      {/* 2. ANIMATED FLOW MEDIA BANNER (REAL GIF OF THE APP) */}
+      {/* 2. TEXT-ONLY WALKTHROUGH */}
       <section className="container max-w-5xl mx-auto">
-        <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-zinc-950 p-4 sm:p-8 shadow-2xl space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-            <div>
-              <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
-                Demostración en video real
-              </span>
-              <h3 className="font-heading text-lg sm:text-xl font-bold text-white mt-0.5">
-                El flujo completo de LABURANTE en acción
-              </h3>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              Búsqueda ➔ Perfil ➔ WhatsApp directo ➔ 0% comisión
-            </div>
-          </div>
-
-          <div className="relative rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 flex justify-center">
-            <img
-              src="/assets/demo/laburante-flow.gif"
-              alt="Grabación real de uso de LABURANTE"
-              className="w-full h-auto object-contain max-h-[560px]"
-            />
-          </div>
-
-          <p className="text-xs text-zinc-400 text-center">
-            Captura real de pantalla de la plataforma. La navegación ocurre sin retrasos, intermediarios artificiales ni suscripciones forzadas.
-          </p>
+        <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6 sm:p-8">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Prueba textual actualizada</p>
+          <h3 className="mt-2 font-heading text-xl font-bold text-[var(--color-laburante-text)]">Búsqueda → perfil → contacto directo → acuerdo entre partes</h3>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Esta guía refleja el funcionamiento vigente. Usá los marcadores de cada paso para leer qué sucede dentro de la plataforma, sin depender de capturas que pueden quedar desactualizadas.</p>
         </div>
       </section>
 
@@ -140,29 +117,17 @@ export default function HowItWorks() {
               </div>
             </div>
 
-            <div className="md:col-span-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden shadow-md">
-              <img
-                src="/assets/demo/step-1-search.png"
-                alt="Pantalla real de búsqueda en LABURANTE"
-                className="w-full h-auto object-cover max-h-[340px]"
-              />
-              <div className="p-3 bg-[var(--color-laburante-surface-alt)] text-[11px] text-[var(--color-laburante-text-secondary)] border-t border-[var(--color-laburante-border)]">
-                Búsqueda con filtros federales reales por provincia y rubro.
-              </div>
+            <div id="buscar" className="md:col-span-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Marcador 1 · Buscar</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Escribí un oficio, una necesidad o un proyecto. Elegí provincia, localidad y modalidad; los resultados salen de perfiles activos reales.</p>
             </div>
           </div>
 
           {/* Step 2 */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-            <div className="md:col-span-6 order-last md:order-first rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden shadow-md">
-              <img
-                src="/assets/demo/step-2-profile.png"
-                alt="Pantalla real de perfil en LABURANTE"
-                className="w-full h-auto object-cover max-h-[340px]"
-              />
-              <div className="p-3 bg-[var(--color-laburante-surface-alt)] text-[11px] text-[var(--color-laburante-text-secondary)] border-t border-[var(--color-laburante-border)]">
-                Perfil honesto con experiencia, especialidades y recomendaciones con contexto.
-              </div>
+            <div className="md:col-span-6 order-last md:order-first rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Marcador 2 · Revisar</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Abrí el perfil para comparar habilidades, servicios, idiomas, portfolio, CV, zona, disponibilidad y referencias con contexto.</p>
             </div>
 
             <div className="md:col-span-6 space-y-4">
@@ -212,15 +177,9 @@ export default function HowItWorks() {
               </div>
             </div>
 
-            <div className="md:col-span-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden shadow-md">
-              <img
-                src="/assets/demo/step-3-contact.png"
-                alt="Modal real de contacto directo en LABURANTE"
-                className="w-full h-auto object-cover max-h-[340px]"
-              />
-              <div className="p-3 bg-[var(--color-laburante-surface-alt)] text-[11px] text-[var(--color-laburante-text-secondary)] border-t border-[var(--color-laburante-border)]">
-                Modal de contacto directo: conexión inmediata con WhatsApp, llamada y correo.
-              </div>
+            <div className="md:col-span-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Marcador 3 · Contactar</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">El botón Contactar abre únicamente los canales que la persona autorizó: WhatsApp, teléfono, email, redes o portfolio.</p>
             </div>
           </div>
         </section>
@@ -262,29 +221,17 @@ export default function HowItWorks() {
               </div>
             </div>
 
-            <div className="md:col-span-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden shadow-md">
-              <img
-                src="/assets/demo/step-create.png"
-                alt="Pantalla real de alta de perfil en LABURANTE"
-                className="w-full h-auto object-cover max-h-[340px]"
-              />
-              <div className="p-3 bg-[var(--color-laburante-surface-alt)] text-[11px] text-[var(--color-laburante-text-secondary)] border-t border-[var(--color-laburante-border)]">
-                Registro voluntario transparente con consentimiento explícito de canales de contacto.
-              </div>
+            <div className="md:col-span-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Marcador 1 · Publicar</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Completá tu perfil, sumá foto, CV, servicios, idiomas y los canales de contacto que decidís mostrar. Es gratuito.</p>
             </div>
           </div>
 
           {/* Worker Step 2 */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-            <div className="md:col-span-6 order-last md:order-first rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden shadow-md">
-              <img
-                src="/assets/demo/step-3-contact.png"
-                alt="Modal de contacto directo"
-                className="w-full h-auto object-cover max-h-[340px]"
-              />
-              <div className="p-3 bg-[var(--color-laburante-surface-alt)] text-[11px] text-[var(--color-laburante-text-secondary)] border-t border-[var(--color-laburante-border)]">
-                Consentimiento voluntario: solo se muestra el canal que autorizás expresamente.
-              </div>
+            <div className="md:col-span-6 order-last md:order-first rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Marcador 2 · Recibir oportunidades</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Las personas y Empresas revisan tu información y te contactan directamente. Podés pausar o editar tu perfil cuando quieras.</p>
             </div>
 
             <div className="md:col-span-6 space-y-4">

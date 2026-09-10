@@ -91,42 +91,6 @@ export default function Admin() {
       const waReqs = await fetchPendingWhatsAppVerifications()
       setWaRequests(waReqs)
 
-      // Ensure any profile with a verification request is visible in the profiles list
-      const profileIds = new Set((profilesData || []).map((p: any) => p.id))
-      const extraProfiles: any[] = []
-      for (const req of waReqs) {
-        if (!profileIds.has(req.profile_id)) {
-          profileIds.add(req.profile_id)
-          extraProfiles.push({
-            id: req.profile_id,
-            name: req.profile_name,
-            slug: req.profile_slug,
-            provincia: 'Buenos Aires',
-            localidad: 'Zona Norte',
-            status: 'activo',
-            disponibilidad: 'disponible',
-            created_at: req.created_at,
-            whatsapp_verified: req.status === 'aprobado',
-            whatsapp_verified_at: req.reviewed_at,
-          })
-          // Also automatically upsert to public.profiles in Supabase in background
-          try {
-            (supabase.from('profiles') as any).upsert({
-              id: req.profile_id,
-              name: req.profile_name,
-              slug: req.profile_slug,
-              provincia: 'Buenos Aires',
-              localidad: 'Zona Norte',
-              status: 'activo',
-              disponibilidad: 'disponible',
-              modalidad: 'presencial',
-              whatsapp_verified: req.status === 'aprobado',
-              whatsapp_verified_at: req.reviewed_at,
-            }, { onConflict: 'id' }).then(() => {})
-          } catch {}
-        }
-      }
-
       // Local WhatsApp cache hydration
       let localWA: Record<string, any> = {}
       try {
@@ -134,14 +98,14 @@ export default function Admin() {
         if (raw) localWA = JSON.parse(raw)
       } catch {}
 
-      const allCombined = [...(profilesData || []), ...extraProfiles]
-      if (allCombined.length > 0) {
-        const hydrated = allCombined.map((p: any) => ({
-          ...p,
-          whatsapp_verified: Boolean(p.whatsapp_verified || (localWA[p.id] !== undefined)),
-        }))
-        setProfiles(hydrated)
-      }
+      // Verification requests are audit records, never a source of profiles.
+      // Recreating a profile from a stale local request made deleted accounts reappear.
+      const allCombined = [...(profilesData || [])]
+      const hydrated = allCombined.map((p: any) => ({
+        ...p,
+        whatsapp_verified: Boolean(p.whatsapp_verified || (localWA[p.id] !== undefined)),
+      }))
+      setProfiles(hydrated)
 
       // 4. Fetch Deletions
       const delList = await fetchAccountDeletions()
@@ -322,7 +286,18 @@ export default function Admin() {
       return
     }
     setProfiles((prev) => prev.filter((p) => p.id !== profile.id))
+    setWaRequests((prev) => prev.filter((request) => request.profile_id !== profile.id))
+    try {
+      const raw = localStorage.getItem('laburante_v2_verified_wa')
+      const verified = raw ? JSON.parse(raw) : {}
+      delete verified[profile.id]
+      localStorage.setItem('laburante_v2_verified_wa', JSON.stringify(verified))
+      const requestsRaw = localStorage.getItem('laburante_v2_wa_verification_requests')
+      const requests = requestsRaw ? JSON.parse(requestsRaw) : []
+      localStorage.setItem('laburante_v2_wa_verification_requests', JSON.stringify(requests.filter((request: any) => request.profile_id !== profile.id)))
+    } catch {}
     setActionMessage(`Cuenta de ${profile.name} eliminada definitivamente.`)
+    await loadData()
   }
 
   const pendingReportsCount = reports.filter((r) => r.status === 'pendiente').length

@@ -15,6 +15,22 @@ BEGIN
     RAISE EXCEPTION 'No se puede eliminar la cuenta administradora activa';
   END IF;
 
+  IF to_regclass('public.whatsapp_verification_requests') IS NOT NULL THEN
+    DELETE FROM public.whatsapp_verification_requests WHERE profile_id = target_user_id;
+  END IF;
+  IF to_regclass('public.company_opportunity_shares') IS NOT NULL THEN
+    DELETE FROM public.company_opportunity_shares WHERE source_company_id = target_user_id OR recipient_company_id = target_user_id;
+  END IF;
+  IF to_regclass('public.company_opportunities') IS NOT NULL THEN
+    DELETE FROM public.company_opportunities WHERE source_company_id = target_user_id;
+  END IF;
+  IF to_regclass('public.company_saved_profiles') IS NOT NULL THEN
+    DELETE FROM public.company_saved_profiles WHERE company_id = target_user_id;
+  END IF;
+  IF to_regclass('public.company_projects') IS NOT NULL THEN
+    DELETE FROM public.company_projects WHERE company_id = target_user_id;
+  END IF;
+  DELETE FROM public.profiles WHERE id = target_user_id;
   DELETE FROM auth.users WHERE id = target_user_id;
 END;
 $$;

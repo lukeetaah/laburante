@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Search, ArrowRight, UserCheck, Shield, Sparkles, MapPin, CheckCircle2, ChevronRight, HelpCircle } from 'lucide-react'
 import { CATEGORIES } from '@/data/categories'
 import { PROVINCES } from '@/data/provinces'
-import HowItWorksVisual from '@/components/home/HowItWorksVisual'
+import HomeGuideRibbons from '@/components/home/HomeGuideRibbons'
 import ComparisonSection from '@/components/home/ComparisonSection'
 
 export default function Home() {
@@ -141,8 +141,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. HOW IT WORKS (VISUAL SHOWCASE WITH REAL USAGE IMAGES & GIF) */}
-      <HowItWorksVisual />
+      {/* 3. QUICK GUIDES: text-only and closable */}
+      <HomeGuideRibbons />
 
       {/* 4. COMPARISON: LABURANTE VS TRADITIONAL PORTALS */}
       <ComparisonSection />
