@@ -37,7 +37,7 @@ export default function HowItWorks() {
           </h1>
 
           <p className="text-base sm:text-lg md:text-xl text-[var(--color-laburante-text-secondary)] max-w-2xl mx-auto leading-relaxed">
-            Sin algoritmos que te oculten, sin comisiones que encarezcan los trabajos y sin muros de pago para ver números de teléfono. Una conexión real entre personas en toda Argentina.
+            Describí lo que necesitás, encontrá personas capaces de hacerlo y hablá directo. Sin intermediarios obligatorios, sin comisiones para los LABURANTEs y con libertad para acordar cada trabajo.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -105,7 +105,7 @@ export default function HowItWorks() {
               Guía para encontrar a la persona adecuada
             </h2>
             <p className="text-sm text-[var(--color-laburante-text-secondary)] mt-2">
-              Desde una urgencia doméstica hasta un proyecto profesional independiente, así de simple es resolverlo.
+              Desde una tarea puntual hasta un proyecto profesional, así de simple es encontrar a la persona adecuada.
             </p>
           </div>
 

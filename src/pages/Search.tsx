@@ -6,6 +6,7 @@ import ProfileCard from '@/components/profile/ProfileCard'
 import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
 import { Link } from 'react-router-dom'
+import { interpretSearch, inferCategory } from '@/lib/search-intent'
 
 export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -18,6 +19,8 @@ export default function Search() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   const { profiles, loading, fetchProfiles, includeDevMocks, setIncludeDevMocks } = useProfileStore()
+  const interpretation = query.trim() ? interpretSearch(query) : null
+  const inferredCategory = query.trim() ? inferCategory(query) : undefined
 
   // Sync state with URL params
   useEffect(() => {
@@ -59,10 +62,10 @@ export default function Search() {
       {/* Top Search Header */}
       <div className="mb-8">
         <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
-          Buscar personas que saben hacer cosas
+          Encontrá a la persona indicada para lo que necesitás
         </h1>
         <p className="text-sm text-[var(--color-laburante-text-secondary)] mt-1">
-          Encontrá oficios, profesiones o servicios por rubro y localidad en toda Argentina.
+          Desde un oficio o un proyecto profesional hasta una tarea puntual: describilo con tus palabras y filtrá por zona o modalidad.
         </p>
       </div>
 
@@ -192,6 +195,14 @@ export default function Search() {
               </p>
             </div>
           </div>
+
+          {interpretation && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-laburante-text-secondary)]">
+              <Sparkles size={14} className="text-[var(--color-laburante-accent)]" />
+              <span>Entendimos: <strong className="text-[var(--color-laburante-text)]">{interpretation.label}</strong></span>
+              {inferredCategory && <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-700">Rubro sugerido: {inferredCategory}</span>}
+            </div>
+          )}
         </aside>
 
         {/* Results Content */}
@@ -205,7 +216,7 @@ export default function Search() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
-                placeholder="Buscar por oficio, habilidad o palabra clave..."
+                placeholder="Ej: necesito alguien para llevar las redes de mi negocio"
                 className="w-full pl-10 pr-4 py-3 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-sm outline-none focus:border-[var(--color-laburante-indigo)]"
               />
             </div>

@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase'
 import { DEV_MOCK_PROFILES } from '@/lib/mock-fixtures'
 import type { WhatsAppVerificationRequest } from '@/lib/database.types'
 import { SITE_CONFIG } from '@/lib/constants'
+import { interpretSearch } from '@/lib/search-intent'
+import { CATEGORIES } from '@/data/categories'
 
 export interface ProfileWithDetails {
   id: string
@@ -203,17 +205,26 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }))
       }
 
+      if (filters.category) {
+        const categoryDef = CATEGORIES.find((category) => category.name.toLowerCase() === filters.category!.toLowerCase())
+        const categoryTerms = [filters.category, ...(categoryDef?.subcategories || [])].map((term) => term.toLowerCase())
+        realProfiles = realProfiles.filter((p) => {
+          const text = [p.name, p.bio || '', ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' ').toLowerCase()
+          return categoryTerms.some((term) => text.includes(term))
+        })
+      }
+
       // Filter by text query if given
       if (filters.query && filters.query.trim()) {
+        const interpretation = interpretSearch(filters.query)
         const q = filters.query.toLowerCase().trim()
-        realProfiles = realProfiles.filter(p =>
-          p.name.toLowerCase().includes(q) ||
-          p.bio?.toLowerCase().includes(q) ||
-          p.provincia.toLowerCase().includes(q) ||
-          p.localidad.toLowerCase().includes(q) ||
-          p.skills?.some((s: string) => s.toLowerCase().includes(q)) ||
-          p.services?.some((s: any) => s.title.toLowerCase().includes(q))
-        )
+        const score = (p: ProfileWithDetails) => {
+          const text = [p.name, p.bio || '', p.provincia, p.localidad, ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' ').toLowerCase()
+          const exact = text.includes(q) ? 3 : 0
+          const hits = interpretation.expandedTerms.filter((term) => text.includes(term)).length
+          return exact + hits
+        }
+        realProfiles = realProfiles.map((profile) => ({ profile, rank: score(profile) })).filter((item) => item.rank > 0).sort((a, b) => b.rank - a.rank).map((item) => item.profile)
       }
 
       // If user enabled dev mocks in testing toggle
@@ -233,13 +244,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           mockFiltered = mockFiltered.filter(p => p.categories.some(c => c.toLowerCase() === filters.category!.toLowerCase()))
         }
         if (filters.query && filters.query.trim()) {
-          const q = filters.query.toLowerCase().trim()
-          mockFiltered = mockFiltered.filter(p =>
-            p.name.toLowerCase().includes(q) ||
-            p.bio.toLowerCase().includes(q) ||
-            p.skills.some((s: string) => s.toLowerCase().includes(q)) ||
-            p.services.some((s: any) => s.title.toLowerCase().includes(q))
-          )
+          const interpretation = interpretSearch(filters.query)
+          mockFiltered = mockFiltered.filter((p) => {
+            const text = [p.name, p.bio, ...p.skills, ...p.services.map((s: any) => s.title)].join(' ').toLowerCase()
+            return interpretation.expandedTerms.some((term) => text.includes(term))
+          })
         }
         combined = [...combined, ...mockFiltered]
       }

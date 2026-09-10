@@ -37,7 +37,7 @@ export default function Home() {
           </h1>
 
           <p className="text-base sm:text-lg md:text-xl text-[var(--color-laburante-text-secondary)] max-w-2xl mx-auto leading-relaxed mb-10">
-            LABURANTE acerca a quienes ofrecen su oficio, profesión o servicios con quienes buscan resolver un trabajo. Sin comisiones, sin intermediarios obligatorios y de acceso libre.
+            LABURANTE conecta directamente a quienes necesitan resolver algo con personas que pueden hacerlo: oficios, proyectos, servicios, tareas puntuales y trabajo profesional. Sin comisiones para los LABURANTEs.
           </p>
 
           {/* TWO MAIN INTENTIONS (CTAs) */}
@@ -69,7 +69,7 @@ export default function Home() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="¿Qué necesitás? (ej: electricista, programadora, plomero...)"
+                placeholder="¿Qué necesitás? (ej: alguien para redes, una fotógrafa, un técnico...)"
                 className="w-full text-sm bg-transparent outline-none placeholder:text-[var(--color-laburante-text-muted)] text-[var(--color-laburante-text)]"
               />
             </div>
