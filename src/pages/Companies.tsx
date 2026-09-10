@@ -84,9 +84,9 @@ export default function Companies() {
             ))}
           </div>
         </div>
-        <div className="mt-14 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-text)] p-6 text-white sm:p-8">
+              <div className="mt-14 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-text)] p-6 text-white sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300"><PlayCircle size={15} /> Demo real</p><h2 className="mt-2 font-heading text-xl font-bold">Dos caminos, una red.</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-white/70">LABURANTE crea un perfil y recibe pedidos de presupuesto sin costo. Empresa busca, filtra, guarda, envía pedidos concretos y puede activar capacidad adicional.</p></div>
+            <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300"><PlayCircle size={15} /> Demo real</p><h2 className="mt-2 font-heading text-xl font-bold">Dos caminos, una red.</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-white/70">LABURANTE crea un perfil y recibe pedidos de presupuesto sin costo. Empresa busca, guarda perfiles y propone entrevistas o contrataciones; luego gestiona internamente proveedor, compra y aprobación.</p></div>
             <a href={`https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent('Hola LABURANTE, quiero activar un plan Empresa.')}`} target="_blank" rel="noopener noreferrer" className="btn-amber inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Hablar sobre un plan <ArrowRight size={16} /></a>
           </div>
         </div>

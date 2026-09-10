@@ -88,6 +88,7 @@ export default function ProfilePage() {
   }
 
   const isOwnProfile = user?.id === profile.id
+  const isCompanyViewer = user?.user_metadata?.account_type === 'empresa'
 
   return (
     <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">
@@ -187,7 +188,7 @@ export default function ProfilePage() {
         {/* Action Buttons: Request Budget + Contact + Review + Share */}
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
           {isOwnProfile && <p className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs font-semibold text-indigo-900">Este es tu perfil. Podés editarlo desde Mi perfil; las solicitudes y reseñas se realizan entre cuentas distintas.</p>}
-          {profile.status !== 'oculto' && !isOwnProfile && (
+          {profile.status !== 'oculto' && !isOwnProfile && !isCompanyViewer && (
             <>
               <button
                 onClick={() => setJobRequestOpen(true)}
@@ -205,6 +206,12 @@ export default function ProfilePage() {
                 <MessageCircle size={16} className="text-emerald-600" /> Pedir presupuesto para contactar
               </button>
             </>
+          )}
+
+          {profile.status !== 'oculto' && !isOwnProfile && isCompanyViewer && (
+            <div className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs leading-relaxed text-indigo-950">
+              <strong>Selección para Empresas:</strong> no necesitás pedir un presupuesto para entrevistar a esta persona. Guardala en un proyecto y enviá una propuesta de entrevista o contratación desde las herramientas de Empresa.
+            </div>
           )}
 
           <button

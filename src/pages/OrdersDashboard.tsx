@@ -27,6 +27,8 @@ import CancelJobModal from '@/components/jobs/CancelJobModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
 import OutcomeModal from '@/components/jobs/OutcomeModal'
 import type { JobRequestStatus } from '@/lib/database.types'
+import { supabase } from '@/lib/supabase'
+import { useNotificationStore } from '@/stores/notification-store'
 
 export default function OrdersDashboard() {
   const { user } = useAuthStore()
@@ -51,12 +53,16 @@ export default function OrdersDashboard() {
   const [reviewModalJob, setReviewModalJob] = useState<JobRequestWithDetails | null>(null)
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
   const [outcomeModal, setOutcomeModal] = useState<{ job: JobRequestWithDetails; role: 'cliente' | 'profesional'; blocking?: boolean } | null>(null)
+  const [companyInquiries, setCompanyInquiries] = useState<any[]>([])
 
   useEffect(() => {
     fetchMyRequests()
     if (user) {
       fetchMyProfile()
       fetchMyJobs()
+      if (user.user_metadata?.account_type !== 'empresa') {
+        ;(supabase.from('company_candidate_inquiries') as any).select('*').eq('profile_id', user.id).eq('status', 'pendiente').order('created_at', { ascending: false }).then(({ data }: any) => setCompanyInquiries(data || []))
+      }
     }
   }, [user, fetchMyRequests, fetchMyJobs, fetchMyProfile])
 
@@ -95,6 +101,20 @@ export default function OrdersDashboard() {
     if (!outcomeModal) return
     const result = await submitOutcome(outcomeModal.job.id, outcomeModal.role, outcome, note)
     if (!result.error) setOutcomeModal(null)
+  }
+
+  const respondToCompanyInquiry = async (inquiry: any, status: 'aceptada' | 'rechazada') => {
+    if (!user) return
+    const { error } = await (supabase.from('company_candidate_inquiries') as any).update({ status, updated_at: new Date().toISOString() }).eq('id', inquiry.id).eq('profile_id', user.id)
+    if (error) return
+    setCompanyInquiries((items) => items.filter((item) => item.id !== inquiry.id))
+    await useNotificationStore.getState().addNotification({
+      userId: inquiry.company_id,
+      title: status === 'aceptada' ? 'Aceptaron tu propuesta' : 'No avanzarán con tu propuesta',
+      message: status === 'aceptada' ? 'La persona aceptó conversar. Podés coordinar la entrevista y completar tu proceso interno de proveedor.' : 'La persona rechazó esta propuesta por ahora.',
+      type: 'status',
+      link: '/empresa',
+    })
   }
 
   return (
@@ -137,6 +157,8 @@ export default function OrdersDashboard() {
           </button>
         </div>
       </div>
+
+      {companyInquiries.length > 0 && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Propuestas de Empresas</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">No son pedidos de presupuesto: son invitaciones a entrevista o conversación de contratación. Respondé para que la Empresa sepa cómo seguir.</p></div>{companyInquiries.map((inquiry) => <article key={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p>{inquiry.message && <p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => respondToCompanyInquiry(inquiry, 'aceptada')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Aceptar propuesta</button><button type="button" onClick={() => respondToCompanyInquiry(inquiry, 'rechazada')} className="rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">No avanzar</button></div></article>)}</section>}
 
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[var(--color-laburante-border)]">

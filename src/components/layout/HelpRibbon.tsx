@@ -14,7 +14,7 @@ export default function HelpRibbon() {
   const content = {
     visitante: { icon: Search, title: '¿Cómo funciona LABURANTE?', text: 'Describí lo que necesitás, pedí un presupuesto y coordiná después de recibir respuesta.', link: '/buscar', cta: 'Empezar a buscar' },
     laburante: { icon: UserRound, title: 'Decí para qué sos bueno', text: 'Completá tu perfil, sumá foto, CV, portfolio y canales para que puedan encontrarte.', link: '/crear-perfil', cta: 'Editar mi perfil' },
-    empresa: { icon: Building2, title: 'Ayuda para tu Empresa', text: 'Descubrí, evaluá, guardá y organizá LABURANTEs antes de enviar pedidos de presupuesto.', link: '/empresa', cta: 'Ir a mi espacio Empresa' },
+    empresa: { icon: Building2, title: 'Ayuda para tu Empresa', text: 'Descubrí, evaluá, guardá y organizá LABURANTEs antes de proponer entrevistas o contrataciones. El alta de proveedor y la orden de compra se resuelven dentro de tu empresa.', link: '/empresa', cta: 'Ir a mi espacio Empresa' },
     admin: { icon: ShieldCheck, title: 'Ayuda de Administración', text: 'Moderá perfiles, revisá cuentas Empresa y atendé verificaciones desde el panel.', link: '/admin', cta: 'Abrir Admin' },
   }[context]
   const Icon = content.icon

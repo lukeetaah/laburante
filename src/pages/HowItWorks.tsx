@@ -76,8 +76,8 @@ export default function HowItWorks() {
       <section className="container max-w-5xl mx-auto">
         <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6 sm:p-8">
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Prueba textual actualizada</p>
-          <h3 className="mt-2 font-heading text-xl font-bold text-[var(--color-laburante-text)]">Búsqueda → perfil → pedido de presupuesto → respuesta y acuerdo</h3>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Esta guía refleja el funcionamiento vigente. Usá los marcadores de cada paso para leer qué sucede dentro de la plataforma, sin depender de capturas que pueden quedar desactualizadas.</p>
+          <h3 className="mt-2 font-heading text-xl font-bold text-[var(--color-laburante-text)]">Dos recorridos reales: acuerdo privado o selección Empresa</h3>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Las personas piden presupuestos para trabajos puntuales; las Empresas guardan perfiles y proponen entrevistas o contrataciones sin convertir una entrevista en un presupuesto.</p>
         </div>
       </section>
 
@@ -163,7 +163,7 @@ export default function HowItWorks() {
                 Recibí y respondé pedidos con contexto
               </h3>
               <p className="text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-                Primero enviás un pedido de presupuesto con el alcance y la fecha. La persona puede presupuestar, aceptar o explicar por qué no puede tomarlo. Cuando responde, se habilitan los canales autorizados para coordinar.
+                Para un acuerdo entre particulares enviás un pedido de presupuesto con alcance y fecha. Si sos Empresa, guardás el perfil y proponés una entrevista o contratación; la persona responde desde su cuenta.
               </p>
               <div className="space-y-2 text-xs text-[var(--color-laburante-text)] font-medium">
                 <div className="flex items-center gap-2">
@@ -231,7 +231,7 @@ export default function HowItWorks() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
             <div className="md:col-span-6 order-last md:order-first rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Marcador 2 · Recibir oportunidades</p>
-              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Las personas y Empresas revisan tu información y te envían pedidos de presupuesto. Podés aceptar, presupuestar o explicar por qué no tomás un caso, además de pausar o editar tu perfil.</p>
+               <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Las personas te envían pedidos de presupuesto por trabajos puntuales. Las Empresas pueden proponerte una entrevista o contratación directa. En ambos casos decidís qué aceptar, rechazar o pausar.</p>
             </div>
 
             <div className="md:col-span-6 space-y-4">
@@ -305,9 +305,9 @@ export default function HowItWorks() {
 
       {activeTab === 'empresa' && (
         <section className="container max-w-5xl mx-auto space-y-10 animate-in fade-in duration-300">
-          <div className="text-center max-w-2xl mx-auto"><Building2 size={30} className="mx-auto text-[var(--color-laburante-indigo)]" /><h2 className="mt-3 font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">Para Empresas: encontrá capacidad real</h2><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Describí lo que necesitás con palabras simples, compará perfiles reales y guardá personas para tus proyectos. Cuando una búsqueda no encaja, LABURANTE puede ayudarte a derivarla hacia empresas similares.</p></div>
+           <div className="text-center max-w-2xl mx-auto"><Building2 size={30} className="mx-auto text-[var(--color-laburante-indigo)]" /><h2 className="mt-3 font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">Para Empresas: encontrá y seleccioná capacidad real</h2><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Describí el rol o proyecto, compará perfiles reales y guardá personas. Luego proponé una entrevista o contratación directa; tu empresa gestiona el alta de proveedor, la orden de compra y sus aprobaciones internas.</p></div>
           <div className="grid gap-4 md:grid-cols-3">
-            {[['1', 'Describí lo que necesitás', 'Escribí una frase natural: “busco una fotógrafa para un evento” o “necesito soporte para mi comercio”.'], ['2', 'Compará perfiles reales', 'Usá zona, modalidad, habilidades, CV, portfolio y recomendaciones. Guardá los que te interesan en un proyecto.'], ['3', 'Pedí presupuesto y coordiná', 'Enviá el pedido, recibí una respuesta y, si corresponde, abrí el canal autorizado para acordar directamente.']].map(([number, title, description]) => <article key={number} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 font-heading font-bold text-indigo-700">{number}</span><h3 className="mt-4 font-heading text-lg font-bold text-[var(--color-laburante-text)]">{title}</h3><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{description}</p></article>)}
+             {[['1', 'Definí el rol o proyecto', 'Escribí una necesidad concreta: “busco una fotógrafa para un evento” o “necesito soporte para mi comercio”.'], ['2', 'Compará y organizá perfiles', 'Usá zona, modalidad, habilidades, CV y portfolio. Guardá los perfiles que te interesan dentro de un proyecto.'], ['3', 'Proponé entrevista o contratación', 'La persona recibe tu propuesta y responde. Después tu empresa gestiona alta de proveedor, orden de compra y condiciones internas.']].map(([number, title, description]) => <article key={number} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 font-heading font-bold text-indigo-700">{number}</span><h3 className="mt-4 font-heading text-lg font-bold text-[var(--color-laburante-text)]">{title}</h3><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{description}</p></article>)}
           </div>
           <div className="flex flex-wrap justify-center gap-3"><Link to="/empresas" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Ver opciones Empresa <ArrowRight size={15} /></Link><Link to="/buscar" className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] px-5 py-3 text-sm font-semibold">Probar búsqueda real <Search size={15} /></Link></div>
         </section>

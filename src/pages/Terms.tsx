@@ -37,6 +37,7 @@ export default function Terms() {
         <section className="space-y-3">
           <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">4 bis. Solicitudes, presupuestos y cierre</h2>
           <p>Una solicitud de presupuesto permite ordenar la conversación entre las partes. LABURANTE puede habilitar herramientas de contacto dentro del flujo cuando existe una solicitud, un presupuesto o una aceptación; no garantiza que el trabajo se concrete ni que las partes respondan.</p>
+          <p>Las cuentas Empresa utilizan un recorrido distinto para selección: pueden guardar perfiles y enviar propuestas de entrevista o contratación directa. El alta de proveedor, la orden de compra, las retenciones, facturación y aprobaciones internas corresponden exclusivamente a la Empresa y no son emitidas ni gestionadas por LABURANTE.</p>
           <p>Quien solicita y quien ofrece el servicio deben informar el resultado del caso cuando la plataforma lo solicite: realizado, en proceso, no realizado o cancelado. Esa información se usa para mantener el historial, mejorar las sugerencias y reducir solicitudes abandonadas. La plataforma podrá recordar el cierre pendiente y limitar avances dentro del flujo, sin asumir responsabilidad por la relación entre las partes.</p>
         </section>
 
