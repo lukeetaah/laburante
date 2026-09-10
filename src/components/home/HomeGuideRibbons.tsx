@@ -12,8 +12,8 @@ const guides = {
         {[
           ['1', 'Buscás', 'Por oficio, necesidad y zona.'],
           ['2', 'Revisás', 'Perfil, habilidades, idiomas y referencias.'],
-          ['3', 'Contactás', 'WhatsApp, teléfono, email o portfolio.'],
-          ['4', 'Acuerdan', 'Entre ustedes, con 0% de comisión.'],
+          ['3', 'Pedís presupuesto', 'La persona revisa tu pedido y responde con contexto.'],
+          ['4', 'Contactan y acuerdan', 'Cuando hay respuesta, coordinan entre ustedes con 0% de comisión.'],
         ].map(([number, title, text]) => <div key={number} className="rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-3"><span className="font-heading text-sm font-bold text-[var(--color-laburante-indigo)]">{number}</span><p className="mt-1 text-xs font-bold">{title}</p><p className="mt-1 text-[11px] leading-relaxed text-[var(--color-laburante-text-secondary)]">{text}</p></div>)}
       </div>
       <div className="mt-4 flex flex-wrap gap-3"><Link to="/buscar" className="inline-flex items-center gap-1.5 font-bold text-[var(--color-laburante-indigo)] hover:underline">Probar la búsqueda <ArrowRight size={14} /></Link><Link to="/como-funciona#buscar" className="inline-flex items-center gap-1.5 font-semibold text-[var(--color-laburante-text-muted)] hover:underline">Guía completa <ArrowRight size={14} /></Link></div>
@@ -29,7 +29,7 @@ const guides = {
         <div className="flex items-start gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-3"><UserRound size={15} className="mt-0.5 shrink-0 text-emerald-600" /><p className="text-xs leading-relaxed"><strong>LABURANTE:</strong> publicá foto, CV, portfolio, servicios, idiomas y canales autorizados.</p></div>
         <div className="flex items-start gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-3"><Building2 size={15} className="mt-0.5 shrink-0 text-indigo-600" /><p className="text-xs leading-relaxed"><strong>Empresa:</strong> guardá perfiles, armá proyectos y derivá búsquedas a empresas similares.</p></div>
       </div>
-      <p className="mt-4 flex items-center gap-2 text-[11px] text-[var(--color-laburante-text-muted)]"><MessageCircle size={14} /> Los contactos se abren en los canales elegidos por cada persona.</p>
+      <p className="mt-4 flex items-center gap-2 text-[11px] text-[var(--color-laburante-text-muted)]"><MessageCircle size={14} /> Primero enviás un pedido de presupuesto; luego el contacto se habilita dentro del flujo correspondiente.</p>
     </>,
   },
 }

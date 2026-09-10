@@ -10,9 +10,9 @@ Una creación de **[Lukson Arts](https://luksonarts.vercel.app)**.
 
 ## Principios del Producto
 
-- **100% Gratuito**: Sin comisiones sobre trabajos, sin suscripciones obligatorias, sin cobro de créditos para contactar.
+- **0% para LABURANTEs**: Sin comisiones sobre trabajos ni suscripciones obligatorias. Quien busca inicia un pedido de presupuesto para abrir un contacto contextualizado.
 - **Alcance Nacional Real**: Diseñado desde el inicio para las 23 provincias argentinas y la Ciudad Autónoma de Buenos Aires.
-- **Contacto Directo y Voluntario**: Solo se muestran los medios de contacto que cada persona elige compartir y autoriza expresamente.
+- **Contacto Contextual y Voluntario**: Después de un pedido de presupuesto respondido, solo se muestran los medios de contacto que cada persona elige compartir y autoriza expresamente.
 - **Transparencia**: Sin falsas promesas de verificación ni garantías que la plataforma no puede controlar. Herramientas de reporte comunitario.
 - **Privacidad por Diseño**: Sin recopilación innecesaria de DNI ni datos bancarios. Observancia estricta de la Ley 25.326.
 - **Ecosistema Integrado**: Conexión editorial y descubrimiento natural hacia las demás creaciones del universo Lukson Arts (MI MANDATO, SENDERO, CORPORITY, RASTRO, MANDÍBULA, EL ORIGEN, AMAN, UMBRAL, EL BUCLE).

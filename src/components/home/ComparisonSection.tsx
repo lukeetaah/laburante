@@ -11,7 +11,7 @@ export default function ComparisonSection() {
     {
       feature: 'Contacto directo',
       traditional: 'Ocultan el teléfono. Te obligan a comprar "créditos" o pagar membresías mensuales para ver el contacto o responder presupuestos.',
-      laburante: '100% libre e inmediato. Abrís WhatsApp, llamás por teléfono o enviás un email con un solo clic.',
+      laburante: 'Pedís un presupuesto primero. Cuando hay una respuesta, el contacto autorizado se habilita para coordinar directamente.',
       highlight: true
     },
     {

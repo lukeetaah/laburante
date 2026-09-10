@@ -12,9 +12,9 @@ export default function HelpRibbon() {
   const isCompany = user?.user_metadata?.account_type === 'empresa'
   const context = isAdmin ? 'admin' : isCompany ? 'empresa' : user ? 'laburante' : 'visitante'
   const content = {
-    visitante: { icon: Search, title: '¿Cómo funciona LABURANTE?', text: 'Describí lo que necesitás, encontrá personas reales y contactá directamente.', link: '/buscar', cta: 'Empezar a buscar' },
+    visitante: { icon: Search, title: '¿Cómo funciona LABURANTE?', text: 'Describí lo que necesitás, pedí un presupuesto y coordiná después de recibir respuesta.', link: '/buscar', cta: 'Empezar a buscar' },
     laburante: { icon: UserRound, title: 'Decí para qué sos bueno', text: 'Completá tu perfil, sumá foto, CV, portfolio y canales para que puedan encontrarte.', link: '/crear-perfil', cta: 'Editar mi perfil' },
-    empresa: { icon: Building2, title: 'Ayuda para tu Empresa', text: 'Descubrí, evaluá, guardá y organizá LABURANTEs antes de contactarlos directamente.', link: '/empresa', cta: 'Ir a mi espacio Empresa' },
+    empresa: { icon: Building2, title: 'Ayuda para tu Empresa', text: 'Descubrí, evaluá, guardá y organizá LABURANTEs antes de enviar pedidos de presupuesto.', link: '/empresa', cta: 'Ir a mi espacio Empresa' },
     admin: { icon: ShieldCheck, title: 'Ayuda de Administración', text: 'Moderá perfiles, revisá cuentas Empresa y atendé verificaciones desde el panel.', link: '/admin', cta: 'Abrir Admin' },
   }[context]
   const Icon = content.icon

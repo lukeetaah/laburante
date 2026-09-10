@@ -288,7 +288,7 @@ export default function CreateProfile() {
               ¡Cuenta creada! Paso 2 de 2: Completá tu perfil profesional
             </p>
             <p className="text-amber-800 leading-relaxed text-xs">
-              Ya precargamos tus datos de contacto iniciales. Solo agregá qué tareas realizás, tu zona habitual y confirmá la publicación para empezar a recibir consultas directas.
+              Ya precargamos tus datos de contacto iniciales. Solo agregá qué tareas realizás, tu zona habitual y confirmá la publicación para empezar a recibir pedidos de presupuesto.
             </p>
           </div>
         </div>

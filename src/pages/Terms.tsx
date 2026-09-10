@@ -51,7 +51,7 @@ export default function Terms() {
             2. Gratuidad
           </h2>
           <p>
-            El acceso a LABURANTE, la búsqueda de perfiles, la publicación de servicios y la visualización de medios de contacto son libres y gratuitos. La plataforma no cobra comisiones sobre trabajos concretados ni exige la compra de créditos para establecer contacto.
+            El acceso a LABURANTE, la búsqueda de perfiles, la publicación de servicios y el envío de pedidos de presupuesto son libres y gratuitos. Para cuidar el contexto y la respuesta de ambas partes, los canales de contacto se habilitan dentro del flujo de un pedido respondido. La plataforma no cobra comisiones sobre trabajos concretados ni exige la compra de créditos.
           </p>
         </section>
 

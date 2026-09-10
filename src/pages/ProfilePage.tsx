@@ -3,7 +3,6 @@ import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
-import ContactModal from '@/components/profile/ContactModal'
 import ReportModal from '@/components/profile/ReportModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
 import JobRequestModal from '@/components/jobs/JobRequestModal'
@@ -17,7 +16,6 @@ export default function ProfilePage() {
   const [rawProfile, setRawProfile] = useState<ProfileWithDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
-  const [contactOpen, setContactOpen] = useState(searchParams.get('contacto') === '1' || searchParams.get('contacto') === 'true')
   const [reportOpen, setReportOpen] = useState(false)
   const [recommendationOpen, setRecommendationOpen] = useState(false)
   const [jobRequestOpen, setJobRequestOpen] = useState(false)
@@ -213,10 +211,10 @@ export default function ProfilePage() {
               </button>
 
               <button
-                onClick={() => setContactOpen(true)}
+                onClick={() => setJobRequestOpen(true)}
                 className="inline-flex flex-1 items-center justify-center gap-2 py-3.5 px-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors sm:flex-initial"
               >
-                <MessageCircle size={16} className="text-emerald-600" /> Contactar ahora
+                <MessageCircle size={16} className="text-emerald-600" /> Pedir presupuesto para contactar
               </button>
             </>
           )}
@@ -437,13 +435,6 @@ export default function ProfilePage() {
       </div>
 
       {/* Modals */}
-      <ContactModal
-        isOpen={contactOpen}
-        onClose={() => setContactOpen(false)}
-        profileName={profile.name}
-        contactMethods={profile.contact_methods || []}
-      />
-
       <ReportModal
         isOpen={reportOpen}
         onClose={() => setReportOpen(false)}

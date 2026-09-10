@@ -93,7 +93,7 @@ export default function ContactModal({ isOpen, onClose, profileName, contactMeth
           Contactar a {profileName}
         </h3>
         <p className="text-xs text-[var(--color-laburante-text-secondary)] mb-5">
-          Elegí el medio de contacto que prefieras para coordinar directamente:
+          Estos son los medios que la persona autorizó para coordinar después de responder un pedido de presupuesto:
         </p>
 
         {publicMethods.length === 0 ? (

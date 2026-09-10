@@ -211,7 +211,7 @@ export default function Home() {
               ¿Cuánto cuesta usar LABURANTE?
             </h4>
             <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-              Es 100% gratuito. No cobramos por registrarte, por publicar tu trabajo, por aparecer en las búsquedas ni por contactar a personas.
+              Es 100% gratuito para quienes ofrecen su trabajo. No cobramos por registrarte, publicar tu perfil, aparecer en búsquedas ni responder pedidos. Para contactar, primero enviás un pedido de presupuesto que deja claro qué necesitás.
             </p>
           </div>
 

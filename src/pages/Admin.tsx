@@ -26,6 +26,8 @@ import {
   Building2,
   Pencil,
   Save,
+  BarChart3,
+  TrendingUp,
 } from 'lucide-react'
 
 const REASON_LABELS: Record<string, string> = {
@@ -47,7 +49,7 @@ export default function Admin() {
     adminRejectWhatsAppVerification,
   } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions'>('verifications')
+  const [activeTab, setActiveTab] = useState<'analytics' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions'>('analytics')
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos'>('todos')
   const [reports, setReports] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
@@ -57,6 +59,7 @@ export default function Admin() {
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [editingProfile, setEditingProfile] = useState<any | null>(null)
   const [editForm, setEditForm] = useState<any>({})
+  const [jobRequests, setJobRequests] = useState<any[]>([])
 
   const loadData = async () => {
     setLoading(true)
@@ -107,6 +110,11 @@ export default function Admin() {
         whatsapp_verified: Boolean(p.whatsapp_verified || (localWA[p.id] !== undefined)),
       }))
       setProfiles(hydrated)
+
+      const { data: jobsData } = await (supabase.from('job_requests') as any)
+        .select('id, status, created_at, budget_amount, client_outcome, professional_outcome')
+        .order('created_at', { ascending: false })
+      setJobRequests(jobsData || [])
 
       // 4. Fetch Deletions
       const delList = await fetchAccountDeletions()
@@ -303,6 +311,14 @@ export default function Admin() {
 
   const pendingReportsCount = reports.filter((r) => r.status === 'pendiente').length
   const pendingWaCount = waRequests.filter((r) => r.status === 'pendiente').length
+  const jobStatusCounts = jobRequests.reduce<Record<string, number>>((acc, job) => {
+    acc[job.status] = (acc[job.status] || 0) + 1
+    return acc
+  }, {})
+  const budgetedJobs = jobRequests.filter((job) => job.budget_amount !== null && job.budget_amount !== '').length
+  const closedJobs = jobRequests.filter((job) => ['completado', 'cancelado'].includes(job.status)).length
+  const unresolvedCases = jobRequests.filter((job) => job.status === 'completado' && (!job.client_outcome || !job.professional_outcome)).length
+  const completionRate = jobRequests.length ? Math.round((closedJobs / jobRequests.length) * 100) : 0
 
   const filteredProfiles = profiles.filter((p) => {
     if (profileFilter === 'activos') return p.status === 'activo'
@@ -410,6 +426,12 @@ export default function Admin() {
       {/* Tabs */}
       <div className="flex border-b border-[var(--color-laburante-border)] overflow-x-auto">
         <button
+          onClick={() => setActiveTab('analytics')}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'analytics' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
+        >
+          <BarChart3 size={16} /> Métricas
+        </button>
+        <button
           onClick={() => setActiveTab('verifications')}
           className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'verifications'
@@ -474,6 +496,25 @@ export default function Admin() {
           Bajas y Motivos ({deletions.length})
         </button>
       </div>
+
+      {activeTab === 'analytics' && (
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
+            <div className="flex items-center gap-2 text-indigo-800"><TrendingUp size={18} /><h2 className="font-heading text-lg font-bold">Vista operativa de LABURANTE</h2></div>
+            <p className="mt-1 text-xs leading-relaxed text-indigo-950/75">Indicadores reales para entender dónde se generan pedidos, presupuestos y casos sin cierre. Se actualiza junto con “Refrescar datos”.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[['Pedidos de presupuesto', jobRequests.length, 'bg-white'], ['Con presupuesto', budgetedJobs, 'bg-amber-50'], ['Casos cerrados', closedJobs, 'bg-emerald-50'], ['Cierres pendientes', unresolvedCases, 'bg-rose-50']].map(([label, value, tone]) => <article key={String(label)} className={`rounded-2xl border border-[var(--color-laburante-border)] ${tone} p-5`}><p className="text-xs font-semibold text-[var(--color-laburante-text-muted)]">{label}</p><p className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">{value}</p></article>)}
+          </div>
+          <div className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
+            <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-heading font-bold">Embudo de solicitudes</h3><span className="text-xs font-bold text-indigo-700">{completionRate}% cerradas</span></div>
+              <div className="mt-5 space-y-3">{[['solicitado', 'Solicitadas', 'bg-indigo-500'], ['presupuestado', 'Presupuestadas', 'bg-amber-500'], ['aceptado', 'Aceptadas', 'bg-cyan-500'], ['en_progreso', 'En progreso', 'bg-violet-500'], ['completado', 'Completadas', 'bg-emerald-500'], ['cancelado', 'Canceladas', 'bg-rose-500']].map(([key, label, color]) => { const count = jobStatusCounts[key] || 0; const width = jobRequests.length ? Math.max(4, Math.round((count / jobRequests.length) * 100)) : 4; return <div key={key}><div className="mb-1 flex justify-between text-xs"><span className="font-semibold">{label}</span><span className="text-[var(--color-laburante-text-muted)]">{count}</span></div><div className="h-2 rounded-full bg-slate-100"><div className={`h-2 rounded-full ${color}`} style={{ width: `${width}%` }} /></div></div> })}</div>
+            </section>
+            <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5"><h3 className="font-heading font-bold">Lectura rápida</h3><div className="mt-4 space-y-3 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]"><p><strong className="text-[var(--color-laburante-text)]">Presupuestos:</strong> {budgetedJobs} de {jobRequests.length} pedidos recibieron una propuesta.</p><p><strong className="text-[var(--color-laburante-text)]">Cierre:</strong> {unresolvedCases} casos completados todavía necesitan respuesta de una de las partes.</p><p><strong className="text-[var(--color-laburante-text)]">Empresas:</strong> {profiles.filter((p) => p.account_type === 'empresa').length} cuentas registradas para búsquedas y proyectos.</p></div></section>
+          </div>
+        </div>
+      )}
 
       {/* Tab: WhatsApp Verification Requests */}
       {activeTab === 'verifications' && (

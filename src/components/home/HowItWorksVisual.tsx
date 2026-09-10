@@ -57,17 +57,17 @@ const STEPS: StepData[] = [
   },
   {
     id: 3,
-    title: '3. Contactás directo por WhatsApp',
-    subtitle: 'En 1 clic, sin chat retenido ni números censurados',
-    description: 'Al presionar "Contactar", se despliegan los canales habilitados expresamente por el laburante (WhatsApp, teléfono, email o redes). Un toque y estás hablando en WhatsApp con un mensaje prearmado.',
+    title: '3. Pedís presupuesto y recibís respuesta',
+    subtitle: 'Un pedido concreto antes de abrir el contacto',
+    description: 'Enviás qué necesitás, cuándo y con qué alcance. La persona puede aceptar, presupuestar o explicar por qué no puede tomarlo. Cuando hay una respuesta, se habilita el contacto autorizado para coordinar.',
     highlights: [
-      'Sin chat interno cautivo ni palabras bloqueadas',
-      'No cobramos por mensaje ni retenemos tus datos',
-      'Contacto voluntario y directo entre personas'
+      'El pedido deja contexto y fecha',
+      'La persona puede explicar por qué no toma el trabajo',
+      'Contacto directo después de una respuesta'
     ],
     imageSrc: '/assets/demo/step-3-contact.png',
     urlDisplay: 'laburante.ar/p/esteban-morales?contacto=1',
-    realDetail: 'Modal real de contacto directo: conexión inmediata con WhatsApp y teléfono.'
+    realDetail: 'Flujo real de pedido de presupuesto y habilitación del contacto después de una respuesta.'
   },
   {
     id: 4,
@@ -194,7 +194,7 @@ export default function HowItWorksVisual() {
                   <span className="h-3 w-3 rounded-full bg-amber-500/80 inline-block" />
                   <span className="h-3 w-3 rounded-full bg-emerald-500/80 inline-block" />
                   <span className="ml-3 text-xs text-zinc-400 font-mono hidden sm:inline">
-                    Recorrido real en vivo: Búsqueda ➔ Perfil ➔ Contacto directo ➔ 0% comisión
+                    Recorrido real en vivo: Búsqueda ➔ Perfil ➔ Pedido de presupuesto ➔ Respuesta y contacto ➔ 0% comisión
                   </span>
                 </div>
                 <div className="text-[11px] font-mono text-emerald-400 font-medium flex items-center gap-1.5">

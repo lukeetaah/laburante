@@ -76,7 +76,7 @@ export default function HowItWorks() {
       <section className="container max-w-5xl mx-auto">
         <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6 sm:p-8">
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Prueba textual actualizada</p>
-          <h3 className="mt-2 font-heading text-xl font-bold text-[var(--color-laburante-text)]">Búsqueda → perfil → contacto directo → acuerdo entre partes</h3>
+          <h3 className="mt-2 font-heading text-xl font-bold text-[var(--color-laburante-text)]">Búsqueda → perfil → pedido de presupuesto → respuesta y acuerdo</h3>
           <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Esta guía refleja el funcionamiento vigente. Usá los marcadores de cada paso para leer qué sucede dentro de la plataforma, sin depender de capturas que pueden quedar desactualizadas.</p>
         </div>
       </section>
@@ -160,10 +160,10 @@ export default function HowItWorks() {
                 3
               </div>
               <h3 className="font-heading text-xl sm:text-2xl font-bold text-[var(--color-laburante-text)]">
-                Contactá directo por WhatsApp o teléfono
+                Recibí y respondé pedidos con contexto
               </h3>
               <p className="text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-                Hacés clic en "Contactar" y se abre el modal con los canales habilitados por el trabajador. Podés mandarle un WhatsApp con un mensaje preconfigurado, llamarlo por teléfono o enviarle un email. Sin chat interno que te censure ni demoras.
+                Primero enviás un pedido de presupuesto con el alcance y la fecha. La persona puede presupuestar, aceptar o explicar por qué no puede tomarlo. Cuando responde, se habilitan los canales autorizados para coordinar.
               </p>
               <div className="space-y-2 text-xs text-[var(--color-laburante-text)] font-medium">
                 <div className="flex items-center gap-2">
@@ -179,7 +179,7 @@ export default function HowItWorks() {
 
             <div className="md:col-span-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Marcador 3 · Contactar</p>
-              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">El botón Contactar abre únicamente los canales que la persona autorizó: WhatsApp, teléfono, email, redes o portfolio.</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">El contacto aparece dentro del pedido respondido y abre únicamente los canales que la persona autorizó: WhatsApp, teléfono, email, redes o portfolio.</p>
             </div>
           </div>
         </section>
@@ -231,7 +231,7 @@ export default function HowItWorks() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
             <div className="md:col-span-6 order-last md:order-first rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-indigo)]">Marcador 2 · Recibir oportunidades</p>
-              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Las personas y Empresas revisan tu información y te contactan directamente. Podés pausar o editar tu perfil cuando quieras.</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Las personas y Empresas revisan tu información y te envían pedidos de presupuesto. Podés aceptar, presupuestar o explicar por qué no tomás un caso, además de pausar o editar tu perfil.</p>
             </div>
 
             <div className="md:col-span-6 space-y-4">
@@ -242,7 +242,7 @@ export default function HowItWorks() {
                 Vos elegís qué canales mostrar y recibís mensajes directo a tu WhatsApp
               </h3>
               <p className="text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-                Si querés que te escriban por WhatsApp, ponés tu número. Si preferís llamadas o email, elegís esos canales. Cada dato requiere tu consentimiento voluntario. Cuando un cliente te contacta, el mensaje te llega directamente a tu teléfono sin intermediarios.
+                Si querés recibir pedidos por WhatsApp, ponés tu número. Si preferís llamadas o email, elegís esos canales. Cada dato requiere tu consentimiento voluntario. El contacto se habilita dentro del flujo cuando respondés un pedido de presupuesto.
               </p>
               <div className="space-y-2 text-xs text-[var(--color-laburante-text)] font-medium">
                 <div className="flex items-center gap-2">
@@ -307,7 +307,7 @@ export default function HowItWorks() {
         <section className="container max-w-5xl mx-auto space-y-10 animate-in fade-in duration-300">
           <div className="text-center max-w-2xl mx-auto"><Building2 size={30} className="mx-auto text-[var(--color-laburante-indigo)]" /><h2 className="mt-3 font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">Para Empresas: encontrá capacidad real</h2><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Describí lo que necesitás con palabras simples, compará perfiles reales y guardá personas para tus proyectos. Cuando una búsqueda no encaja, LABURANTE puede ayudarte a derivarla hacia empresas similares.</p></div>
           <div className="grid gap-4 md:grid-cols-3">
-            {[['1', 'Describí lo que necesitás', 'Escribí una frase natural: “busco una fotógrafa para un evento” o “necesito soporte para mi comercio”.'], ['2', 'Compará perfiles reales', 'Usá zona, modalidad, habilidades, CV, portfolio y recomendaciones. Guardá los que te interesan en un proyecto.'], ['3', 'Contactá sin intermediarios', 'Abrí WhatsApp, email, teléfono o sitio web autorizado. El acuerdo y el pago se hacen directamente entre las partes.']].map(([number, title, description]) => <article key={number} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 font-heading font-bold text-indigo-700">{number}</span><h3 className="mt-4 font-heading text-lg font-bold text-[var(--color-laburante-text)]">{title}</h3><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{description}</p></article>)}
+            {[['1', 'Describí lo que necesitás', 'Escribí una frase natural: “busco una fotógrafa para un evento” o “necesito soporte para mi comercio”.'], ['2', 'Compará perfiles reales', 'Usá zona, modalidad, habilidades, CV, portfolio y recomendaciones. Guardá los que te interesan en un proyecto.'], ['3', 'Pedí presupuesto y coordiná', 'Enviá el pedido, recibí una respuesta y, si corresponde, abrí el canal autorizado para acordar directamente.']].map(([number, title, description]) => <article key={number} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 font-heading font-bold text-indigo-700">{number}</span><h3 className="mt-4 font-heading text-lg font-bold text-[var(--color-laburante-text)]">{title}</h3><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{description}</p></article>)}
           </div>
           <div className="flex flex-wrap justify-center gap-3"><Link to="/empresas" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Ver opciones Empresa <ArrowRight size={15} /></Link><Link to="/buscar" className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] px-5 py-3 text-sm font-semibold">Probar búsqueda real <Search size={15} /></Link></div>
         </section>
