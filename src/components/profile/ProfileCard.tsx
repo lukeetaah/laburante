@@ -19,8 +19,8 @@ export default function ProfileCard({ profile }: ProfileCardProps) {
       <div>
         {/* Header: Name + Location */}
         <div className="flex items-start gap-4 mb-3">
-          <div className="h-12 w-12 rounded-full bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-bold text-lg text-[var(--color-laburante-text)] flex-shrink-0">
-            {profile.name.charAt(0)}
+          <div className="h-12 w-12 overflow-hidden rounded-full bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-bold text-lg text-[var(--color-laburante-text)] flex-shrink-0">
+            {profile.photo_url ? <img src={profile.photo_url} alt={`Foto de ${profile.name}`} className="h-full w-full object-cover" /> : profile.name.charAt(0)}
           </div>
           <div className="min-w-0 flex-1 pr-14">
             <div className="flex items-center gap-1.5 flex-wrap">

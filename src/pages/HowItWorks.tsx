@@ -16,11 +16,12 @@ import {
   HeartHandshake,
   Layers,
   MapPin
+  ,Building2
 } from 'lucide-react'
 import ComparisonSection from '@/components/home/ComparisonSection'
 
 export default function HowItWorks() {
-  const [activeTab, setActiveTab] = useState<'buscar' | 'ofrecer'>('buscar')
+  const [activeTab, setActiveTab] = useState<'buscar' | 'ofrecer' | 'empresa'>('buscar')
 
   return (
     <div className="space-y-16 md:space-y-24 pb-20">
@@ -60,6 +61,12 @@ export default function HowItWorks() {
               }`}
             >
               Para quien ofrece su trabajo
+            </button>
+            <button
+              onClick={() => setActiveTab('empresa')}
+              className={`px-6 py-3 rounded-2xl font-heading text-sm font-bold transition-all ${activeTab === 'empresa' ? 'bg-[var(--color-laburante-text)] text-white shadow-md' : 'bg-[var(--color-laburante-surface)] border border-[var(--color-laburante-border)] text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]'}`}
+            >
+              Para Empresas
             </button>
           </div>
         </div>
@@ -346,6 +353,16 @@ export default function HowItWorks() {
               </Link>
             </div>
           </div>
+        </section>
+      )}
+
+      {activeTab === 'empresa' && (
+        <section className="container max-w-5xl mx-auto space-y-10 animate-in fade-in duration-300">
+          <div className="text-center max-w-2xl mx-auto"><Building2 size={30} className="mx-auto text-[var(--color-laburante-indigo)]" /><h2 className="mt-3 font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">Guía para Empresas</h2><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">La Empresa busca personas para una necesidad concreta, revisa perfiles, guarda candidatos y contacta directamente. La cuenta de LABURANTE sigue siendo gratuita.</p></div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[['1', 'Describí lo que necesitás', 'Escribí una frase natural: “busco una fotógrafa para un evento” o “necesito soporte para mi comercio”.'], ['2', 'Compará perfiles reales', 'Usá zona, modalidad, habilidades, CV, portfolio y recomendaciones. Guardá los que te interesan en un proyecto.'], ['3', 'Contactá sin intermediarios', 'Abrí WhatsApp, email, teléfono o sitio web autorizado. El acuerdo y el pago se hacen directamente entre las partes.']].map(([number, title, description]) => <article key={number} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 font-heading font-bold text-indigo-700">{number}</span><h3 className="mt-4 font-heading text-lg font-bold text-[var(--color-laburante-text)]">{title}</h3><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{description}</p></article>)}
+          </div>
+          <div className="flex flex-wrap justify-center gap-3"><Link to="/empresas" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Ver opciones Empresa <ArrowRight size={15} /></Link><Link to="/buscar" className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] px-5 py-3 text-sm font-semibold">Probar búsqueda real <Search size={15} /></Link></div>
         </section>
       )}
 

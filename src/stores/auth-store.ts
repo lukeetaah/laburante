@@ -58,9 +58,10 @@ async function ensureUserProfile(user: User | null) {
         slug,
         provincia: meta.provincia || 'CABA',
         localidad: meta.localidad || 'Buenos Aires',
-        status: 'activo',
         disponibilidad: 'disponible',
         modalidad: 'presencial',
+        account_type: meta.account_type === 'empresa' ? 'empresa' : 'persona',
+        status: meta.account_type === 'empresa' ? 'oculto' : 'activo',
       })
 
       if (meta.phone) {
@@ -128,6 +129,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         isAdmin: checkIsAdmin(data.session.user),
         loading: false,
       })
+      await ensureUserProfile(data.session.user)
     }
     return { error: null, needsEmailConfirmation }
   },
@@ -164,8 +166,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       isAdmin: checkIsAdmin(user),
       loading: false,
     })
+    await ensureUserProfile(user)
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null
       set({
         session,
@@ -173,6 +176,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         isAdmin: checkIsAdmin(u),
         loading: false,
       })
+      await ensureUserProfile(u)
     })
   },
 }))

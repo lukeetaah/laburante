@@ -10,6 +10,9 @@ export type Database = {
           name: string
           slug: string
           photo_url: string | null
+          account_type?: 'persona' | 'empresa'
+          resume_url?: string | null
+          resume_name?: string | null
           bio: string | null
           provincia: string
           localidad: string
@@ -194,5 +197,4 @@ export type JobRequestUrgency = JobRequest['urgency']
 export type AccountDeletion = Database['public']['Tables']['account_deletions']['Row']
 export type InAppNotification = Database['public']['Tables']['notifications']['Row']
 export type WhatsAppVerificationRequest = Database['public']['Tables']['whatsapp_verification_requests']['Row']
-
 

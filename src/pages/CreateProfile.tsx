@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
+import { supabase } from '@/lib/supabase'
 import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
-import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, MessageCircle, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, MessageCircle, AlertTriangle, Upload, FileText } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 
@@ -23,6 +24,11 @@ export default function CreateProfile() {
   const [status, setStatus] = useState<'activo' | 'oculto'>('activo')
   const [notifyWhatsapp, setNotifyWhatsapp] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState('')
+  const [existingResumeUrl, setExistingResumeUrl] = useState('')
+  const [existingResumeName, setExistingResumeName] = useState('')
 
   // Modals state
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false)
@@ -57,6 +63,9 @@ export default function CreateProfile() {
         setModalidad(existing.modalidad || 'presencial')
         setDisponibilidad(existing.disponibilidad || 'disponible')
         setStatus(existing.status === 'oculto' ? 'oculto' : 'activo')
+        setExistingPhotoUrl(existing.photo_url || '')
+        setExistingResumeUrl(existing.resume_url || '')
+        setExistingResumeName(existing.resume_name || '')
         if (existing.notify_whatsapp !== undefined) {
           setNotifyWhatsapp(existing.notify_whatsapp)
         }
@@ -173,7 +182,24 @@ export default function CreateProfile() {
     setSubmitting(true)
     setError(null)
 
-    const payload = {
+    const uploadAsset = async (file: File | null, kind: 'photo' | 'resume') => {
+      if (!file || !user) return kind === 'photo' ? existingPhotoUrl : existingResumeUrl
+      const allowed = kind === 'photo'
+        ? ['image/jpeg', 'image/png', 'image/webp']
+        : ['application/pdf', 'text/plain', 'text/csv', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+      if (!allowed.includes(file.type)) throw new Error(kind === 'photo' ? 'La foto debe ser JPG, PNG o WebP.' : 'El CV debe ser PDF, DOC, DOCX, CSV o TXT.')
+      if (file.size > 10 * 1024 * 1024) throw new Error('El archivo no puede superar los 10 MB.')
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'bin'
+      const path = `${user.id}/${kind}-${Date.now()}.${extension}`
+      const { error: uploadError } = await supabase.storage.from('profile-assets').upload(path, file, { upsert: true, contentType: file.type })
+      if (uploadError) throw new Error('No se pudo subir el archivo. Verificá que la migración de archivos esté aplicada en Supabase.')
+      return supabase.storage.from('profile-assets').getPublicUrl(path).data.publicUrl
+    }
+
+    try {
+      const photoUrl = await uploadAsset(photoFile, 'photo')
+      const resumeUrl = await uploadAsset(resumeFile, 'resume')
+      const payload = {
       name: name.trim(),
       bio: bio.trim(),
       provincia,
@@ -186,15 +212,19 @@ export default function CreateProfile() {
       skills: skills.filter((s) => s.trim()),
       services: services.filter((s) => s.title.trim()),
       contact_methods: contactMethods.filter((c) => c.value.trim()),
-    }
+        photo_url: photoUrl || null,
+        resume_url: resumeUrl || null,
+        resume_name: resumeFile?.name || existingResumeName || null,
+      }
 
-    const res = await createProfile(payload)
-    setSubmitting(false)
+      const res = await createProfile(payload)
+      setSubmitting(false)
 
-    if (res.error) {
-      setError(res.error)
-    } else if (res.slug) {
-      navigate(`/p/${res.slug}`)
+      if (res.error) setError(res.error)
+      else if (res.slug) navigate(`/p/${res.slug}`)
+    } catch (uploadError: any) {
+      setSubmitting(false)
+      setError(uploadError.message || 'No se pudo procesar el archivo.')
     }
   }
 
@@ -419,6 +449,15 @@ export default function CreateProfile() {
                 </div>
               </button>
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
+          <div className="flex items-center gap-2 border-b border-[var(--color-laburante-border)] pb-2"><Upload size={17} className="text-[var(--color-laburante-indigo)]" /><h2 className="font-heading text-base font-bold">Foto y CV</h2></div>
+          <p className="text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">Mejorá tu presentación con una foto y un CV opcional. Sólo se muestran públicamente los archivos que subas a tu perfil.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="cursor-pointer rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-4 text-xs hover:bg-[var(--color-laburante-surface-alt)]"><span className="font-semibold">Foto de perfil</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} className="mt-2 block w-full text-[11px]" />{photoFile?.name || existingPhotoUrl ? <span className="mt-2 block text-emerald-700">{photoFile?.name || 'Foto cargada'}</span> : null}</label>
+            <label className="cursor-pointer rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-4 text-xs hover:bg-[var(--color-laburante-surface-alt)]"><span className="font-semibold">CV o presentación</span><input type="file" accept=".pdf,.doc,.docx,.csv,.txt,application/pdf,text/plain,text/csv" onChange={(e) => setResumeFile(e.target.files?.[0] || null)} className="mt-2 block w-full text-[11px]" />{resumeFile?.name || existingResumeUrl ? <span className="mt-2 flex items-center gap-1 text-emerald-700"><FileText size={13} />{resumeFile?.name || existingResumeName || 'CV cargado'}</span> : null}</label>
           </div>
         </section>
 

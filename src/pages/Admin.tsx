@@ -23,6 +23,7 @@ import {
   Check,
   XCircle,
   Clock,
+  Building2,
 } from 'lucide-react'
 
 const REASON_LABELS: Record<string, string> = {
@@ -44,7 +45,7 @@ export default function Admin() {
     adminRejectWhatsAppVerification,
   } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'verifications' | 'reports' | 'profiles' | 'deletions'>('verifications')
+  const [activeTab, setActiveTab] = useState<'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions'>('verifications')
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos'>('todos')
   const [reports, setReports] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
@@ -70,7 +71,7 @@ export default function Admin() {
       // 2. Fetch all Profiles
       let profilesData: any[] | null = null
       const resProfiles = await (supabase.from('profiles') as any)
-        .select('id, name, slug, provincia, localidad, status, disponibilidad, created_at, whatsapp_verified, whatsapp_verified_at')
+        .select('id, name, slug, provincia, localidad, status, disponibilidad, account_type, created_at, whatsapp_verified, whatsapp_verified_at')
         .order('created_at', { ascending: false })
 
       if (resProfiles.error) {
@@ -335,6 +336,10 @@ export default function Admin() {
             {profiles.length}
           </p>
         </div>
+        <div className="p-4 rounded-2xl border border-indigo-200 bg-indigo-50/60">
+          <p className="text-xs text-indigo-700 font-medium">Cuentas Empresa</p>
+          <p className="font-heading text-2xl font-bold text-indigo-900 mt-1">{profiles.filter((p) => p.account_type === 'empresa').length}</p>
+        </div>
         <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Perfiles activos</p>
           <p className="font-heading text-2xl font-bold text-emerald-600 mt-1">
@@ -384,6 +389,13 @@ export default function Admin() {
               {pendingWaCount}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('companies')}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'companies' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
+        >
+          <Building2 size={16} /> Empresas ({profiles.filter((p) => p.account_type === 'empresa').length})
         </button>
 
         <button
@@ -737,6 +749,23 @@ export default function Admin() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'companies' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-xs text-indigo-950">
+            <p className="font-bold">Cuentas Empresa</p>
+            <p className="mt-1 leading-relaxed">Acá aparecen las cuentas que buscan profesionales. Sus perfiles internos quedan ocultos del buscador público y se administran desde este panel.</p>
+          </div>
+          {profiles.filter((p) => p.account_type === 'empresa').length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">Todavía no hay cuentas Empresa sincronizadas. Verificá la migración de Supabase y refrescá los datos.</div>
+          ) : profiles.filter((p) => p.account_type === 'empresa').map((company) => (
+            <div key={company.id} className="flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-[var(--color-laburante-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div><div className="flex items-center gap-2"><Building2 size={17} className="text-indigo-600" /><h3 className="font-heading font-bold text-sm">{company.name}</h3><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">EMPRESA</span></div><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{company.localidad}, {company.provincia} · Alta {new Date(company.created_at).toLocaleDateString()}</p></div>
+              <button onClick={() => handleToggleProfileStatus(company.id, company.status)} className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">{company.status === 'suspendido' ? 'Reactivar cuenta' : 'Suspender cuenta'}</button>
+            </div>
+          ))}
         </div>
       )}
 

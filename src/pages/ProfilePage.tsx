@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye } from 'lucide-react'
+import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
 import ContactModal from '@/components/profile/ContactModal'
@@ -8,6 +8,7 @@ import ReportModal from '@/components/profile/ReportModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
 import JobRequestModal from '@/components/jobs/JobRequestModal'
 import { SITE_CONFIG } from '@/lib/constants'
+import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
 
 export default function ProfilePage() {
   const { user } = useAuthStore()
@@ -20,6 +21,7 @@ export default function ProfilePage() {
   const [reportOpen, setReportOpen] = useState(false)
   const [recommendationOpen, setRecommendationOpen] = useState(false)
   const [jobRequestOpen, setJobRequestOpen] = useState(false)
+  const [copiedContact, setCopiedContact] = useState('')
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
   const updateProfileVisibility = useProfileStore((s) => s.updateProfileVisibility)
@@ -50,6 +52,12 @@ export default function ProfilePage() {
     const url = `${window.location.origin}/p/${profile?.slug}`
     const text = `Te comparto el perfil de ${profile?.name} en LABURANTE: ${url}`
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
+  const copyContact = async (value: string, type: string) => {
+    await navigator.clipboard?.writeText(value)
+    setCopiedContact(type)
+    window.setTimeout(() => setCopiedContact(''), 1800)
   }
 
   if (loading) {
@@ -196,7 +204,7 @@ export default function ProfilePage() {
                 onClick={() => setContactOpen(true)}
                 className="py-3.5 px-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors text-center"
               >
-                Contactar ahora
+                <MessageCircle size={16} className="text-emerald-600" /> Contactar ahora
               </button>
             </>
           )}
@@ -225,6 +233,17 @@ export default function ProfilePage() {
             WhatsApp
           </button>
         </div>
+        <CompanyProfileActions profileId={profile.id} profileName={profile.name} />
+        {(profile.contact_methods || []).some((method) => method.type === 'web' || method.type === 'portfolio') && (
+          <div className="flex flex-wrap gap-2 pt-3">
+            {(profile.contact_methods || []).filter((method) => (method.type === 'web' || method.type === 'portfolio') && method.is_public).map((method) => (
+              <div key={`${method.type}-${method.value}`} className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3 py-2 text-xs">
+                <Globe size={14} className="text-[var(--color-laburante-indigo)]" /><a href={method.value.startsWith('http') ? method.value : `https://${method.value}`} target="_blank" rel="noopener noreferrer" className="max-w-[210px] truncate font-semibold text-[var(--color-laburante-indigo)]">{method.value}</a><button type="button" onClick={() => copyContact(method.value, method.type)} aria-label={`Copiar ${method.type}`} className="rounded p-1 hover:bg-[var(--color-laburante-surface-alt)]">{copiedContact === method.type ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}</button><ExternalLink size={12} className="text-[var(--color-laburante-text-muted)]" />
+              </div>
+            ))}
+          </div>
+        )}
+        {profile.resume_url && <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 pt-3 text-xs font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{profile.resume_name ? `: ${profile.resume_name}` : ''}</a>}
       </div>
 
       {/* Profile Bio */}

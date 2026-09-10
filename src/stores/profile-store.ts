@@ -11,6 +11,9 @@ export interface ProfileWithDetails {
   name: string
   slug: string
   photo_url: string | null
+  account_type?: 'persona' | 'empresa'
+  resume_url?: string | null
+  resume_name?: string | null
   bio: string | null
   provincia: string
   localidad: string
@@ -171,7 +174,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     try {
       let query = (supabase.from('profiles') as any)
         .select(`
-          id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo,
+          id, name, slug, photo_url, account_type, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
           disponibilidad, modalidad, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
@@ -189,7 +192,18 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         query = query.eq('modalidad', filters.modalidad)
       }
 
-      const { data, error } = await query
+      let { data, error } = await query
+      if (error) {
+        let legacyQuery = (supabase.from('profiles') as any)
+          .select(`id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( type, value, is_public )`)
+          .eq('status', 'activo')
+        if (filters.provincia) legacyQuery = legacyQuery.eq('provincia', filters.provincia)
+        if (filters.localidad) legacyQuery = legacyQuery.ilike('localidad', `%${filters.localidad}%`)
+        if (filters.modalidad && filters.modalidad !== 'todas') legacyQuery = legacyQuery.eq('modalidad', filters.modalidad)
+        const legacyResult = await legacyQuery
+        data = legacyResult.data
+        error = legacyResult.error
+      }
 
       let realProfiles: ProfileWithDetails[] = []
       if (!error && data) {
@@ -268,9 +282,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     set({ loading: true })
     try {
       // Check Supabase first
-      const { data, error } = await (supabase.from('profiles') as any)
+      let { data, error } = await (supabase.from('profiles') as any)
         .select(`
-          id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo,
+          id, name, slug, photo_url, account_type, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
           disponibilidad, modalidad, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
@@ -279,6 +293,15 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         `)
         .eq('slug', slug)
         .single()
+
+      if (error) {
+        const legacyResult = await (supabase.from('profiles') as any)
+          .select(`id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at )`)
+          .eq('slug', slug)
+          .single()
+        data = legacyResult.data
+        error = legacyResult.error
+      }
 
       if (!error && data) {
         const item = data as any
@@ -322,9 +345,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return null
       }
       const userId = userData.user.id
-      const { data, error } = await (supabase.from('profiles') as any)
+      let { data, error } = await (supabase.from('profiles') as any)
         .select(`
-          id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo,
+          id, name, slug, photo_url, account_type, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
           disponibilidad, modalidad, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
@@ -333,6 +356,15 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         `)
         .eq('id', userId)
         .maybeSingle()
+
+      if (error) {
+        const legacyResult = await (supabase.from('profiles') as any)
+          .select(`id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at )`)
+          .eq('id', userId)
+          .maybeSingle()
+        data = legacyResult.data
+        error = legacyResult.error
+      }
 
       if (error || !data) {
         set({ myProfile: null })
@@ -397,6 +429,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           disponibilidad: profileData.disponibilidad || 'disponible',
           modalidad: profileData.modalidad || 'presencial',
           status: targetStatus,
+          photo_url: profileData.photo_url || null,
+          resume_url: profileData.resume_url || null,
+          resume_name: profileData.resume_name || null,
           updated_at: new Date().toISOString()
         }
         if (profileData.notify_whatsapp !== undefined) {
@@ -426,6 +461,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           disponibilidad: profileData.disponibilidad || 'disponible',
           modalidad: profileData.modalidad || 'presencial',
           status: targetStatus,
+          photo_url: profileData.photo_url || null,
+          resume_url: profileData.resume_url || null,
+          resume_name: profileData.resume_name || null,
           notify_whatsapp: profileData.notify_whatsapp ?? true
         }
 
