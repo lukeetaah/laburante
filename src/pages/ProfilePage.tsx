@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle } from 'lucide-react'
+import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2 } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
 import ContactModal from '@/components/profile/ContactModal'
@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const [recommendationOpen, setRecommendationOpen] = useState(false)
   const [jobRequestOpen, setJobRequestOpen] = useState(false)
   const [copiedContact, setCopiedContact] = useState('')
+  const [imageFailed, setImageFailed] = useState(false)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
   const updateProfileVisibility = useProfileStore((s) => s.updateProfileVisibility)
@@ -29,15 +30,21 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!slug) return
+    const normalizedSlug = decodeURIComponent(slug).trim()
     setLoading(true)
-    fetchProfileBySlug(slug).then((res) => {
+    let active = true
+    setImageFailed(false)
+    fetchProfileBySlug(normalizedSlug).then((res) => {
+      if (!active) return
       setRawProfile(res)
       setLoading(false)
     })
+    return () => { active = false }
   }, [slug, fetchProfileBySlug])
 
   // Prefer store's currentProfile so newly added recommendations reflect immediately
-  const profile = (currentProfile && currentProfile.slug === slug) ? currentProfile : rawProfile
+  const normalizedRouteSlug = slug ? decodeURIComponent(slug).trim() : ''
+  const profile = (currentProfile && currentProfile.slug === normalizedRouteSlug) ? currentProfile : rawProfile
 
   const handleShare = () => {
     const url = `${window.location.origin}/p/${profile?.slug}`
@@ -143,8 +150,10 @@ export default function ProfilePage() {
         )}
 
         <div className="flex flex-col sm:flex-row items-start gap-6 mb-6">
-          <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-[var(--color-laburante-surface-alt)] border-2 border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-extrabold text-2xl sm:text-3xl text-[var(--color-laburante-text)] flex-shrink-0">
-            {profile.name.charAt(0)}
+          <div className="h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full bg-[var(--color-laburante-surface-alt)] border-2 border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-extrabold text-2xl sm:text-3xl text-[var(--color-laburante-text)] flex-shrink-0">
+            {profile.photo_url && !imageFailed ? (
+              <img src={profile.photo_url} alt={`Foto de ${profile.name}`} className="h-full w-full object-cover" onError={() => setImageFailed(true)} />
+            ) : profile.name.charAt(0)}
           </div>
 
           <div className="flex-1 min-w-0 space-y-2">
@@ -202,7 +211,7 @@ export default function ProfilePage() {
 
               <button
                 onClick={() => setContactOpen(true)}
-                className="py-3.5 px-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors text-center"
+                className="inline-flex flex-1 items-center justify-center gap-2 py-3.5 px-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors sm:flex-initial"
               >
                 <MessageCircle size={16} className="text-emerald-600" /> Contactar ahora
               </button>
@@ -234,13 +243,16 @@ export default function ProfilePage() {
           </button>
         </div>
         <CompanyProfileActions profileId={profile.id} profileName={profile.name} />
-        {(profile.contact_methods || []).some((method) => method.type === 'web' || method.type === 'portfolio') && (
-          <div className="flex flex-wrap gap-2 pt-3">
+        {(profile.contact_methods || []).some((method) => (method.type === 'web' || method.type === 'portfolio') && method.is_public) && (
+          <div className="mt-4 border-t border-[var(--color-laburante-border)] pt-4">
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]"><Link2 size={13} /> Portfolio y sitio</p>
+            <div className="flex flex-wrap gap-2">
             {(profile.contact_methods || []).filter((method) => (method.type === 'web' || method.type === 'portfolio') && method.is_public).map((method) => (
-              <div key={`${method.type}-${method.value}`} className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3 py-2 text-xs">
-                <Globe size={14} className="text-[var(--color-laburante-indigo)]" /><a href={method.value.startsWith('http') ? method.value : `https://${method.value}`} target="_blank" rel="noopener noreferrer" className="max-w-[210px] truncate font-semibold text-[var(--color-laburante-indigo)]">{method.value}</a><button type="button" onClick={() => copyContact(method.value, method.type)} aria-label={`Copiar ${method.type}`} className="rounded p-1 hover:bg-[var(--color-laburante-surface-alt)]">{copiedContact === method.type ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}</button><ExternalLink size={12} className="text-[var(--color-laburante-text-muted)]" />
+              <div key={`${method.type}-${method.value}`} className="inline-flex min-w-0 items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3 py-2 text-xs">
+                <Globe size={14} className="shrink-0 text-[var(--color-laburante-indigo)]" /><a href={method.value.startsWith('http') ? method.value : `https://${method.value}`} target="_blank" rel="noopener noreferrer" className="max-w-[min(60vw,280px)] truncate font-semibold text-[var(--color-laburante-indigo)]">{method.value}</a><button type="button" onClick={() => copyContact(method.value, method.type)} aria-label={`Copiar ${method.type}`} className="rounded p-1 hover:bg-[var(--color-laburante-surface-alt)]">{copiedContact === method.type ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}</button><ExternalLink size={12} className="shrink-0 text-[var(--color-laburante-text-muted)]" />
               </div>
             ))}
+            </div>
           </div>
         )}
         {profile.resume_url && <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 pt-3 text-xs font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{profile.resume_name ? `: ${profile.resume_name}` : ''}</a>}

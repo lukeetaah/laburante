@@ -292,13 +292,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           recommendations ( id, from_name, text, context, created_at )
         `)
         .eq('slug', slug)
-        .single()
+        .maybeSingle()
 
       if (error) {
         const legacyResult = await (supabase.from('profiles') as any)
           .select(`id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at )`)
           .eq('slug', slug)
-          .single()
+          .maybeSingle()
         data = legacyResult.data
         error = legacyResult.error
       }

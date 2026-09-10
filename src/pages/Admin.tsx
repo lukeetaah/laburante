@@ -24,6 +24,8 @@ import {
   XCircle,
   Clock,
   Building2,
+  Pencil,
+  Save,
 } from 'lucide-react'
 
 const REASON_LABELS: Record<string, string> = {
@@ -53,6 +55,8 @@ export default function Admin() {
   const [waRequests, setWaRequests] = useState<WhatsAppVerificationRequest[]>([])
   const [loading, setLoading] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [editingProfile, setEditingProfile] = useState<any | null>(null)
+  const [editForm, setEditForm] = useState<any>({})
 
   const loadData = async () => {
     setLoading(true)
@@ -71,7 +75,7 @@ export default function Admin() {
       // 2. Fetch all Profiles
       let profilesData: any[] | null = null
       const resProfiles = await (supabase.from('profiles') as any)
-        .select('id, name, slug, provincia, localidad, status, disponibilidad, account_type, created_at, whatsapp_verified, whatsapp_verified_at')
+        .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, created_at, whatsapp_verified, whatsapp_verified_at')
         .order('created_at', { ascending: false })
 
       if (resProfiles.error) {
@@ -264,6 +268,61 @@ export default function Admin() {
         ? 'Número de WhatsApp certificado como verificado.'
         : 'Certificación de WhatsApp removida.'
     )
+  }
+
+  const openProfileEditor = (profile: any) => {
+    setEditingProfile(profile)
+    setEditForm({
+      name: profile.name || '',
+      bio: profile.bio || '',
+      provincia: profile.provincia || '',
+      localidad: profile.localidad || '',
+      modalidad: profile.modalidad || 'presencial',
+      disponibilidad: profile.disponibilidad || 'disponible',
+      account_type: profile.account_type || 'persona',
+    })
+  }
+
+  const handleSaveProfile = async () => {
+    if (!editingProfile || !editForm.name.trim() || !editForm.provincia.trim() || !editForm.localidad.trim()) {
+      setActionMessage('Completá nombre, provincia y localidad antes de guardar.')
+      return
+    }
+    const { error } = await (supabase.from('profiles') as any)
+      .update({
+        name: editForm.name.trim(),
+        bio: editForm.bio.trim() || null,
+        provincia: editForm.provincia.trim(),
+        localidad: editForm.localidad.trim(),
+        modalidad: editForm.modalidad,
+        disponibilidad: editForm.disponibilidad,
+        account_type: editForm.account_type,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', editingProfile.id)
+
+    if (error) {
+      setActionMessage(`No se pudo guardar: ${error.message}`)
+      return
+    }
+    setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? { ...p, ...editForm } : p))
+    setEditingProfile(null)
+    setActionMessage('Perfil actualizado desde Administración.')
+  }
+
+  const handleDeleteAccount = async (profile: any) => {
+    if (profile.id === user?.id) {
+      setActionMessage('La cuenta administradora activa no se puede eliminar desde este panel.')
+      return
+    }
+    if (!window.confirm(`¿Eliminar definitivamente la cuenta de ${profile.name}? También se quitará su acceso y sus datos asociados.`)) return
+    const { error } = await (supabase.rpc as any)('admin_delete_account', { target_user_id: profile.id })
+    if (error) {
+      setActionMessage(`No se pudo eliminar la cuenta: ${error.message}. Aplicá migration_admin_controls.sql en Supabase.`)
+      return
+    }
+    setProfiles((prev) => prev.filter((p) => p.id !== profile.id))
+    setActionMessage(`Cuenta de ${profile.name} eliminada definitivamente.`)
   }
 
   const pendingReportsCount = reports.filter((r) => r.status === 'pendiente').length
@@ -710,6 +769,13 @@ export default function Admin() {
                       Ver
                     </Link>
 
+                    <button
+                      onClick={() => openProfileEditor(p)}
+                      className="py-1.5 px-3 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 text-xs font-semibold flex items-center gap-1"
+                    >
+                      <Pencil size={13} /> Editar
+                    </button>
+
                     {/* WhatsApp verify toggle */}
                     <button
                       onClick={() => handleToggleWhatsAppVerified(p.id, p.whatsapp_verified)}
@@ -722,6 +788,13 @@ export default function Admin() {
                     >
                       <ShieldCheck size={13} />
                       {p.whatsapp_verified ? 'Quitar Verificado' : 'Certificar WhatsApp'}
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteAccount(p)}
+                      className="py-1.5 px-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 text-xs font-semibold flex items-center gap-1"
+                    >
+                      <Trash2 size={13} /> Eliminar
                     </button>
 
                     {/* Visibility toggle */}
@@ -763,9 +836,34 @@ export default function Admin() {
           ) : profiles.filter((p) => p.account_type === 'empresa').map((company) => (
             <div key={company.id} className="flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-[var(--color-laburante-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
               <div><div className="flex items-center gap-2"><Building2 size={17} className="text-indigo-600" /><h3 className="font-heading font-bold text-sm">{company.name}</h3><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">EMPRESA</span></div><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{company.localidad}, {company.provincia} · Alta {new Date(company.created_at).toLocaleDateString()}</p></div>
-              <button onClick={() => handleToggleProfileStatus(company.id, company.status)} className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">{company.status === 'suspendido' ? 'Reactivar cuenta' : 'Suspender cuenta'}</button>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => openProfileEditor(company)} className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800"><Pencil size={13} /> Editar</button>
+                <button onClick={() => handleToggleProfileStatus(company.id, company.status)} className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">{company.status === 'suspendido' ? 'Reactivar cuenta' : 'Suspender cuenta'}</button>
+                <button onClick={() => handleDeleteAccount(company)} className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800"><Trash2 size={13} /> Eliminar</button>
+              </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {editingProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Editar perfil">
+          <div className="w-full max-w-lg rounded-2xl bg-[var(--color-laburante-surface)] p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div><p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Edición administrativa</p><h2 className="mt-1 font-heading text-xl font-bold">{editingProfile.name}</h2></div>
+              <button type="button" onClick={() => setEditingProfile(null)} className="rounded-lg p-1 text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)]" aria-label="Cerrar"><XCircle size={19} /></button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-semibold">Nombre<input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold">Tipo<select value={editForm.account_type} onChange={(e) => setEditForm({ ...editForm, account_type: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="persona">LABURANTE</option><option value="empresa">EMPRESA</option></select></label>
+              <label className="text-xs font-semibold">Provincia<input value={editForm.provincia} onChange={(e) => setEditForm({ ...editForm, provincia: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold">Localidad<input value={editForm.localidad} onChange={(e) => setEditForm({ ...editForm, localidad: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold">Modalidad<select value={editForm.modalidad} onChange={(e) => setEditForm({ ...editForm, modalidad: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="presencial">Presencial</option><option value="remoto">Remoto</option><option value="ambas">Ambas</option></select></label>
+              <label className="text-xs font-semibold">Disponibilidad<select value={editForm.disponibilidad} onChange={(e) => setEditForm({ ...editForm, disponibilidad: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="disponible">Disponible</option><option value="ocupado">Ocupado</option><option value="no_disponible">No disponible</option></select></label>
+            </div>
+            <label className="mt-3 block text-xs font-semibold">Presentación<textarea value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
+            <button type="button" onClick={handleSaveProfile} className="btn-dark mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold"><Save size={14} /> Guardar cambios</button>
+          </div>
         </div>
       )}
 
