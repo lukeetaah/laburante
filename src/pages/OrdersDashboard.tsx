@@ -25,6 +25,7 @@ import JobStatusStepper from '@/components/jobs/JobStatusStepper'
 import BudgetModal from '@/components/jobs/BudgetModal'
 import CancelJobModal from '@/components/jobs/CancelJobModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
+import OutcomeModal from '@/components/jobs/OutcomeModal'
 import type { JobRequestStatus } from '@/lib/database.types'
 
 export default function OrdersDashboard() {
@@ -37,6 +38,7 @@ export default function OrdersDashboard() {
     fetchMyJobs,
     acceptBudget,
     updateJobStatus,
+    submitOutcome,
     loading,
   } = useJobStore()
 
@@ -48,6 +50,7 @@ export default function OrdersDashboard() {
   const [cancelModalJob, setCancelModalJob] = useState<{ job: JobRequestWithDetails; role: 'cliente' | 'profesional' } | null>(null)
   const [reviewModalJob, setReviewModalJob] = useState<JobRequestWithDetails | null>(null)
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
+  const [outcomeModal, setOutcomeModal] = useState<{ job: JobRequestWithDetails; role: 'cliente' | 'profesional'; blocking?: boolean } | null>(null)
 
   useEffect(() => {
     fetchMyRequests()
@@ -86,6 +89,12 @@ export default function OrdersDashboard() {
   const handleOpenWhatsApp = (phone: string, text: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '')
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
+  const handleOutcome = async (outcome: string, note: string) => {
+    if (!outcomeModal) return
+    const result = await submitOutcome(outcomeModal.job.id, outcomeModal.role, outcome, note)
+    if (!result.error) setOutcomeModal(null)
   }
 
   return (
@@ -325,11 +334,11 @@ export default function OrdersDashboard() {
               {activeTab === 'cliente' && (
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--color-laburante-border)]">
                   {/* WhatsApp contact once accepted or in progress */}
-                  {['aceptado', 'en_progreso', 'presupuestado'].includes(job.status) && (
+                  {['presupuestado', 'aceptado', 'en_progreso'].includes(job.status) && job.pro_contact && (
                     <button
                       onClick={() =>
                         handleOpenWhatsApp(
-                          job.client_contact,
+                          job.pro_contact || '',
                           `Hola ${job.pro_name || ''}, te contacto por el trabajo "${job.title}" en LABURANTE.`
                         )
                       }
@@ -340,7 +349,7 @@ export default function OrdersDashboard() {
                   )}
 
                   {/* Review button on completion */}
-                  {job.status === 'completado' && (
+                  {job.status === 'completado' && !job.client_outcome && (
                     <button
                       onClick={() => setReviewModalJob(job)}
                       className="btn-dark py-2.5 px-5 rounded-xl font-heading font-bold text-xs flex items-center gap-1.5 shadow-xs"
@@ -349,6 +358,7 @@ export default function OrdersDashboard() {
                       Dejar reseña del trabajo
                     </button>
                   )}
+                  {job.status === 'completado' && !job.client_outcome && <button type="button" onClick={() => setOutcomeModal({ job, role: 'cliente', blocking: true })} className="btn-dark py-2.5 px-5 rounded-xl font-heading font-bold text-xs">Indicar qué sucedió</button>}
 
                   {/* Cancel button if active */}
                   {!['completado', 'cancelado'].includes(job.status) && (
@@ -385,7 +395,7 @@ export default function OrdersDashboard() {
                   {['aceptado', 'en_progreso'].includes(job.status) && (
                     <>
                       <button
-                        onClick={() => updateJobStatus(job.id, 'completado')}
+                        onClick={() => setOutcomeModal({ job, role: 'profesional', blocking: true })}
                         className="py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-heading font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors"
                       >
                         <CheckCircle2 size={14} /> Marcar como Finalizado
@@ -410,6 +420,7 @@ export default function OrdersDashboard() {
                     </>
                   )}
 
+                  {job.status === 'completado' && !job.professional_outcome && <button type="button" onClick={() => setOutcomeModal({ job, role: 'profesional', blocking: true })} className="rounded-xl bg-amber-600 px-4 py-2.5 text-xs font-bold text-white">Completar resultado pendiente</button>}
                   {job.status === 'completado' && (
                     <div className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
                       <CheckCircle2 size={16} className="text-emerald-600" />
@@ -452,6 +463,7 @@ export default function OrdersDashboard() {
           </div>
         </div>
       )}
+      {outcomeModal && <OutcomeModal role={outcomeModal.role} blocking={outcomeModal.blocking} onClose={() => setOutcomeModal(null)} onSubmit={handleOutcome} />}
 
       {/* Lightbox Photo Preview */}
       {selectedPhoto && (

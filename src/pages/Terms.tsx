@@ -17,7 +17,7 @@ export default function Terms() {
           Términos y Condiciones de Uso
         </h1>
         <p className="text-xs text-[var(--color-laburante-text-muted)]">
-          Última actualización: Septiembre 2026 · República Argentina
+          Última actualización: Septiembre 2026 · República Argentina · Borrador sujeto a revisión legal
         </p>
       </div>
 
@@ -32,6 +32,18 @@ export default function Terms() {
           <p>
             LABURANTE actúa exclusivamente como una <strong>infraestructura digital de contacto</strong>. No es una agencia de empleo, no es una empresa de contratación, no es intermediaria laboral ni comercial, y no forma parte de los acuerdos, contrataciones, presupuestos o relaciones que eventualmente celebren los usuarios entre sí.
           </p>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">4 bis. Solicitudes, presupuestos y cierre</h2>
+          <p>Una solicitud de presupuesto permite ordenar la conversación entre las partes. LABURANTE puede habilitar herramientas de contacto dentro del flujo cuando existe una solicitud, un presupuesto o una aceptación; no garantiza que el trabajo se concrete ni que las partes respondan.</p>
+          <p>Quien solicita y quien ofrece el servicio deben informar el resultado del caso cuando la plataforma lo solicite: realizado, en proceso, no realizado o cancelado. Esa información se usa para mantener el historial, mejorar las sugerencias y reducir solicitudes abandonadas. La plataforma podrá recordar el cierre pendiente y limitar avances dentro del flujo, sin asumir responsabilidad por la relación entre las partes.</p>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">4 ter. Independencia y contratación</h2>
+          <p>LABURANTE no contrata trabajadores, no fija precios, no cobra ni retiene pagos, no garantiza resultados y no participa como parte en acuerdos laborales, civiles, comerciales o de consumo. Cada usuario debe cumplir la normativa que le corresponda, incluyendo obligaciones fiscales, laborales, profesionales, de seguridad e higiene y de protección al consumidor.</p>
+          <p>La exclusión o limitación de responsabilidad se aplica únicamente en la medida permitida por la legislación vigente y no alcanza obligaciones que legalmente no puedan excluirse. Estos términos no reemplazan asesoramiento jurídico local.</p>
         </section>
 
         <section className="space-y-3">

@@ -17,7 +17,7 @@ export default function Privacy() {
           Política de Privacidad
         </h1>
         <p className="text-xs text-[var(--color-laburante-text-muted)]">
-          Tratamiento de datos personales y compromiso de minimización · República Argentina
+          Tratamiento de datos personales y compromiso de minimización · República Argentina · Borrador sujeto a revisión legal
         </p>
       </div>
 
@@ -40,6 +40,12 @@ export default function Privacy() {
               <li>No vendemos ni comercializamos bases de datos a terceros.</li>
             </ul>
           </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">6. Solicitudes y datos de contacto</h2>
+          <p>Cuando una persona pide un presupuesto, LABURANTE procesa los datos necesarios para enviar la solicitud, gestionar el presupuesto, mostrar el estado y registrar el resultado informado por cada parte. Los datos de contacto no deben cargarse para terceros sin autorización.</p>
+          <p>Los medios de contacto y la información de una solicitud se utilizan para operar LABURANTE, facilitar el contacto solicitado, prevenir abusos, moderar reportes y cumplir obligaciones legales. No se venden ni se entregan para bases comerciales ajenas. Pueden intervenir proveedores tecnológicos que alojan autenticación, base de datos y archivos bajo instrucciones de LABURANTE.</p>
         </section>
 
         <section className="space-y-3">
@@ -93,6 +99,7 @@ export default function Privacy() {
           <p>
             Implementamos protocolos modernos de seguridad, políticas de Row Level Security (RLS) en la base de datos PostgreSQL y cifrado en tránsito (HTTPS) para proteger la integridad y privacidad de las cuentas.
           </p>
+          <p>El acceso se limita por cuenta y por participación en cada solicitud; se minimiza la exposición del contacto en la interfaz y se eliminan o anonimizan datos cuando corresponde. Ningún sistema conectado a Internet puede prometer seguridad absoluta, por eso también recomendamos no publicar información sensible, contraseñas, datos bancarios o documentos innecesarios.</p>
         </section>
       </div>
     </div>

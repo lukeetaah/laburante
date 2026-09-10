@@ -8,6 +8,7 @@ export interface JobRequestWithDetails extends JobRequest {
   pro_photo?: string | null
   pro_provincia?: string
   pro_localidad?: string
+  pro_contact?: string | null
 }
 
 export interface CreateJobRequestPayload {
@@ -43,6 +44,7 @@ interface JobState {
   acceptBudget: (requestId: string) => Promise<{ error: string | null }>
   updateJobStatus: (requestId: string, status: JobRequestStatus) => Promise<{ error: string | null }>
   cancelJob: (requestId: string, reason: string, cancelledBy: 'cliente' | 'profesional') => Promise<{ error: string | null }>
+  submitOutcome: (requestId: string, role: 'cliente' | 'profesional', outcome: string, note?: string) => Promise<{ error: string | null }>
 }
 
 const LOCAL_STORAGE_KEY = 'laburante_job_requests_cache'
@@ -85,7 +87,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         const { data, error } = await (supabase.from('job_requests') as any)
           .select(`
             *,
-            profiles:profile_id ( name, slug, photo_url, provincia, localidad )
+            profiles:profile_id ( name, slug, photo_url, provincia, localidad, contact_methods ( type, value, is_public ) )
           `)
           .eq('client_id', userId)
           .order('created_at', { ascending: false })
@@ -98,6 +100,7 @@ export const useJobStore = create<JobState>((set, get) => ({
             pro_photo: item.profiles?.photo_url || null,
             pro_provincia: item.profiles?.provincia || '',
             pro_localidad: item.profiles?.localidad || '',
+            pro_contact: item.profiles?.contact_methods?.find((contact: any) => contact.type === 'whatsapp' && contact.is_public)?.value || null,
           }))
           set({ clientRequests: formatted, loading: false })
           return
@@ -171,6 +174,10 @@ export const useJobStore = create<JobState>((set, get) => ({
         budget_created_at: null,
         cancel_reason: null,
         cancelled_by: null,
+        client_outcome: null,
+        professional_outcome: null,
+        outcome_note: null,
+        outcome_updated_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         pro_name: payload.pro_name,
@@ -261,7 +268,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   updateJobStatus: async (requestId, newStatus) => {
     try {
       const now = new Date().toISOString()
-      const updateData = {
+      const updateData: Partial<JobRequest> & { updated_at: string } = {
         status: newStatus,
         updated_at: now,
       }
@@ -331,6 +338,33 @@ export const useJobStore = create<JobState>((set, get) => ({
       return { error: null }
     } catch (e: any) {
       return { error: e.message || 'Error al cancelar la solicitud.' }
+    }
+  },
+
+  submitOutcome: async (requestId, role, outcome, note) => {
+    try {
+      const now = new Date().toISOString()
+      const updateData = {
+        [role === 'cliente' ? 'client_outcome' : 'professional_outcome']: outcome.trim(),
+        outcome_note: note?.trim() || null,
+        outcome_updated_at: now,
+        updated_at: now,
+      }
+      if (role === 'profesional') {
+        await get().updateJobStatus(requestId, 'completado')
+      }
+      const { error } = await (supabase.from('job_requests') as any).update(updateData).eq('id', requestId)
+      if (error) throw error
+      const { data: userData } = await supabase.auth.getUser()
+      const local = getLocalCache(userData.user?.id).map((item) => item.id === requestId ? { ...item, ...updateData } : item)
+      saveLocalCache(local as JobRequestWithDetails[], userData.user?.id)
+      set((s) => ({
+        proJobs: s.proJobs.map((item) => item.id === requestId ? { ...item, ...updateData } : item),
+        clientRequests: s.clientRequests.map((item) => item.id === requestId ? { ...item, ...updateData } : item),
+      }))
+      return { error: null }
+    } catch (e: any) {
+      return { error: e.message || 'No pudimos guardar el resultado del trabajo.' }
     }
   },
 }))

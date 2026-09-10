@@ -127,6 +127,10 @@ export type Database = {
           budget_created_at: string | null
           cancel_reason: string | null
           cancelled_by: 'cliente' | 'profesional' | null
+          client_outcome: string | null
+          professional_outcome: string | null
+          outcome_note: string | null
+          outcome_updated_at: string | null
           created_at: string
           updated_at: string
         }
@@ -197,4 +201,3 @@ export type JobRequestUrgency = JobRequest['urgency']
 export type AccountDeletion = Database['public']['Tables']['account_deletions']['Row']
 export type InAppNotification = Database['public']['Tables']['notifications']['Row']
 export type WhatsAppVerificationRequest = Database['public']['Tables']['whatsapp_verification_requests']['Row']
-
