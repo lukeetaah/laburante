@@ -295,7 +295,7 @@ export default function ProfilePage() {
           <div className="flex flex-wrap gap-2">
             {profile.languages.filter((entry) => entry.is_public).map((entry) => (
               <span key={entry.language} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] px-3 py-2 text-xs font-semibold text-[var(--color-laburante-text)]">
-                {entry.language}<span className="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--color-laburante-indigo)]">{entry.level === 'basico' ? 'Básico' : entry.level === 'intermedio' ? 'Intermedio' : entry.level === 'avanzado' ? 'Avanzado' : 'Bilingüe'}</span>
+                {entry.language}<span className="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--color-laburante-indigo)]">{entry.level === 'basico' ? 'Básico' : entry.level === 'intermedio' ? 'Intermedio' : entry.level === 'avanzado' ? 'Avanzado' : entry.level === 'nativo' ? 'Nativo' : 'Bilingüe'}</span>
               </span>
             ))}
           </div>

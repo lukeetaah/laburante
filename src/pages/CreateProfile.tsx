@@ -42,7 +42,7 @@ export default function CreateProfile() {
   const [contactMethods, setContactMethods] = useState<{ type: string; value: string }[]>([
     { type: 'whatsapp', value: '' }
   ])
-  const [languages, setLanguages] = useState<{ language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue'; is_public: boolean }[]>([])
+  const [languages, setLanguages] = useState<{ language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue' | 'nativo'; is_public: boolean }[]>([])
 
   // Explicit voluntary consent checkbox (CRITICAL REQUIREMENT)
   const [consentGranted, setConsentGranted] = useState(false)
@@ -520,7 +520,7 @@ export default function CreateProfile() {
           {languages.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--color-laburante-border)] p-4 text-xs text-[var(--color-laburante-text-muted)]">Todavía no agregaste idiomas.</p> : <div className="space-y-2">
             {languages.map((entry, idx) => <div key={idx} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
               <input value={entry.language} onChange={(e) => handleLanguageChange(idx, 'language', e.target.value)} placeholder="Ej: Inglés" className="min-w-0 rounded-xl border border-[var(--color-laburante-border)] px-3.5 py-2 text-sm" />
-              <select value={entry.level} onChange={(e) => handleLanguageChange(idx, 'level', e.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] px-2.5 py-2 text-xs"><option value="basico">Básico</option><option value="intermedio">Intermedio</option><option value="avanzado">Avanzado</option><option value="bilingue">Bilingüe</option></select>
+              <select value={entry.level} onChange={(e) => handleLanguageChange(idx, 'level', e.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] px-2.5 py-2 text-xs"><option value="basico">Básico</option><option value="intermedio">Intermedio</option><option value="avanzado">Avanzado</option><option value="bilingue">Bilingüe</option><option value="nativo">Nativo</option></select>
               <button type="button" onClick={() => handleRemoveLanguage(idx)} className="p-2 text-[var(--color-laburante-text-muted)] hover:text-rose-600" aria-label="Quitar idioma"><Trash2 size={16} /></button>
             </div>)}
           </div>}

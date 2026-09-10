@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS public.profile_languages (
   is_public BOOLEAN NOT NULL DEFAULT true,
   PRIMARY KEY (profile_id, language)
 );
+ALTER TABLE public.profile_languages DROP CONSTRAINT IF EXISTS profile_languages_level_check;
+ALTER TABLE public.profile_languages ADD CONSTRAINT profile_languages_level_check CHECK (level IN ('basico', 'intermedio', 'avanzado', 'bilingue', 'nativo'));
 ALTER TABLE public.profile_languages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public read public profile languages" ON public.profile_languages;
 CREATE POLICY "Public read public profile languages" ON public.profile_languages FOR SELECT

@@ -43,7 +43,7 @@ export interface ProfileWithDetails {
     date?: string
     created_at?: string
   }[]
-  languages?: { language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue'; is_public: boolean }[]
+  languages?: { language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue' | 'nativo'; is_public: boolean }[]
 }
 
 export interface AccountDeletionRecord {
