@@ -151,6 +151,10 @@ export const useJobStore = create<JobState>((set, get) => ({
       const { data: userData } = await supabase.auth.getUser()
       const userId = userData?.user?.id || null
 
+      if (userId && userId === payload.profile_id) {
+        return { error: 'No podés contratarte a vos mismo.' }
+      }
+
       const newId = typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
         : 'job-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
@@ -186,7 +190,7 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       // Try inserting into Supabase
       try {
-        await (supabase.from('job_requests') as any).insert({
+        const { error } = await (supabase.from('job_requests') as any).insert({
           id: newId,
           client_id: userId,
           client_name: record.client_name,
@@ -200,8 +204,10 @@ export const useJobStore = create<JobState>((set, get) => ({
           photos: record.photos,
           status: 'solicitado',
         })
+        if (error) return { error: error.message || 'No se pudo enviar la solicitud.' }
       } catch (dbErr) {
-        console.warn('Supabase insert skipped or failed, saved locally:', dbErr)
+        console.warn('Supabase insert failed:', dbErr)
+        return { error: 'No se pudo validar la solicitud. Intentá nuevamente.' }
       }
 
       // Always save to local cache for instant UI feedback

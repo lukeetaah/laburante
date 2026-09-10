@@ -95,6 +95,8 @@ export default function ProfilePage() {
     )
   }
 
+  const isOwnProfile = user?.id === profile.id
+
   return (
     <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">
       {/* Back button */}
@@ -198,7 +200,8 @@ export default function ProfilePage() {
 
         {/* Action Buttons: Request Budget + Contact + Review + Share */}
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
-          {profile.status !== 'oculto' && (
+          {isOwnProfile && <p className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs font-semibold text-indigo-900">Este es tu perfil. Podés editarlo desde Mi perfil; las solicitudes y reseñas se realizan entre cuentas distintas.</p>}
+          {profile.status !== 'oculto' && !isOwnProfile && (
             <>
               <button
                 onClick={() => setJobRequestOpen(true)}
@@ -398,6 +401,7 @@ export default function ProfilePage() {
             </div>
             <button
               onClick={() => setRecommendationOpen(true)}
+              disabled={isOwnProfile}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-dark text-xs font-heading font-semibold shadow-xs"
             >
               <Star size={14} className="fill-amber-400 text-amber-400" />

@@ -69,6 +69,17 @@ export default function JobRequestModal({
 
   if (!isOpen) return null
 
+  const isOwnProfile = Boolean(user?.id && user.id === profileId)
+
+  if (isOwnProfile) {
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-amber-600" /><div><h2 className="text-lg font-bold">No podés contratarte a vos mismo</h2><p className="mt-2 text-sm leading-relaxed text-slate-600">Este perfil pertenece a tu propia cuenta. Para probar el flujo, usá otra cuenta o buscá a otra persona.</p></div></div>
+        <button type="button" onClick={onClose} className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white">Entendido</button>
+      </div>
+    </div>
+  }
+
   // Image handling with compression to Base64
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
