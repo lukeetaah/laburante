@@ -319,7 +319,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           .select(`id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at )`)
           .eq('id', userId)
           .maybeSingle()
-        data = legacyResult.data
+        data = legacyResult.data ? { ...legacyResult.data, account_type: legacyResult.data.account_type || userData.user.user_metadata?.account_type || userData.user.user_metadata?.accountType } : legacyResult.data
         error = legacyResult.error
       }
 

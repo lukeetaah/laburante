@@ -22,7 +22,8 @@ export default function Header() {
   }
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Mi cuenta'
-  const isCompanyAccount = user?.user_metadata?.account_type === 'empresa'
+  const metadataAccountType = user?.user_metadata?.account_type || user?.user_metadata?.accountType
+  const isCompanyAccount = metadataAccountType === 'empresa' || (myProfile?.id === user?.id && myProfile?.account_type === 'empresa')
   const showOfferLink = !isCompanyAccount && (!user || (profileChecked && !myProfile))
   const accountPath = isCompanyAccount ? '/empresa' : '/crear-perfil'
 
