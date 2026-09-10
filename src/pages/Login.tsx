@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
 import { LogIn, ArrowRight } from 'lucide-react'
 
 export default function Login() {
+  const [searchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -27,7 +28,8 @@ export default function Login() {
       setError(res.error)
     } else {
       const profile = await fetchMyProfile()
-      navigate(isCompanyAccount(useAuthStore.getState().user, profile) ? '/empresa' : '/crear-perfil')
+      const redirectTo = searchParams.get('redirect')
+      navigate(redirectTo && redirectTo.startsWith('/') ? redirectTo : (isCompanyAccount(useAuthStore.getState().user, profile) ? '/empresa' : '/crear-perfil'))
     }
   }
 
@@ -89,7 +91,7 @@ export default function Login() {
 
         <div className="text-center text-xs text-[var(--color-laburante-text-secondary)] pt-2 border-t border-[var(--color-laburante-border)]">
           ¿Todavía no tenés cuenta?{' '}
-          <Link to="/registrar" className="font-semibold text-[var(--color-laburante-indigo)] hover:underline">
+          <Link to={searchParams.get('redirect') ? `/registrar?redirect=${encodeURIComponent(searchParams.get('redirect') || '')}` : '/registrar'} className="font-semibold text-[var(--color-laburante-indigo)] hover:underline">
             Registrate gratis
           </Link>
         </div>

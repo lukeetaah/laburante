@@ -80,6 +80,20 @@ export default function JobRequestModal({
     </div>
   }
 
+  if (!user) {
+    const returnPath = `/p/${encodeURIComponent(profileSlug)}`
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-indigo-600" /><div><h2 className="text-lg font-bold">Creá una cuenta para enviar la solicitud</h2><p className="mt-2 text-sm leading-relaxed text-slate-600">Necesitás una cuenta para que el pedido quede a tu nombre, puedas seguir el estado y recibas cada aviso cuando la persona responda.</p></div></div>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <Link to={`/registrar?redirect=${encodeURIComponent(returnPath)}`} onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white">Crear cuenta gratis <ArrowRight size={15} /></Link>
+          <Link to={`/ingresar?redirect=${encodeURIComponent(returnPath)}`} onClick={onClose} className="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-800">Ya tengo cuenta</Link>
+        </div>
+        <button type="button" onClick={onClose} className="mt-3 w-full rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-500 hover:bg-slate-50">Volver al perfil</button>
+      </div>
+    </div>
+  }
+
   // Image handling with compression to Base64
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -133,6 +147,11 @@ export default function JobRequestModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!user) {
+      setError('Necesitás ingresar o crear una cuenta para enviar y seguir esta solicitud.')
+      return
+    }
 
     if (!title.trim()) {
       setError('Por favor indicá el trabajo que necesitás.')

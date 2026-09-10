@@ -154,6 +154,10 @@ export const useJobStore = create<JobState>((set, get) => ({
       const { data: userData } = await supabase.auth.getUser()
       const userId = userData?.user?.id || null
 
+      if (!userId) {
+        return { error: 'Necesitás ingresar o crear una cuenta para enviar y seguir esta solicitud.' }
+      }
+
       if (userId && userId === payload.profile_id) {
         return { error: 'No podés contratarte a vos mismo.' }
       }
@@ -221,7 +225,17 @@ export const useJobStore = create<JobState>((set, get) => ({
         clientRequests: [record, ...s.clientRequests],
       }))
 
-      if (userId && userId !== payload.profile_id) {
+      if (userId) {
+        await useNotificationStore.getState().addNotification({
+          userId,
+          title: 'Solicitud registrada',
+          message: `Tu pedido “${record.title}” quedó guardado. Vas a recibir un aviso cuando ${record.pro_name} lo revise o responda.`,
+          type: 'job',
+          link: '/mis-trabajos',
+        })
+      }
+
+      if (userId !== payload.profile_id) {
         await useNotificationStore.getState().addNotification({
           userId: payload.profile_id,
           title: 'Nuevo pedido de presupuesto',

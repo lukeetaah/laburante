@@ -137,7 +137,10 @@ export default function Register() {
       setSuccessEmail(email.trim())
     } else {
       if (retryStorageKey) localStorage.removeItem(retryStorageKey)
-      if (isCompany) {
+      const redirectTo = searchParams.get('redirect')
+      if (redirectTo && redirectTo.startsWith('/')) {
+        navigate(redirectTo)
+      } else if (isCompany) {
         navigate('/empresa')
       } else if (intent === 'ofrecer' || intent === 'ambas') {
         navigate('/crear-perfil?from=registro')

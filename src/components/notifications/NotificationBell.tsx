@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notification-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { supabase } from '@/lib/supabase'
 
 export default function NotificationBell() {
   const { user } = useAuthStore()
@@ -31,8 +32,23 @@ export default function NotificationBell() {
   useEffect(() => {
     fetchNotifications()
     if (!user) return
-    const refresh = window.setInterval(fetchNotifications, 15000)
-    return () => window.clearInterval(refresh)
+    const refresh = window.setInterval(fetchNotifications, 10000)
+    const refreshOnFocus = () => fetchNotifications()
+    const refreshOnVisibility = () => {
+      if (document.visibilityState === 'visible') fetchNotifications()
+    }
+    window.addEventListener('focus', refreshOnFocus)
+    document.addEventListener('visibilitychange', refreshOnVisibility)
+    const channel = supabase
+      .channel(`notifications-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => fetchNotifications())
+      .subscribe()
+    return () => {
+      window.clearInterval(refresh)
+      window.removeEventListener('focus', refreshOnFocus)
+      document.removeEventListener('visibilitychange', refreshOnVisibility)
+      supabase.removeChannel(channel)
+    }
   }, [user, fetchNotifications])
 
   // Close when clicking outside

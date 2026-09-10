@@ -363,9 +363,10 @@ CREATE POLICY "Pros read requests for their profile"
     USING (auth.uid() = profile_id);
 
 DROP POLICY IF EXISTS "Anyone can insert job request" ON public.job_requests;
-CREATE POLICY "Anyone can insert job request"
+DROP POLICY IF EXISTS "Authenticated clients can insert job request" ON public.job_requests;
+CREATE POLICY "Authenticated clients can insert job request"
     ON public.job_requests FOR INSERT
-    WITH CHECK (true);
+    WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = client_id);
 
 DROP POLICY IF EXISTS "Clients and Pros update own job request" ON public.job_requests;
 CREATE POLICY "Clients and Pros update own job request"
