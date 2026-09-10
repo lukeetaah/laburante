@@ -32,8 +32,11 @@ export default function Home() {
 
           {/* Core Title */}
           <h1 className="font-heading text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[var(--color-laburante-text)] leading-[1.15] mb-6">
-            ¿Y si al mercado le dijeras vos<br className="hidden sm:inline" />
-            para qué sos bueno?
+            ¿Y si al mercado le dijeras vos
+            <br className="hidden sm:inline" />
+            <span className="block sm:inline">
+              <span className="whitespace-nowrap">para qué</span> sos bueno?
+            </span>
           </h1>
 
           <p className="text-base sm:text-lg md:text-xl text-[var(--color-laburante-text-secondary)] max-w-2xl mx-auto leading-relaxed mb-10">
