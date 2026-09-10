@@ -17,7 +17,12 @@ const ALIASES: Record<string, string[]> = {
   'cumpleaños': ['catering', 'fotografo', 'animador'],
 }
 
-const normalize = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+export const normalizeSearchText = (value: string) => value
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
 
 export interface SearchInterpretation {
   terms: string[]
@@ -27,11 +32,11 @@ export interface SearchInterpretation {
 }
 
 export function interpretSearch(input: string): SearchInterpretation {
-  const normalized = normalize(input.trim())
+  const normalized = normalizeSearchText(input)
   const terms = normalized.split(/[^a-z0-9]+/).filter((term) => term.length > 2 && !STOP_WORDS.has(term))
   const expanded = new Set(terms)
   Object.entries(ALIASES).forEach(([key, values]) => {
-    if (normalized.includes(key)) values.forEach((value) => expanded.add(normalize(value)))
+    if (normalized.includes(normalizeSearchText(key))) values.forEach((value) => expanded.add(normalizeSearchText(value)))
   })
 
   const intent = /ofrezco|ofrecer|busco trabajo|quiero trabajar|estoy disponible/.test(normalized)
@@ -50,9 +55,9 @@ export function interpretSearch(input: string): SearchInterpretation {
 }
 
 export function inferCategory(input: string): string | undefined {
-  const normalized = normalize(input)
+  const normalized = normalizeSearchText(input)
   return CATEGORIES.find((category) => {
-    const values = [category.name, ...(category.subcategories || [])].map(normalize)
+    const values = [category.name, ...(category.subcategories || [])].map(normalizeSearchText)
     return values.some((value) => value.length > 3 && normalized.includes(value))
   })?.name
 }

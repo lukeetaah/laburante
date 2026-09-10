@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { WhatsAppVerificationRequest } from '@/lib/database.types'
 import { SITE_CONFIG } from '@/lib/constants'
-import { interpretSearch } from '@/lib/search-intent'
+import { interpretSearch, normalizeSearchText } from '@/lib/search-intent'
 import { CATEGORIES } from '@/data/categories'
 
 export interface ProfileWithDetails {
@@ -213,10 +213,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       if (filters.category) {
-        const categoryDef = CATEGORIES.find((category) => category.name.toLowerCase() === filters.category!.toLowerCase())
-        const categoryTerms = [filters.category, ...(categoryDef?.subcategories || [])].map((term) => term.toLowerCase())
+        const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
+        const categoryTerms = [filters.category, ...(categoryDef?.subcategories || [])].map(normalizeSearchText)
         realProfiles = realProfiles.filter((p) => {
-          const text = [p.name, p.bio || '', ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' ').toLowerCase()
+          const text = normalizeSearchText([p.name, p.bio || '', ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' '))
           return categoryTerms.some((term) => text.includes(term))
         })
       }
@@ -224,9 +224,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       // Filter by text query if given
       if (filters.query && filters.query.trim()) {
         const interpretation = interpretSearch(filters.query)
-        const q = filters.query.toLowerCase().trim()
+        const q = normalizeSearchText(filters.query)
         const score = (p: ProfileWithDetails) => {
-          const text = [p.name, p.bio || '', p.provincia, p.localidad, ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' ').toLowerCase()
+          const text = normalizeSearchText([p.name, p.bio || '', p.provincia, p.localidad, ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' '))
           const exact = text.includes(q) ? 3 : 0
           const hits = interpretation.expandedTerms.filter((term) => text.includes(term)).length
           return exact + hits
