@@ -47,7 +47,6 @@ laburante/
 │   │   └── lukson-universe.ts # Registro centralizado de obras de Lukson Arts
 │   ├── lib/
 │   │   ├── constants.ts     # Configuración de sitio y dominio
-│   │   ├── mock-fixtures.ts # Fixtures de prueba aislados para desarrollo
 │   │   └── supabase.ts      # Cliente Supabase tipado
 │   ├── pages/               # Home, Search, ProfilePage, Categories, Auth, Legal
 │   ├── stores/              # auth-store, profile-store (Zustand)

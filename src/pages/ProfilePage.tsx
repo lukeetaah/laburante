@@ -137,12 +137,6 @@ export default function ProfilePage() {
 
       {/* Main Profile Header Card */}
       <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 md:p-10 shadow-xs relative">
-        {profile.isMock && (
-          <div className="absolute top-6 right-6 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-            MOCK DEV (Prueba)
-          </div>
-        )}
-
         <div className="flex flex-col sm:flex-row items-start gap-6 mb-6">
           <div className="h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full bg-[var(--color-laburante-surface-alt)] border-2 border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-extrabold text-2xl sm:text-3xl text-[var(--color-laburante-text)] flex-shrink-0">
             {profile.photo_url && !imageFailed ? (

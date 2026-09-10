@@ -9,13 +9,6 @@ interface ProfileCardProps {
 export default function ProfileCard({ profile }: ProfileCardProps) {
   return (
     <article className="group relative rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 transition-all duration-200 hover:border-[var(--color-laburante-border-hover)] hover:shadow-md hover:-translate-y-0.5 flex flex-col justify-between">
-      {/* Dev Mock Badge (If applicable) */}
-      {profile.isMock && (
-        <div className="absolute top-4 right-4 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-          MOCK DEV
-        </div>
-      )}
-
       <div>
         {/* Header: Name + Location */}
         <div className="flex items-start gap-4 mb-3">

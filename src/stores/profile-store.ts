@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
-import { DEV_MOCK_PROFILES } from '@/lib/mock-fixtures'
 import type { WhatsAppVerificationRequest } from '@/lib/database.types'
 import { SITE_CONFIG } from '@/lib/constants'
 import { interpretSearch } from '@/lib/search-intent'
@@ -25,7 +24,6 @@ export interface ProfileWithDetails {
   whatsapp_verified_at?: string | null
   notify_whatsapp?: boolean
   created_at: string
-  isMock?: boolean
   categories?: string[]
   skills?: string[]
   services?: { title: string; description: string | null; precio_orientativo?: string | null }[]
@@ -62,8 +60,6 @@ interface ProfileState {
   currentProfile: ProfileWithDetails | null
   myProfile: ProfileWithDetails | null
   loading: boolean
-  includeDevMocks: boolean
-  setIncludeDevMocks: (val: boolean) => void
   fetchProfiles: (filters?: {
     query?: string
     category?: string
@@ -163,13 +159,6 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   currentProfile: null,
   myProfile: null,
   loading: false,
-  includeDevMocks: false, // Default false: zero fake profiles shown by default
-
-  setIncludeDevMocks: (val) => {
-    set({ includeDevMocks: val })
-    get().fetchProfiles()
-  },
-
   fetchProfiles: async (filters = {}) => {
     set({ loading: true })
     try {
@@ -244,40 +233,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         realProfiles = realProfiles.map((profile) => ({ profile, rank: score(profile) })).filter((item) => item.rank > 0).sort((a, b) => b.rank - a.rank).map((item) => item.profile)
       }
 
-      // If user enabled dev mocks in testing toggle
-      let combined = [...realProfiles]
-      if (get().includeDevMocks) {
-        let mockFiltered = [...DEV_MOCK_PROFILES]
-        if (filters.provincia) {
-          mockFiltered = mockFiltered.filter(p => p.provincia === filters.provincia)
-        }
-        if (filters.localidad) {
-          mockFiltered = mockFiltered.filter(p => p.localidad.toLowerCase().includes(filters.localidad!.toLowerCase()))
-        }
-        if (filters.modalidad && filters.modalidad !== 'todas') {
-          mockFiltered = mockFiltered.filter(p => p.modalidad === filters.modalidad)
-        }
-        if (filters.category) {
-          mockFiltered = mockFiltered.filter(p => p.categories.some(c => c.toLowerCase() === filters.category!.toLowerCase()))
-        }
-        if (filters.query && filters.query.trim()) {
-          const interpretation = interpretSearch(filters.query)
-          mockFiltered = mockFiltered.filter((p) => {
-            const text = [p.name, p.bio, ...p.skills, ...p.services.map((s: any) => s.title)].join(' ').toLowerCase()
-            return interpretation.expandedTerms.some((term) => text.includes(term))
-          })
-        }
-        combined = [...combined, ...mockFiltered]
-      }
-
-      set({ profiles: combined, loading: false })
+      set({ profiles: realProfiles, loading: false })
     } catch (err) {
       console.warn('Error fetching profiles from Supabase:', err)
-      if (get().includeDevMocks) {
-        set({ profiles: DEV_MOCK_PROFILES, loading: false })
-      } else {
-        set({ profiles: [], loading: false })
-      }
+      set({ profiles: [], loading: false })
     }
   },
 
@@ -325,20 +284,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return fullProfile
       }
 
-      // Check dev mocks if not found in DB
-      const mockFound = DEV_MOCK_PROFILES.find(p => p.slug === slug)
-      if (mockFound) {
-        set({ currentProfile: mockFound, loading: false })
-        return mockFound
-      }
-
       set({ currentProfile: null, loading: false })
       return null
     } catch (err) {
       console.warn('Error fetching profile by slug:', err)
-      const mockFound = DEV_MOCK_PROFILES.find(p => p.slug === slug)
-      set({ currentProfile: mockFound || null, loading: false })
-      return mockFound || null
+      set({ currentProfile: null, loading: false })
+      return null
     }
   },
 

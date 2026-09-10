@@ -18,15 +18,12 @@ export default function Search() {
   const [modalidad, setModalidad] = useState(searchParams.get('modalidad') || 'todas')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
-  const { profiles, loading, fetchProfiles, includeDevMocks, setIncludeDevMocks } = useProfileStore()
+  const { profiles, loading, fetchProfiles } = useProfileStore()
   const interpretation = query.trim() ? interpretSearch(query) : null
   const inferredCategory = query.trim() ? inferCategory(query) : undefined
 
   // Sync state with URL params
   useEffect(() => {
-    if (searchParams.get('mock') === '1' && !includeDevMocks) {
-      setIncludeDevMocks(true)
-    }
     fetchProfiles({
       query: searchParams.get('q') || undefined,
       provincia: searchParams.get('provincia') || undefined,
@@ -34,7 +31,7 @@ export default function Search() {
       category: searchParams.get('categoria') || undefined,
       modalidad: searchParams.get('modalidad') || undefined,
     })
-  }, [searchParams, fetchProfiles, includeDevMocks, setIncludeDevMocks])
+  }, [searchParams, fetchProfiles])
 
   const handleApplyFilters = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
@@ -179,21 +176,6 @@ export default function Search() {
               Aplicar filtros
             </button>
 
-            {/* Isolated Development Testing Toggle */}
-            <div className="pt-4 border-t border-[var(--color-laburante-border)]">
-              <label className="flex items-center gap-2 cursor-pointer text-[11px] text-[var(--color-laburante-text-secondary)]">
-                <input
-                  type="checkbox"
-                  checked={includeDevMocks}
-                  onChange={(e) => setIncludeDevMocks(e.target.checked)}
-                  className="rounded border-[var(--color-laburante-border)] text-[var(--color-laburante-indigo)] focus:ring-0"
-                />
-                <span>Ver perfiles de prueba (MOCK DEV)</span>
-              </label>
-              <p className="text-[10px] text-[var(--color-laburante-text-muted)] mt-1">
-                Útil en desarrollo si aún no hay perfiles reales dados de alta en Supabase.
-              </p>
-            </div>
           </div>
 
           {interpretation && (
@@ -278,14 +260,6 @@ export default function Search() {
                 >
                   Ofrecer mi trabajo gratis
                 </Link>
-                {!includeDevMocks && (
-                  <button
-                    onClick={() => setIncludeDevMocks(true)}
-                    className="text-xs text-[var(--color-laburante-indigo)] hover:underline"
-                  >
-                    Ver perfiles de prueba de desarrollo
-                  </button>
-                )}
               </div>
             </div>
           )}
