@@ -1,10 +1,17 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Building2, Check, Search, ShieldCheck, Users } from 'lucide-react'
+import { ArrowRight, Building2, Check, Search, ShieldCheck, Users, PlayCircle } from 'lucide-react'
+import { SITE_CONFIG } from '@/lib/constants'
 
 const benefits = [
   { icon: Search, title: 'Búsquedas que ahorran tiempo', text: 'Filtrá por rubro, ubicación y modalidad para llegar rápido a perfiles relevantes.' },
   { icon: Users, title: 'Un espacio para tu equipo', text: 'Centralizá la búsqueda de profesionales y dejá preparada la cuenta para sumar colaboradores.' },
   { icon: ShieldCheck, title: 'Más confianza para decidir', text: 'Priorizá perfiles completos, canales verificados y señales de reputación.' },
+]
+
+const plans = [
+  { name: 'Explorar', price: '$0', detail: 'Para probar la red', items: ['Búsqueda base', 'Acceso a perfiles públicos', 'Sin vencimiento'], tone: 'border-[var(--color-laburante-border)]' },
+  { name: 'Equipo', price: 'Consultar', detail: 'Para búsquedas frecuentes', items: ['Más búsquedas y guardados', 'Listas para comparar', 'Soporte de activación'], tone: 'border-amber-300 bg-amber-50/40' },
+  { name: 'Pro', price: 'Consultar', detail: 'Para equipos con volumen', items: ['Prioridad operativa', 'Colaboración del equipo', 'Beneficios a medida'], tone: 'border-indigo-200 bg-indigo-50/40' },
 ]
 
 export default function Companies() {
@@ -57,6 +64,31 @@ export default function Companies() {
               <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{text}</p>
             </article>
           ))}
+        </div>
+        <div className="mt-16">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]">Modelo claro</p>
+              <h2 className="mt-2 font-heading text-2xl font-bold text-[var(--color-laburante-text)]">LABURANTEs gratis. Empresas con capacidad extra.</h2>
+            </div>
+            <p className="max-w-md text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">La red abierta sigue siendo gratuita. Las empresas pagan sólo por ahorrar tiempo, ordenar búsquedas y trabajar en equipo.</p>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {plans.map((plan) => (
+              <article key={plan.name} className={`rounded-2xl border p-5 ${plan.tone}`}>
+                <h3 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">{plan.name}</h3>
+                <p className="mt-2 font-heading text-2xl font-extrabold text-[var(--color-laburante-text)]">{plan.price}</p>
+                <p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{plan.detail}</p>
+                <ul className="mt-5 space-y-2 text-xs text-[var(--color-laburante-text-secondary)]">{plan.items.map((item) => <li key={item} className="flex gap-2"><Check size={14} className="mt-0.5 shrink-0 text-emerald-600" />{item}</li>)}</ul>
+              </article>
+            ))}
+          </div>
+        </div>
+        <div className="mt-14 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-text)] p-6 text-white sm:p-8">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300"><PlayCircle size={15} /> Demo real</p><h2 className="mt-2 font-heading text-xl font-bold">Dos caminos, una red.</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-white/70">LABURANTE crea un perfil y recibe contactos sin costo. Empresa busca, filtra, guarda y puede activar capacidad adicional.</p></div>
+            <a href={`https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent('Hola LABURANTE, quiero activar un plan Empresa.')}`} target="_blank" rel="noopener noreferrer" className="btn-amber inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Hablar sobre un plan <ArrowRight size={16} /></a>
+          </div>
         </div>
         <div className="mt-14 flex flex-col items-start justify-between gap-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6 sm:flex-row sm:items-center sm:p-8">
           <div>

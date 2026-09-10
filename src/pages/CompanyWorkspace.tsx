@@ -1,0 +1,19 @@
+import { Link } from 'react-router-dom'
+import { ArrowRight, Building2, Check, Search, Users } from 'lucide-react'
+import { useAuthStore } from '@/stores/auth-store'
+import { SITE_CONFIG } from '@/lib/constants'
+
+export default function CompanyWorkspace() {
+  const user = useAuthStore((state) => state.user)
+  const isCompany = user?.user_metadata?.account_type === 'empresa'
+  const companyName = user?.user_metadata?.name || 'Tu empresa'
+
+  if (!user) return <div className="container py-20 text-center space-y-4"><Building2 className="mx-auto text-[var(--color-laburante-indigo)]" size={32} /><h1 className="font-heading text-2xl font-bold">Ingresá para ver tu espacio Empresa</h1><Link to="/registrar?tipo=empresa" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Crear cuenta Empresa <ArrowRight size={16} /></Link></div>
+  if (!isCompany) return <div className="container py-20 text-center space-y-4"><h1 className="font-heading text-2xl font-bold">Esta sección es para cuentas Empresa</h1><Link to="/empresas" className="text-sm font-semibold text-[var(--color-laburante-indigo)]">Conocé las opciones para empresas</Link></div>
+
+  return <div className="container py-10 md:py-16 space-y-8">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]"><Building2 size={15} /> Espacio Empresa</p><h1 className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">Hola, {companyName}</h1><p className="mt-1 text-sm text-[var(--color-laburante-text-secondary)]">Tu cuenta está lista para buscar profesionales.</p></div><Link to="/buscar" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"><Search size={16} /> Empezar a buscar</Link></div>
+    <div className="grid gap-5 md:grid-cols-3"><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Search className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Búsqueda real</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Usá la búsqueda pública con filtros por oficio, localidad y modalidad.</p></article><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Users className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Más capacidad</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Los planes Equipo y Pro están preparados para guardados, colaboración y volumen.</p></article><article className="rounded-2xl border border-amber-300 bg-amber-50/50 p-6"><Check className="text-emerald-600" size={22} /><h2 className="mt-4 font-heading font-bold">Activación comercial</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Cuando tu operación lo necesite, coordinamos el plan adecuado sin cobrarle a los LABURANTEs.</p></article></div>
+    <div className="rounded-2xl bg-[var(--color-laburante-text)] p-6 text-white sm:p-8"><h2 className="font-heading text-xl font-bold">¿Querés activar capacidad empresarial?</h2><p className="mt-2 max-w-xl text-sm leading-relaxed text-white/70">Escribinos por WhatsApp con el nombre de tu empresa y el volumen de búsquedas. Te ayudamos a elegir el plan.</p><a href={`https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent(`Hola LABURANTE, soy ${companyName} y quiero activar un plan Empresa.`)}`} target="_blank" rel="noopener noreferrer" className="btn-amber mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Solicitar activación <ArrowRight size={16} /></a></div>
+  </div>
+}

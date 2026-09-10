@@ -60,13 +60,19 @@ export default function ContactModal({ isOpen, onClose, profileName, contactMeth
       case 'email':
         return `mailto:${val}?subject=Contacto%20desde%20LABURANTE`
       case 'instagram': {
-        const handle = val.replace('@', '')
-        return `https://instagram.com/${handle}`
+        const handle = val.replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '')
+        return handle ? `https://instagram.com/${handle}` : null
       }
       case 'linkedin':
       case 'web':
       case 'portfolio':
-        return val.startsWith('http') ? val : `https://${val}`
+        try {
+          const normalized = val.startsWith('http://') || val.startsWith('https://') ? val : `https://${val}`
+          const parsed = new URL(normalized)
+          return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null
+        } catch {
+          return null
+        }
       default:
         return '#'
     }
@@ -99,7 +105,7 @@ export default function ContactModal({ isOpen, onClose, profileName, contactMeth
             {publicMethods.map((method, idx) => (
               <a
                 key={idx}
-                href={getActionUrl(method)}
+                href={getActionUrl(method) || undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3.5 rounded-xl border border-[var(--color-laburante-border)] hover:border-[var(--color-laburante-indigo)] hover:bg-[var(--color-laburante-surface-alt)] transition-all group"

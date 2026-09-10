@@ -23,7 +23,7 @@ export default function Login() {
     if (res.error) {
       setError(res.error)
     } else {
-      navigate('/crear-perfil')
+      navigate(useAuthStore.getState().user?.user_metadata?.account_type === 'empresa' ? '/empresa' : '/crear-perfil')
     }
   }
 

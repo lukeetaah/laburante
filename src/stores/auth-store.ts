@@ -10,6 +10,9 @@ export interface SignUpMetadata {
   intent?: 'ofrecer' | 'buscar' | 'ambas'
   role?: string
   accountType?: 'persona' | 'empresa'
+  companyPlan?: 'gratis' | 'equipo' | 'pro'
+  companySector?: string
+  teamSize?: string
 }
 
 interface AuthState {

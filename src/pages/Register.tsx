@@ -12,6 +12,9 @@ export default function Register() {
   const [phone, setPhone] = useState('')
   const [provincia, setProvincia] = useState('CABA')
   const [localidad, setLocalidad] = useState('')
+  const [companySector, setCompanySector] = useState('')
+  const [teamSize, setTeamSize] = useState('1-5')
+  const [companyPlan, setCompanyPlan] = useState<'gratis' | 'equipo' | 'pro'>('equipo')
   const [intent, setIntent] = useState<'ofrecer' | 'buscar' | 'ambas'>(isCompany ? 'buscar' : 'ofrecer')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -62,6 +65,9 @@ export default function Register() {
       localidad: localidad.trim(),
       intent,
       accountType: isCompany ? 'empresa' : 'persona',
+      companyPlan: isCompany ? companyPlan : undefined,
+      companySector: isCompany ? companySector.trim() : undefined,
+      teamSize: isCompany ? teamSize : undefined,
     })
 
     setLoading(false)
@@ -71,7 +77,9 @@ export default function Register() {
     } else if (res.needsEmailConfirmation) {
       setSuccessEmail(email.trim())
     } else {
-      if (intent === 'ofrecer' || intent === 'ambas') {
+      if (isCompany) {
+        navigate('/empresa')
+      } else if (intent === 'ofrecer' || intent === 'ambas') {
         navigate('/crear-perfil?from=registro')
       } else {
         navigate('/buscar')
@@ -103,8 +111,8 @@ export default function Register() {
             </p>
             <ol className="list-decimal list-inside space-y-1.5 pl-1 leading-relaxed text-[11px]">
               <li>Abrí el enlace de confirmación que te enviamos a tu email.</li>
-              <li>Completá los datos de tu perfil profesional (oficios, fotos y contacto).</li>
-              <li>Tu perfil quedará publicado de inmediato para que te contacten.</li>
+              <li>{isCompany ? 'Ingresá al espacio de Empresa y elegí cómo empezar.' : 'Completá los datos de tu perfil profesional (oficios, fotos y contacto).'}</li>
+              <li>{isCompany ? 'Probá la búsqueda gratuita y activá un plan cuando necesites más capacidad.' : 'Tu perfil quedará publicado de inmediato para que te contacten.'}</li>
             </ol>
           </div>
 
@@ -116,10 +124,10 @@ export default function Register() {
               Ir a Iniciar Sesión <ArrowRight size={16} />
             </Link>
             <Link
-              to="/crear-perfil"
+              to={isCompany ? '/empresa' : '/crear-perfil'}
               className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] text-xs font-semibold text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)] inline-block"
             >
-              Ya lo confirmé, completar mi perfil
+              {isCompany ? 'Ya lo confirmé, ir al espacio Empresa' : 'Ya lo confirmé, completar mi perfil'}
             </Link>
           </div>
         </div>
@@ -221,6 +229,39 @@ export default function Register() {
               />
             </div>
           </div>
+
+          {isCompany && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">Rubro de la empresa</label>
+                  <input value={companySector} onChange={(e) => setCompanySector(e.target.value)} placeholder="ej: Construcción, comercio, tecnología" className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">Tamaño del equipo</label>
+                  <select value={teamSize} onChange={(e) => setTeamSize(e.target.value)} className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent">
+                    <option>1-5</option><option>6-20</option><option>21-50</option><option>51+</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-[var(--color-laburante-text)]">Elegí cómo querés empezar</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {([
+                    ['gratis', 'Explorar', 'Sin costo · búsqueda base'],
+                    ['equipo', 'Equipo', 'Más búsquedas y guardados'],
+                    ['pro', 'Pro', 'Prioridad y colaboración'],
+                  ] as const).map(([value, title, detail]) => (
+                    <button key={value} type="button" onClick={() => setCompanyPlan(value)} className={`rounded-xl border p-3 text-left transition-colors ${companyPlan === value ? 'border-[var(--color-laburante-indigo)] bg-indigo-50/60' : 'border-[var(--color-laburante-border)]'}`}>
+                      <span className="block text-xs font-bold text-[var(--color-laburante-text)]">{title}</span>
+                      <span className="mt-1 block text-[10px] leading-relaxed text-[var(--color-laburante-text-secondary)]">{detail}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[var(--color-laburante-text-muted)]">El plan pago se activa con confirmación comercial; no se cobra nada desde este formulario.</p>
+              </div>
+            </>
+          )}
 
           {isCompany && (
             <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900">

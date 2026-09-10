@@ -31,7 +31,10 @@ export default function AuthNotifier() {
       // If user came from signup confirmation and is on home page, prompt or guide to /crear-perfil
       if (location.pathname === '/') {
         const intent = user?.user_metadata?.intent
-        if (intent === 'ofrecer' || intent === 'ambas') {
+        const isCompany = user?.user_metadata?.account_type === 'empresa'
+        if (isCompany) {
+          navigate('/empresa')
+        } else if (intent === 'ofrecer' || intent === 'ambas') {
           // Redirect them to complete their profile with context
           navigate('/crear-perfil?confirmed=true')
         }
@@ -58,13 +61,13 @@ export default function AuthNotifier() {
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
-          {location.pathname !== '/crear-perfil' && (
+          {location.pathname !== '/crear-perfil' && location.pathname !== '/empresa' && (
             <Link
-              to="/crear-perfil?confirmed=true"
+              to={user?.user_metadata?.account_type === 'empresa' ? '/empresa' : '/crear-perfil?confirmed=true'}
               onClick={() => setShowConfirmedNotice(false)}
               className="py-1.5 px-4 rounded-xl bg-white text-emerald-950 font-heading font-bold text-xs hover:bg-emerald-50 transition-colors shadow-xs flex items-center gap-1.5"
             >
-              Completar mi perfil de trabajo
+              {user?.user_metadata?.account_type === 'empresa' ? 'Ir a mi espacio Empresa' : 'Completar mi perfil de trabajo'}
               <ArrowRight size={13} />
             </Link>
           )}

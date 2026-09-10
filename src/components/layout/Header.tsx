@@ -22,7 +22,9 @@ export default function Header() {
   }
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Mi cuenta'
+  const isCompanyAccount = user?.user_metadata?.account_type === 'empresa'
   const showOfferLink = !user || (profileChecked && !myProfile)
+  const accountPath = isCompanyAccount ? '/empresa' : '/crear-perfil'
 
   useEffect(() => {
     let active = true
@@ -103,7 +105,7 @@ export default function Header() {
             Empresas
           </Link>
           {showOfferLink && <Link
-            to="/crear-perfil"
+            to={accountPath}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-laburante-accent)] hover:bg-amber-50 transition-colors"
           >
             <UserPlus size={16} />
@@ -128,7 +130,7 @@ export default function Header() {
           {user ? (
             <div className="hidden md:flex items-center gap-2">
               <Link
-                to="/crear-perfil"
+                to={accountPath}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-xs font-semibold text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-border)] transition-colors max-w-[160px] truncate"
                 title={`Conectado como ${displayName}`}
               >
@@ -204,8 +206,8 @@ export default function Header() {
               <div className="px-4 py-2 text-xs font-semibold text-[var(--color-laburante-text-muted)]">
                 Conectado como: <span className="text-[var(--color-laburante-text)]">{displayName}</span>
               </div>
-              <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                <User size={16} /> Mi perfil profesional
+              <Link to={accountPath} onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                <User size={16} /> {isCompanyAccount ? 'Espacio Empresa' : 'Mi perfil profesional'}
               </Link>
               <button onClick={handleSignOut} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-rose-600 hover:bg-rose-50 w-full text-left font-medium">
                 <LogOut size={16} /> Cerrar sesión
