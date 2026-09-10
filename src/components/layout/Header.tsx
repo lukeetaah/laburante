@@ -23,7 +23,7 @@ export default function Header() {
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Mi cuenta'
   const isCompanyAccount = user?.user_metadata?.account_type === 'empresa'
-  const showOfferLink = !user || (profileChecked && !myProfile)
+  const showOfferLink = !isCompanyAccount && (!user || (profileChecked && !myProfile))
   const accountPath = isCompanyAccount ? '/empresa' : '/crear-perfil'
 
   useEffect(() => {
@@ -72,17 +72,31 @@ export default function Header() {
           >
             Categorías
           </Link>
-          <Link
-            to="/mis-trabajos"
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isActive('/mis-trabajos') || isActive('/pedidos')
-                ? 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)]'
-                : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]'
-            }`}
-          >
-            <Briefcase size={16} />
-            Mis Trabajos
-          </Link>
+          {isCompanyAccount ? (
+            <Link
+              to="/empresa"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isActive('/empresa')
+                  ? 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)]'
+                  : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]'
+              }`}
+            >
+              <Building2 size={16} />
+              Espacio Empresa
+            </Link>
+          ) : (
+            <Link
+              to="/mis-trabajos"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isActive('/mis-trabajos') || isActive('/pedidos')
+                  ? 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)]'
+                  : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]'
+              }`}
+            >
+              <Briefcase size={16} />
+              Mis Trabajos
+            </Link>
+          )}
           <Link
             to="/como-funciona"
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -93,7 +107,7 @@ export default function Header() {
           >
             Cómo funciona
           </Link>
-          <Link
+          {!isCompanyAccount && <Link
             to="/empresas"
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               isActive('/empresas')
@@ -103,7 +117,7 @@ export default function Header() {
           >
             <Building2 size={16} />
             Empresas
-          </Link>
+          </Link>}
           {showOfferLink && <Link
             to={accountPath}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-laburante-accent)] hover:bg-amber-50 transition-colors"
@@ -183,15 +197,21 @@ export default function Header() {
           <Link to="/categorias" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             Categorías
           </Link>
-          <Link to="/mis-trabajos" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
-            <Briefcase size={16} /> Mis Trabajos
-          </Link>
+          {isCompanyAccount ? (
+            <Link to="/empresa" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
+              <Building2 size={16} /> Espacio Empresa
+            </Link>
+          ) : (
+            <Link to="/mis-trabajos" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
+              <Briefcase size={16} /> Mis Trabajos
+            </Link>
+          )}
           <Link to="/como-funciona" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             Cómo funciona
           </Link>
-          <Link to="/empresas" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
+          {!isCompanyAccount && <Link to="/empresas" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
             <Building2 size={16} /> Empresas
-          </Link>
+          </Link>}
           {showOfferLink && <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-accent)] font-medium">
             <UserPlus size={16} /> Ofrecer mi trabajo
           </Link>}
