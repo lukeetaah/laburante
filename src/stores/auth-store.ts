@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
+import { SITE_CONFIG } from '@/lib/constants'
 
 export interface SignUpMetadata {
   name: string
@@ -98,8 +99,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signUp: async (email, password, metadata) => {
+    const redirectOrigin = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+      ? window.location.origin
+      : SITE_CONFIG.url
     const redirectUrl = typeof window !== 'undefined'
-      ? `${window.location.origin}/crear-perfil?confirmed=true`
+      ? `${redirectOrigin}/crear-perfil?confirmed=true`
       : undefined
 
     const { data, error } = await supabase.auth.signUp({

@@ -1,12 +1,12 @@
 // LABURANTE — Site configuration
-// Domain is configurable for future custom domain
+// Canonical production domain. VITE_SITE_URL may still override it for previews.
 
 export const SITE_CONFIG = {
   name: 'LABURANTE',
   tagline: 'Encontrá a alguien que sepa hacerlo',
   description:
     'Una plataforma gratuita para conectar personas que ofrecen su trabajo, oficio, profesión o servicios con quienes necesitan encontrarlos.',
-  url: import.meta.env.VITE_SITE_URL || 'https://laburante.vercel.app',
+  url: import.meta.env.VITE_SITE_URL || 'https://laburante.ar',
   origin: 'Lukson Arts',
   originUrl: 'https://luksonarts.vercel.app',
   officialWhatsApp: import.meta.env.VITE_OFFICIAL_WHATSAPP || '5491178202409',

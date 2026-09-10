@@ -8,4 +8,4 @@ Allow: /privacidad
 Disallow: /editar-perfil
 Disallow: /admin
 
-Sitemap: https://laburante.vercel.app/sitemap.xml
+Sitemap: https://laburante.ar/sitemap.xml

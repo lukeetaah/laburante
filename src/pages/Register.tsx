@@ -29,6 +29,7 @@ export default function Register() {
   const signUp = useAuthStore((s) => s.signUp)
   const navigate = useNavigate()
   const retryStorageKey = email.trim() ? `laburante_signup_retry:${email.trim().toLowerCase()}` : ''
+  const signupLockKey = 'laburante_signup_request_lock'
 
   useEffect(() => {
     if (!retryStorageKey) { setRetryAt(null); return }
@@ -93,17 +94,34 @@ export default function Register() {
     setLoading(true)
     setError(null)
 
-    const res = await signUp(email.trim(), password, {
-      name: name.trim(),
-      phone: phone.trim(),
-      provincia,
-      localidad: localidad.trim(),
-      intent,
-      accountType: isCompany ? 'empresa' : 'persona',
-      companyPlan: isCompany ? companyPlan : undefined,
-      companySector: isCompany ? companySector.trim() : undefined,
-      teamSize: isCompany ? teamSize : undefined,
-    })
+    // Evita dobles envíos desde pestañas abiertas o clicks repetidos mientras
+    // Supabase todavía está respondiendo. El lock expira solo y no bloquea
+    // nuevos usuarios desde otros dispositivos.
+    const currentLock = Number(localStorage.getItem(signupLockKey) || 0)
+    if (currentLock > Date.now()) {
+      setLoading(false)
+      setError('Ya hay una creación de cuenta en curso. Esperá unos segundos para evitar solicitudes duplicadas.')
+      return
+    }
+    const lockValue = String(Date.now() + 15000)
+    localStorage.setItem(signupLockKey, lockValue)
+
+    let res
+    try {
+      res = await signUp(email.trim(), password, {
+        name: name.trim(),
+        phone: phone.trim(),
+        provincia,
+        localidad: localidad.trim(),
+        intent,
+        accountType: isCompany ? 'empresa' : 'persona',
+        companyPlan: isCompany ? companyPlan : undefined,
+        companySector: isCompany ? companySector.trim() : undefined,
+        teamSize: isCompany ? teamSize : undefined,
+      })
+    } finally {
+      if (localStorage.getItem(signupLockKey) === lockValue) localStorage.removeItem(signupLockKey)
+    }
 
     setLoading(false)
 
