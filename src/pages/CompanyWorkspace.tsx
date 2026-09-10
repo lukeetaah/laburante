@@ -1,12 +1,51 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArrowRight, Building2, Check, Inbox, RefreshCw, Search, Send, Users } from 'lucide-react'
+import { Archive, ArrowRight, Building2, Check, ExternalLink, Globe, Inbox, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { SITE_CONFIG } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 import { useNotificationStore } from '@/stores/notification-store'
 
 type Opportunity = { id: string; title: string; description: string; status: string; created_at: string }
+
+const getContactActionUrl = (method: any, profileName: string) => {
+  const value = String(method?.value || '').trim()
+  if (!value) return null
+  if (method.type === 'whatsapp') {
+    const cleaned = value.replace(/\D/g, '')
+    if (!cleaned) return null
+    const number = cleaned.startsWith('54') ? cleaned : `549${cleaned}`
+    return `https://wa.me/${number}?text=Hola%20${encodeURIComponent(profileName)},%20te%20contacto%20a%20trav%C3%A9s%20de%20LABURANTE.`
+  }
+  if (method.type === 'telefono') return `tel:${value.replace(/\s+/g, '')}`
+  if (method.type === 'email') return `mailto:${value}?subject=Contacto%20desde%20LABURANTE`
+  if (method.type === 'instagram') {
+    const handle = value.replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '')
+    return handle ? `https://instagram.com/${handle}` : null
+  }
+  if (['linkedin', 'web', 'portfolio'].includes(method.type)) {
+    try {
+      const normalized = value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`
+      const parsed = new URL(normalized)
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+const getContactLabel = (type: string) => ({
+  whatsapp: 'WhatsApp', telefono: 'Llamar', email: 'Email', instagram: 'Instagram', linkedin: 'LinkedIn', web: 'Sitio web', portfolio: 'Portfolio',
+}[type] || 'Contacto')
+
+const getContactIcon = (type: string) => {
+  if (type === 'whatsapp') return <MessageCircle size={15} />
+  if (type === 'telefono') return <Phone size={15} />
+  if (type === 'email') return <Mail size={15} />
+  if (type === 'web' || type === 'portfolio' || type === 'linkedin') return <Globe size={15} />
+  return <ExternalLink size={15} />
+}
 
 export default function CompanyWorkspace() {
   const user = useAuthStore((state) => state.user)
@@ -43,8 +82,18 @@ export default function CompanyWorkspace() {
       const normalized = (inquiries.data || []).map((item: any) => staleIds.includes(item.id) ? { ...item, archived_at: new Date().toISOString() } : item)
       const profileIds = normalized.map((item: any) => item.profile_id)
       const { data: profiles } = profileIds.length ? await (supabase.from('profiles') as any).select('id, name, slug, localidad, provincia').in('id', profileIds) : { data: [] }
+      const { data: contactMethods } = profileIds.length ? await (supabase.from('contact_methods') as any).select('profile_id, type, value, is_public').in('profile_id', profileIds).eq('is_public', true) : { data: [] }
       const byId = new Map((profiles || []).map((profile: any) => [profile.id, profile]))
-      setCandidateInquiries(normalized.map((item: any) => ({ ...item, profile: byId.get(item.profile_id) })))
+      const contactsByProfile = new Map<string, any[]>()
+      ;(contactMethods || []).forEach((method: any) => {
+        const methods = contactsByProfile.get(method.profile_id) || []
+        methods.push(method)
+        contactsByProfile.set(method.profile_id, methods)
+      })
+      setCandidateInquiries(normalized.map((item: any) => ({
+        ...item,
+        profile: { ...(byId.get(item.profile_id) || {}), contact_methods: contactsByProfile.get(item.profile_id) || [] },
+      })))
     }
   }
 
@@ -111,7 +160,7 @@ export default function CompanyWorkspace() {
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]"><Building2 size={15} /> Espacio Empresa</p><h1 className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">Hola, {companyName}</h1><p className="mt-1 text-sm text-[var(--color-laburante-text-secondary)]">Tu cuenta está lista para buscar profesionales.</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={loadOpportunities} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-4 py-3 text-xs font-bold" title="Actualizar actividad" aria-label="Actualizar actividad"><RefreshCw size={15} /> Actualizar</button><Link to="/buscar" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"><Search size={16} /> Empezar a buscar</Link></div></div>
     <div className="grid gap-5 md:grid-cols-3"><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Search className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Búsqueda real</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Usá la búsqueda pública y revisá también los idiomas declarados en cada perfil.</p></article><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Users className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Red de empresas</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Cuando una búsqueda no encuentra respuesta, podés derivarla a empresas similares.</p></article><article className="rounded-2xl border border-amber-300 bg-amber-50/50 p-6"><Check className="text-emerald-600" size={22} /><h2 className="mt-4 font-heading font-bold">Sin spam</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Solo se comparte el pedido entre cuentas Empresa, sin exponer contactos ni datos privados.</p></article></div>
      {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{message}</div>}
-     {candidateInquiries.length > 0 && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Users size={18} className="text-indigo-700" /><div><h2 className="font-heading text-xl font-bold text-indigo-950">Procesos de selección</h2><p className="mt-1 text-xs text-indigo-900/75">Acá encontrás todas las propuestas enviadas a LABURANTEs y sus respuestas. Las pendientes de días anteriores se archivan automáticamente.</p></div></div><div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase"><span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800">Pendientes: {candidateInquiries.filter((item) => item.status === 'pendiente' && !item.archived_at).length}</span><span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-800">Aceptadas: {candidateInquiries.filter((item) => item.status === 'aceptada').length}</span><button type="button" onClick={() => setShowArchivedCandidates((value) => !value)} className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-white px-2 py-1 text-indigo-800"><Archive size={12} /> {showArchivedCandidates ? 'Ocultar archivadas' : 'Ver archivadas'}</button></div></div><div className="mt-4 space-y-3">{candidateInquiries.filter((item) => showArchivedCandidates || !item.archived_at).map((item) => <article key={item.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{item.profile?.name || 'LABURANTE'} · {item.process_type === 'entrevista' ? 'Entrevista' : 'Contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">Enviada el {new Date(item.created_at).toLocaleDateString('es-AR')} · {item.profile?.localidad || item.profile?.provincia || 'Ubicación no informada'}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${item.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : item.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{item.status}{item.archived_at ? ' · archivada' : ''}</span></div>{item.message && <p className="mt-2 text-xs text-[var(--color-laburante-text-secondary)]">{item.message}</p>}{item.status === 'aceptada' && <p className="mt-3 rounded-lg bg-emerald-50 p-2 text-xs font-semibold text-emerald-800">La persona aceptó conversar. Podés coordinar la entrevista y completar el alta de proveedor y la orden de compra según tu circuito.</p>} {!item.archived_at && <button type="button" onClick={() => archiveCandidateInquiry(item.id)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700" title="Archivar proceso"><Archive size={14} /> Archivar</button>}</article>)}</div></section>}
+     {candidateInquiries.length > 0 && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Users size={18} className="text-indigo-700" /><div><h2 className="font-heading text-xl font-bold text-indigo-950">Procesos de selección</h2><p className="mt-1 text-xs text-indigo-900/75">Acá encontrás todas las propuestas enviadas a LABURANTEs y sus respuestas. Las pendientes de días anteriores se archivan automáticamente.</p></div></div><div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase"><span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800">Pendientes: {candidateInquiries.filter((item) => item.status === 'pendiente' && !item.archived_at).length}</span><span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-800">Aceptadas: {candidateInquiries.filter((item) => item.status === 'aceptada').length}</span><button type="button" onClick={() => setShowArchivedCandidates((value) => !value)} className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-white px-2 py-1 text-indigo-800"><Archive size={12} /> {showArchivedCandidates ? 'Ocultar archivadas' : 'Ver archivadas'}</button></div></div><div className="mt-4 space-y-3">{candidateInquiries.filter((item) => showArchivedCandidates || !item.archived_at).map((item) => { const profileName = item.profile?.name || 'LABURANTE'; const authorizedContacts = item.profile?.contact_methods || []; return <article key={item.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{profileName} · {item.process_type === 'entrevista' ? 'Entrevista' : 'Contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">Enviada el {new Date(item.created_at).toLocaleDateString('es-AR')} · {item.profile?.localidad || item.profile?.provincia || 'Ubicación no informada'}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${item.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : item.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{item.status}{item.archived_at ? ' · archivada' : ''}</span></div>{item.message && <p className="mt-2 text-xs text-[var(--color-laburante-text-secondary)]">{item.message}</p>}{item.status === 'aceptada' && <><p className="mt-3 rounded-lg bg-emerald-50 p-2 text-xs font-semibold text-emerald-800">La persona aceptó conversar. Ya podés coordinar la entrevista o completar el alta de proveedor y la orden de compra según tu circuito.</p><div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3"><p className="text-xs font-bold text-emerald-950">Canales autorizados para coordinar</p>{authorizedContacts.length === 0 ? <p className="mt-1 text-xs text-emerald-900/80">Aceptó la propuesta, pero todavía no autorizó canales públicos de contacto.</p> : <div className="mt-2 flex flex-wrap gap-2">{authorizedContacts.map((method: any) => { const href = getContactActionUrl(method, profileName); if (!href) return null; const external = href.startsWith('http'); return <a key={`${method.type}-${method.value}`} href={href} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-900 hover:border-emerald-500">{getContactIcon(method.type)} {getContactLabel(method.type)}{external && <ExternalLink size={12} />}</a> })}</div>}<p className="mt-2 text-[10px] text-emerald-900/70">Solo se muestran los medios que el LABURANTE autorizó públicamente.</p></div></>} {!item.archived_at && <button type="button" onClick={() => archiveCandidateInquiry(item.id)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700" title="Archivar proceso"><Archive size={14} /> Archivar</button>}</article> })}</div></section>}
     <section className="grid gap-6 lg:grid-cols-[1.05fr_.95fr]">
       <form onSubmit={publishOpportunity} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 space-y-4">
         <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-700"><Send size={15} /> Publicar una idea o necesidad</p><h2 className="mt-2 font-heading text-xl font-bold">Que la oportunidad siga circulando</h2><p className="mt-1 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">Describí qué necesitás, qué podés pagar y para cuándo. LABURANTE lo ofrece a personas y empresas similares por zona.</p></div>
