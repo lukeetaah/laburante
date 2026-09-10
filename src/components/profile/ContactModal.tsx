@@ -18,6 +18,10 @@ export default function ContactModal({ isOpen, onClose, profileName, contactMeth
 
   const publicMethods = contactMethods.filter((c) => c.is_public && c.value)
 
+  const getLabel = (type: string) => ({
+    whatsapp: 'WhatsApp', telefono: 'Teléfono', email: 'Correo electrónico', instagram: 'Instagram', linkedin: 'LinkedIn', web: 'Sitio web', portfolio: 'Portfolio',
+  }[type] || 'Contacto')
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'whatsapp':
@@ -114,7 +118,7 @@ export default function ContactModal({ isOpen, onClose, profileName, contactMeth
                   {getIcon(method.type)}
                   <div className="min-w-0">
                     <p className="text-[11px] uppercase tracking-wider font-semibold text-[var(--color-laburante-text-muted)]">
-                      {method.type}
+                      {getLabel(method.type)}
                     </p>
                     <p className="text-sm font-medium text-[var(--color-laburante-text)] truncate">
                       {method.value}

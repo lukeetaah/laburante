@@ -17,7 +17,9 @@ import {
   ChevronRight,
   Eye,
   AlertTriangle,
-  Archive
+  Archive,
+  Mail,
+  MessageCircle
 } from 'lucide-react'
 import { useJobStore, type JobRequestWithDetails } from '@/stores/job-store'
 import { useAuthStore } from '@/stores/auth-store'
@@ -118,6 +120,11 @@ export default function OrdersDashboard() {
   const handleOpenWhatsApp = (phone: string, text: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '')
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
+  const handleAcceptBudget = async (jobId: string) => {
+    const result = await acceptBudget(jobId)
+    if (!result.error) await fetchMyRequests()
   }
 
   const handleOutcome = async (outcome: string, note: string) => {
@@ -389,7 +396,7 @@ export default function OrdersDashboard() {
                   {activeTab === 'cliente' && job.status === 'presupuestado' && (
                     <div className="pt-2 flex flex-wrap gap-2">
                       <button
-                        onClick={() => acceptBudget(job.id)}
+                        onClick={() => handleAcceptBudget(job.id)}
                         className="btn-dark py-2.5 px-5 rounded-xl font-heading font-bold text-xs shadow-xs"
                       >
                         Aceptar presupuesto y coordinar
@@ -409,19 +416,12 @@ export default function OrdersDashboard() {
               {activeTab === 'cliente' && (
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--color-laburante-border)]">
                   {/* WhatsApp contact once accepted or in progress */}
-                  {['presupuestado', 'aceptado', 'en_progreso'].includes(job.status) && job.pro_contact && (
-                    <button
-                      onClick={() =>
-                        handleOpenWhatsApp(
-                          job.pro_contact || '',
-                          `Hola ${job.pro_name || ''}, te contacto por el trabajo "${job.title}" en LABURANTE.`
-                        )
-                      }
-                      className="py-2.5 px-4 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                    >
-                      <Phone size={14} /> Contactar por WhatsApp
-                    </button>
-                  )}
+                  {['presupuestado', 'aceptado', 'en_progreso'].includes(job.status) && (job.pro_contacts || []).filter((contact) => contact.is_public && contact.value).map((contact) => {
+                    if (contact.type === 'whatsapp') return <button key={`${contact.type}-${contact.value}`} onClick={() => handleOpenWhatsApp(contact.value, `Hola ${job.pro_name || ''}, te contacto por el trabajo "${job.title}" en LABURANTE.`)} className="py-2.5 px-4 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold flex items-center gap-1.5 transition-colors"><MessageCircle size={14} /> Contactar por WhatsApp</button>
+                    if (contact.type === 'email') return <a key={`${contact.type}-${contact.value}`} href={`mailto:${contact.value}?subject=Coordinación de ${encodeURIComponent(job.title)}`} className="py-2.5 px-4 rounded-xl border border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100 text-xs font-semibold flex items-center gap-1.5 transition-colors"><Mail size={14} /> Correo electrónico</a>
+                    if (contact.type === 'telefono') return <a key={`${contact.type}-${contact.value}`} href={`tel:${contact.value.replace(/\s+/g, '')}`} className="py-2.5 px-4 rounded-xl border border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1.5 transition-colors"><Phone size={14} /> Llamar</a>
+                    return null
+                  })}
 
                   {/* Review button on completion */}
                   {job.status === 'completado' && !job.client_outcome && (

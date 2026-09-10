@@ -10,6 +10,7 @@ export interface JobRequestWithDetails extends JobRequest {
   pro_provincia?: string
   pro_localidad?: string
   pro_contact?: string | null
+  pro_contacts?: { type: string; value: string; is_public: boolean }[]
 }
 
 export interface CreateJobRequestPayload {
@@ -102,6 +103,7 @@ export const useJobStore = create<JobState>((set, get) => ({
             pro_provincia: item.profiles?.provincia || '',
             pro_localidad: item.profiles?.localidad || '',
             pro_contact: item.profiles?.contact_methods?.find((contact: any) => contact.type === 'whatsapp' && contact.is_public)?.value || null,
+            pro_contacts: item.profiles?.contact_methods || [],
           }))
           set({ clientRequests: formatted, loading: false })
           return

@@ -38,7 +38,7 @@ const getContactActionUrl = (method: any, profileName: string) => {
 }
 
 const getContactLabel = (type: string) => ({
-  whatsapp: 'WhatsApp', telefono: 'Llamar', email: 'Email', instagram: 'Instagram', linkedin: 'LinkedIn', web: 'Sitio web', portfolio: 'Portfolio',
+  whatsapp: 'WhatsApp', telefono: 'Llamar', email: 'Correo electrónico', instagram: 'Instagram', linkedin: 'LinkedIn', web: 'Sitio web', portfolio: 'Portfolio',
 }[type] || 'Contacto')
 
 const getContactIcon = (type: string) => {
