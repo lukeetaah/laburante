@@ -9,9 +9,8 @@ const benefits = [
 ]
 
 const plans = [
-  { name: 'Explorar', price: '$0', detail: 'Para probar la red', items: ['Búsqueda base', 'Acceso a perfiles públicos', 'Sin vencimiento'], tone: 'border-[var(--color-laburante-border)]' },
-  { name: 'Equipo', price: 'Consultar', detail: 'Para búsquedas frecuentes', items: ['Más búsquedas y guardados', 'Listas para comparar', 'Soporte de activación'], tone: 'border-amber-300 bg-amber-50/40' },
-  { name: 'Pro', price: 'Consultar', detail: 'Para equipos con volumen', items: ['Prioridad operativa', 'Colaboración del equipo', 'Beneficios a medida'], tone: 'border-indigo-200 bg-indigo-50/40' },
+  { name: 'Gratis', price: 'ARS $0', detail: 'Para conocer la red y seleccionar personas', items: ['Búsqueda y perfiles públicos', 'Guardar perfiles y organizar proyectos', 'Proponer entrevistas o contrataciones', 'Sin vencimiento ni comisión'], tone: 'border-[var(--color-laburante-border)]' },
+  { name: 'Pago', price: 'ARS $39.900/mes', detail: 'Para Empresas que necesitan mover oportunidades', items: ['Todo lo del plan Gratis', 'Publicar oportunidades propias', 'Derivar búsquedas a Empresas similares', 'Presupuesto y plazo visibles para la red', 'Seguimiento centralizado de oportunidades'], tone: 'border-amber-300 bg-amber-50/40' },
 ]
 
 export default function Companies() {
@@ -49,7 +48,7 @@ export default function Companies() {
               ))}
             </div>
             <p className="mt-8 border-t border-[var(--color-laburante-border)] pt-5 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">
-              El alta es gratuita. Los beneficios pagos se activan sólo cuando estén disponibles y sean útiles para tu operación.
+              La cuenta Gratis no vence ni cobra comisión. El plan Pago cuesta ARS $39.900 por mes y se activa con confirmación comercial; no se cobra nada sin tu autorización.
             </p>
           </div>
         </div>
@@ -73,7 +72,7 @@ export default function Companies() {
             </div>
             <p className="max-w-md text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">La red abierta sigue siendo gratuita. Las empresas pagan sólo por ahorrar tiempo, ordenar búsquedas y trabajar en equipo.</p>
           </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
             {plans.map((plan) => (
               <article key={plan.name} className={`rounded-2xl border p-5 ${plan.tone}`}>
                 <h3 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">{plan.name}</h3>
@@ -86,7 +85,7 @@ export default function Companies() {
         </div>
               <div className="mt-14 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-text)] p-6 text-white sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300"><PlayCircle size={15} /> Demo real</p><h2 className="mt-2 font-heading text-xl font-bold">Dos caminos, una red.</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-white/70">LABURANTE crea un perfil y recibe pedidos de presupuesto sin costo. Empresa busca, guarda perfiles y propone entrevistas o contrataciones; luego gestiona internamente proveedor, compra y aprobación.</p></div>
+            <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300"><PlayCircle size={15} /> Demo real</p><h2 className="mt-2 font-heading text-xl font-bold">Dos caminos, una red.</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-white/70">LABURANTE es gratuito para quien ofrece su trabajo. Empresa puede usar la cuenta Gratis para seleccionar personas; el plan Pago suma publicación y derivación de oportunidades entre Empresas.</p></div>
             <a href={`https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent('Hola LABURANTE, quiero activar un plan Empresa.')}`} target="_blank" rel="noopener noreferrer" className="btn-amber inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Hablar sobre un plan <ArrowRight size={16} /></a>
           </div>
         </div>

@@ -8,7 +8,6 @@ import {
   Star,
   ShieldCheck,
   Clock,
-  MessageCircle,
   ExternalLink,
   ChevronRight,
   X
@@ -24,9 +23,6 @@ export default function NotificationBell() {
     fetchNotifications,
     markAsRead,
     markAllAsRead,
-    whatsappAlertsEnabled,
-    setWhatsappAlertsEnabled,
-    sendViaWhatsApp,
   } = useNotificationStore()
 
   const [isOpen, setIsOpen] = useState(false)
@@ -121,25 +117,6 @@ export default function NotificationBell() {
             )}
           </div>
 
-          {/* WhatsApp Alert Option */}
-          <div className="p-3 bg-emerald-50/60 border-b border-emerald-100 flex items-center justify-between text-xs text-emerald-950">
-            <div className="flex items-center gap-2">
-              <MessageCircle size={15} className="text-emerald-600 shrink-0" />
-              <span className="text-[11px] font-medium leading-tight">
-                Avisarme novedades por WhatsApp
-              </span>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={whatsappAlertsEnabled}
-                onChange={(e) => setWhatsappAlertsEnabled(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-8 h-4 bg-gray-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
-            </label>
-          </div>
-
           {/* Notifications List */}
           <div className="max-h-72 overflow-y-auto divide-y divide-[var(--color-laburante-border)]/50">
             {notifications.length === 0 ? (
@@ -183,20 +160,6 @@ export default function NotificationBell() {
                       <span>{new Date(n.created_at).toLocaleDateString()}</span>
 
                       <div className="flex items-center gap-2">
-                        {/* Send via WhatsApp quick action */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            sendViaWhatsApp('', `Aviso de LABURANTE: ${n.title} - ${n.message}`)
-                          }}
-                          className="hover:text-emerald-600 transition-colors flex items-center gap-0.5 font-medium"
-                          title="Abrir este aviso en WhatsApp"
-                        >
-                          <MessageCircle size={11} />
-                          <span>WhatsApp</span>
-                        </button>
-
                         {n.link && (
                           <Link
                             to={n.link}

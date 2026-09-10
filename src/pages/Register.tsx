@@ -14,7 +14,7 @@ export default function Register() {
   const [localidad, setLocalidad] = useState('')
   const [companySector, setCompanySector] = useState('')
   const [teamSize, setTeamSize] = useState('1-5')
-  const [companyPlan, setCompanyPlan] = useState<'gratis' | 'equipo' | 'pro'>('equipo')
+  const [companyPlan, setCompanyPlan] = useState<'gratis' | 'pago'>('gratis')
   const [intent, setIntent] = useState<'ofrecer' | 'buscar' | 'ambas'>(isCompany ? 'buscar' : 'ofrecer')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -317,19 +317,18 @@ export default function Register() {
               </div>
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-[var(--color-laburante-text)]">Elegí cómo querés empezar</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {([
-                    ['gratis', 'Explorar', 'Sin costo · búsqueda base'],
-                    ['equipo', 'Equipo', 'Más búsquedas y guardados'],
-                    ['pro', 'Pro', 'Prioridad y colaboración'],
-                  ] as const).map(([value, title, detail]) => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                   {([
+                     ['gratis', 'Gratis', 'Búsqueda, perfiles y selección básica'],
+                     ['pago', 'Pago · ARS 39.900/mes', 'Publicar y derivar oportunidades entre Empresas'],
+                   ] as const).map(([value, title, detail]) => (
                     <button key={value} type="button" onClick={() => setCompanyPlan(value)} className={`rounded-xl border p-3 text-left transition-colors ${companyPlan === value ? 'border-[var(--color-laburante-indigo)] bg-indigo-50/60' : 'border-[var(--color-laburante-border)]'}`}>
                       <span className="block text-xs font-bold text-[var(--color-laburante-text)]">{title}</span>
                       <span className="mt-1 block text-[10px] leading-relaxed text-[var(--color-laburante-text-secondary)]">{detail}</span>
                     </button>
                   ))}
                 </div>
-                <p className="text-[10px] text-[var(--color-laburante-text-muted)]">El plan pago se activa con confirmación comercial; no se cobra nada desde este formulario.</p>
+                 <p className="text-[10px] text-[var(--color-laburante-text-muted)]">El plan pago se solicita desde LABURANTE y se activa con confirmación comercial. Este formulario no realiza cobros.</p>
               </div>
             </>
           )}
@@ -337,7 +336,7 @@ export default function Register() {
           {isCompany && (
             <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900">
               <Building2 size={18} className="mt-0.5 shrink-0" />
-              <p>Tu cuenta empieza con búsquedas avanzadas y un espacio preparado para sumar integrantes y beneficios pagos más adelante.</p>
+               <p>{companyPlan === 'pago' ? 'Tu cuenta queda preparada para activar el plan Pago y publicar oportunidades en la red Empresa.' : 'Tu cuenta Gratis permite buscar, revisar perfiles y gestionar selecciones básicas sin costo.'}</p>
             </div>
           )}
 

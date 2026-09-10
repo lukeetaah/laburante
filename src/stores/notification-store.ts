@@ -27,9 +27,6 @@ interface NotificationState {
   notifications: InAppNotification[]
   unreadCount: number
   loading: boolean
-  whatsappAlertsEnabled: boolean
-
-  setWhatsappAlertsEnabled: (enabled: boolean) => void
   fetchNotifications: () => Promise<void>
   markAsRead: (id: string) => Promise<void>
   markAllAsRead: () => Promise<void>
@@ -40,19 +37,12 @@ interface NotificationState {
     type: 'job' | 'budget' | 'status' | 'review' | 'system'
     link?: string
   }) => Promise<void>
-  sendViaWhatsApp: (phone: string, message: string) => void
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
   loading: false,
-  whatsappAlertsEnabled: true,
-
-  setWhatsappAlertsEnabled: (enabled) => {
-    set({ whatsappAlertsEnabled: enabled })
-  },
-
   fetchNotifications: async () => {
     set({ loading: true })
     try {
@@ -182,11 +172,4 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     }
   },
 
-  sendViaWhatsApp: (phone, message) => {
-    const cleanPhone = phone.replace(/[^0-9]/g, '')
-    const url = cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`
-    window.open(url, '_blank')
-  },
 }))

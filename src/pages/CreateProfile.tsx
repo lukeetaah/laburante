@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
-import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, MessageCircle, AlertTriangle, Upload, FileText, Languages } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 
@@ -22,7 +22,6 @@ export default function CreateProfile() {
   const [modalidad, setModalidad] = useState<'presencial' | 'remoto' | 'ambas'>('presencial')
   const [disponibilidad, setDisponibilidad] = useState<'disponible' | 'ocupado' | 'no_disponible'>('disponible')
   const [status, setStatus] = useState<'activo' | 'oculto'>('activo')
-  const [notifyWhatsapp, setNotifyWhatsapp] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
@@ -67,9 +66,6 @@ export default function CreateProfile() {
         setExistingPhotoUrl(existing.photo_url || '')
         setExistingResumeUrl(existing.resume_url || '')
         setExistingResumeName(existing.resume_name || '')
-        if (existing.notify_whatsapp !== undefined) {
-          setNotifyWhatsapp(existing.notify_whatsapp)
-        }
         if (existing.skills && existing.skills.length > 0) {
           setSkills(existing.skills)
         }
@@ -218,7 +214,6 @@ export default function CreateProfile() {
       modalidad,
       disponibilidad,
       status,
-      notify_whatsapp: notifyWhatsapp,
       skills: skills.filter((s) => s.trim()),
       services: services.filter((s) => s.title.trim()),
       contact_methods: contactMethods.filter((c) => c.value.trim()),
@@ -665,28 +660,6 @@ export default function CreateProfile() {
                 )}
               </div>
             ))}
-          </div>
-
-          {/* WhatsApp Notification Preference */}
-          <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between gap-3 mt-4">
-            <div className="flex items-center gap-2.5 text-xs text-emerald-950">
-              <MessageCircle size={18} className="text-emerald-600 shrink-0" />
-              <div>
-                <p className="font-semibold">Avisarme pedidos de trabajo por WhatsApp</p>
-                <p className="text-[11px] text-emerald-800">
-                  Recibí avisos en tu teléfono cuando una persona te envíe una solicitud o pedido de presupuesto.
-                </p>
-              </div>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                checked={notifyWhatsapp}
-                onChange={(e) => setNotifyWhatsapp(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-8 h-4 bg-gray-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
-            </label>
           </div>
 
           {/* CRITICAL CONSENT CHECKBOX */}

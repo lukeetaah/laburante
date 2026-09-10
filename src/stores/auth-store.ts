@@ -11,7 +11,7 @@ export interface SignUpMetadata {
   intent?: 'ofrecer' | 'buscar' | 'ambas'
   role?: string
   accountType?: 'persona' | 'empresa'
-  companyPlan?: 'gratis' | 'equipo' | 'pro'
+  companyPlan?: 'gratis' | 'pago'
   companySector?: string
   teamSize?: string
 }
@@ -119,6 +119,9 @@ export const useAuthStore = create<AuthState>((set) => ({
           intent: metadata.intent || 'ofrecer',
           role: 'user', // Default role; user can upgrade to 'admin' in Supabase dashboard
           account_type: metadata.accountType || 'persona',
+          company_plan: metadata.accountType === 'empresa' ? (metadata.companyPlan || 'gratis') : undefined,
+          company_sector: metadata.accountType === 'empresa' ? (metadata.companySector || '') : undefined,
+          team_size: metadata.accountType === 'empresa' ? (metadata.teamSize || '') : undefined,
         },
       },
     })

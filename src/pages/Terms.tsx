@@ -54,6 +54,7 @@ export default function Terms() {
           <p>
             El acceso a LABURANTE, la búsqueda de perfiles, la publicación de servicios y el envío de pedidos de presupuesto son libres y gratuitos. Para cuidar el contexto y la respuesta de ambas partes, los canales de contacto se habilitan dentro del flujo de un pedido respondido. La plataforma no cobra comisiones sobre trabajos concretados ni exige la compra de créditos.
           </p>
+          <p>Las cuentas Empresa tienen una opción Gratis, que incluye búsqueda, perfiles, proyectos y propuestas de selección, y una opción Pago de ARS $39.900 mensuales. El plan Pago agrega la publicación y derivación de oportunidades entre Empresas. La activación se confirma comercialmente y no se realiza ningún cobro desde el formulario de registro sin autorización.</p>
         </section>
 
         <section className="space-y-3">
