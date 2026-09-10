@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArrowRight, Building2, Check, ExternalLink, Globe, Inbox, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users } from 'lucide-react'
+import { Archive, ArrowRight, BadgeCheck, Building2, Check, ExternalLink, Globe, Inbox, LockKeyhole, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
@@ -55,8 +55,9 @@ export default function CompanyWorkspace() {
   const user = useAuthStore((state) => state.user)
   const { myProfile, fetchMyProfile } = useProfileStore()
   const isCompany = isCompanyAccount(user, myProfile)
-  const profilePlan = myProfile?.id === user?.id ? myProfile?.company_plan : undefined
-  const isPaidCompany = profilePlan === 'pago' || (profilePlan === undefined && user?.user_metadata?.company_plan === 'pago')
+  const profileLoaded = myProfile?.id === user?.id
+  const profilePlan = profileLoaded ? myProfile?.company_plan : undefined
+  const isPaidCompany = profilePlan === 'pago'
   const companyName = user?.user_metadata?.name || 'Tu empresa'
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [incoming, setIncoming] = useState<any[]>([])
@@ -181,7 +182,34 @@ export default function CompanyWorkspace() {
   }
 
   return <div className="container py-10 md:py-16 space-y-8">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]"><Building2 size={15} /> Espacio Empresa</p><h1 className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">Hola, {companyName}</h1><p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--color-laburante-text-secondary)]">Tu cuenta está lista para buscar profesionales.<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${isPaidCompany ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>Plan {isPaidCompany ? 'Pago' : 'Gratis'}</span></p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={loadOpportunities} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-4 py-3 text-xs font-bold" title="Actualizar actividad" aria-label="Actualizar actividad"><RefreshCw size={15} /> Actualizar</button><Link to="/buscar" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"><Search size={16} /> Empezar a buscar</Link></div></div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]"><Building2 size={15} /> Espacio Empresa</p><h1 className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">Hola, {companyName}</h1><p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--color-laburante-text-secondary)]">Tu cuenta está lista para buscar profesionales.<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${isPaidCompany ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{profileLoaded ? `Plan ${isPaidCompany ? 'Pago activo' : 'Gratis'}` : 'Verificando plan'}</span></p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={loadOpportunities} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-4 py-3 text-xs font-bold" title="Actualizar actividad" aria-label="Actualizar actividad"><RefreshCw size={15} /> Actualizar</button><Link to="/buscar" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"><Search size={16} /> Empezar a buscar</Link></div></div>
+    <section className={`rounded-2xl border p-5 sm:p-6 ${isPaidCompany ? 'border-amber-300 bg-amber-50/70' : 'border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]'}`}>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="max-w-2xl">
+          <p className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isPaidCompany ? 'text-amber-800' : 'text-[var(--color-laburante-text-muted)]'}`}>
+            {isPaidCompany ? <BadgeCheck size={16} /> : <LockKeyhole size={15} />}
+            {isPaidCompany ? 'Plan Pago habilitado por Administración' : 'Plan Gratis activo'}
+          </p>
+          <h2 className="mt-2 font-heading text-xl font-extrabold text-[var(--color-laburante-text)]">
+            {isPaidCompany ? 'Tu empresa puede mover oportunidades' : 'Empezá sin costo y activá capacidad cuando la necesites'}
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">
+            {isPaidCompany
+              ? 'Tenés habilitada la publicación de oportunidades, la derivación a empresas similares y el seguimiento desde este espacio.'
+              : 'La cuenta nueva siempre arranca en Gratis. Podés buscar, guardar perfiles y proponer entrevistas; el plan Pago se activa sólo después de la revisión administrativa.'}
+          </p>
+        </div>
+        <div className="grid w-full gap-2 text-xs sm:grid-cols-3 lg:max-w-xl">
+          {(isPaidCompany
+            ? ['Publicar oportunidades', 'Derivar a empresas similares', 'Seguimiento centralizado']
+            : ['Buscar profesionales', 'Guardar perfiles', 'Proponer entrevistas']).map((feature) => (
+            <div key={feature} className={`rounded-xl border px-3 py-3 font-semibold ${isPaidCompany ? 'border-amber-200 bg-white/80 text-amber-950' : 'border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-secondary)]'}`}>
+              <Check size={14} className="mb-1 text-emerald-600" />{feature}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
     <div className="grid gap-5 md:grid-cols-3"><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Search className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Búsqueda real</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Usá la búsqueda pública y revisá también los idiomas declarados en cada perfil.</p></article><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Users className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Red de empresas</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Cuando una búsqueda no encuentra respuesta, podés derivarla a empresas similares.</p></article><article className="rounded-2xl border border-amber-300 bg-amber-50/50 p-6"><Check className="text-emerald-600" size={22} /><h2 className="mt-4 font-heading font-bold">Sin spam</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Solo se comparte el pedido entre cuentas Empresa, sin exponer contactos ni datos privados.</p></article></div>
      {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{message}</div>}
      {archiveMessage && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">{archiveMessage}</div>}

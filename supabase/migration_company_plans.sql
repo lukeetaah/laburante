@@ -10,14 +10,38 @@ ALTER TABLE public.profiles
   ADD CONSTRAINT profiles_company_plan_check
   CHECK (company_plan IN ('gratis', 'pago'));
 
--- Migra el valor que ya existía en metadata para no cambiar cuentas activas.
-UPDATE public.profiles AS profiles
-SET company_plan = CASE
-  WHEN profiles.account_type = 'empresa' AND users.raw_user_meta_data ->> 'company_plan' = 'pago' THEN 'pago'
-  ELSE 'gratis'
-END
-FROM auth.users AS users
-WHERE users.id = profiles.id;
+-- La metadata de registro nunca es una aprobación comercial. Las cuentas
+-- nuevas y las existentes deben quedar en Gratis hasta que Admin las habilite.
+
+-- Defensa adicional: aunque un cliente intente actualizar su propio perfil,
+-- nunca puede autoasignarse el plan Pago.
+CREATE OR REPLACE FUNCTION public.enforce_company_plan_approval()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  is_admin BOOLEAN := (
+    COALESCE(auth.jwt() -> 'user_metadata' ->> 'role', '') = 'admin'
+    OR COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
+  );
+BEGIN
+  IF NOT is_admin THEN
+    IF TG_OP = 'INSERT' THEN
+      NEW.company_plan := 'gratis';
+    ELSIF NEW.company_plan IS DISTINCT FROM OLD.company_plan THEN
+      NEW.company_plan := OLD.company_plan;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS profiles_company_plan_approval ON public.profiles;
+CREATE TRIGGER profiles_company_plan_approval
+  BEFORE INSERT OR UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_company_plan_approval();
 
 -- El admin cambia el plan desde una operación controlada, sin exponer el service role.
 CREATE OR REPLACE FUNCTION public.admin_set_company_plan(target_user_id UUID, target_plan TEXT)

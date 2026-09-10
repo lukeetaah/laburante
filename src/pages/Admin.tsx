@@ -874,7 +874,7 @@ export default function Admin() {
         <div className="space-y-4">
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-xs text-indigo-950">
             <p className="font-bold">Cuentas Empresa</p>
-            <p className="mt-1 leading-relaxed">Acá aparecen las cuentas que buscan profesionales. Sus perfiles internos quedan ocultos del buscador público y se administran desde este panel. Desde Plan podés activar o quitar Pago; eso habilita publicar y derivar oportunidades.</p>
+            <p className="mt-1 leading-relaxed">Acá aparecen las cuentas que buscan profesionales. Toda cuenta nueva inicia en Gratis; revisá cada solicitud y usá Plan para activar o quitar Pago. Sólo Pago habilita publicar y derivar oportunidades.</p>
           </div>
           {profiles.filter((p) => p.account_type === 'empresa').length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">Todavía no hay cuentas Empresa sincronizadas. Verificá la migración de Supabase y refrescá los datos.</div>

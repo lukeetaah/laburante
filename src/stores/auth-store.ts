@@ -62,7 +62,9 @@ async function ensureUserProfile(user: User | null) {
         disponibilidad: 'disponible',
         modalidad: 'presencial',
         account_type: meta.account_type === 'empresa' ? 'empresa' : 'persona',
-        company_plan: meta.account_type === 'empresa' && meta.company_plan === 'pago' ? 'pago' : 'gratis',
+        // El alta nunca puede activar Pago. La habilitación la hace Admin
+        // después de revisar la solicitud desde el panel.
+        company_plan: meta.account_type === 'empresa' ? 'gratis' : undefined,
         status: meta.account_type === 'empresa' ? 'oculto' : 'activo',
       })
 
@@ -120,7 +122,10 @@ export const useAuthStore = create<AuthState>((set) => ({
           intent: metadata.intent || 'ofrecer',
           role: 'user', // Default role; user can upgrade to 'admin' in Supabase dashboard
           account_type: metadata.accountType || 'persona',
-          company_plan: metadata.accountType === 'empresa' ? (metadata.companyPlan || 'gratis') : undefined,
+          // El plan elegido en el formulario sólo expresa una solicitud;
+          // jamás se persiste como habilitación comercial.
+          company_plan: metadata.accountType === 'empresa' ? 'gratis' : undefined,
+          company_plan_requested: metadata.accountType === 'empresa' && metadata.companyPlan === 'pago',
           company_sector: metadata.accountType === 'empresa' ? (metadata.companySector || '') : undefined,
           team_size: metadata.accountType === 'empresa' ? (metadata.teamSize || '') : undefined,
         },
