@@ -9,7 +9,7 @@ export default function ComparisonSection() {
       highlight: true
     },
     {
-      feature: 'Acceso a los números de contacto',
+      feature: 'Contacto directo',
       traditional: 'Ocultan el teléfono. Te obligan a comprar "créditos" o pagar membresías mensuales para ver el contacto o responder presupuestos.',
       laburante: '100% libre e inmediato. Abrís WhatsApp, llamás por teléfono o enviás un email con un solo clic.',
       highlight: true
@@ -27,9 +27,9 @@ export default function ComparisonSection() {
       highlight: false
     },
     {
-      feature: 'Visibilidad y posicionamiento',
+      feature: 'Cómo te encuentran',
       traditional: 'Algoritmos "Pagar para figurar". Si no pagás pauta o destacados, tu perfil queda enterrado en las últimas páginas.',
-      laburante: 'Búsqueda federal transparente y neutral. Filtros reales por oficio, provincia y localidad en todo el país.',
+      laburante: 'Tu perfil puede aparecer cuando alguien busca lo que sabés hacer, con filtros reales por oficio, provincia y localidad.',
       highlight: false
     },
     {
@@ -50,10 +50,10 @@ export default function ComparisonSection() {
             Sin intermediarios ni trampas comerciales
           </div>
           <h2 className="font-heading text-2xl sm:text-4xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
-            ¿Por qué LABURANTE es mejor que buscar en portales tradicionales?
+            No sos una postulación más
           </h2>
           <p className="text-sm sm:text-base text-[var(--color-laburante-text-secondary)] mt-3 leading-relaxed">
-            La mayoría de las plataformas de oficios y servicios terminan convirtiéndose en un peaje que encarece el trabajo y complica la vida de la gente. En LABURANTE elegimos el camino opuesto.
+            En muchos portales un algoritmo decide quién aparece. En LABURANTE empezás por vos: qué sabés hacer, dónde estás y cómo pueden contactarte.
           </p>
         </div>
 

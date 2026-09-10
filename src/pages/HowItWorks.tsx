@@ -34,11 +34,11 @@ export default function HowItWorks() {
           </div>
 
           <h1 className="font-heading text-3xl sm:text-5xl md:text-6xl font-extrabold text-[var(--color-laburante-text)] tracking-tight leading-[1.15]">
-            Cómo funciona LABURANTE
+            Vos también podés ser encontrado
           </h1>
 
           <p className="text-base sm:text-lg md:text-xl text-[var(--color-laburante-text-secondary)] max-w-2xl mx-auto leading-relaxed">
-            Describí lo que necesitás, encontrá personas capaces de hacerlo y hablá directo. Sin intermediarios obligatorios, sin comisiones para los LABURANTEs y con libertad para acordar cada trabajo.
+            LABURANTE te permite decir para qué sos bueno y dejar que otras personas o Empresas te encuentren. También podés buscar a alguien para resolver algo, sin comisiones para quienes ofrecen su trabajo.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -193,7 +193,7 @@ export default function HowItWorks() {
               Guía para trabajadores y profesionales independientes
             </h2>
             <p className="text-sm text-[var(--color-laburante-text-secondary)] mt-2">
-              Publicá lo que sabés hacer sin intermediarios que se queden con un porcentaje de tu esfuerzo.
+              Publicá lo que sabés hacer y sumá una oportunidad más para que te encuentren.
             </p>
           </div>
 
@@ -204,7 +204,7 @@ export default function HowItWorks() {
                 1
               </div>
               <h3 className="font-heading text-xl sm:text-2xl font-bold text-[var(--color-laburante-text)]">
-                Creá tu perfil en 2 minutos sin pedirte DNI ni datos de banco
+              Decí para qué sos bueno en 2 minutos
               </h3>
               <p className="text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
                 Respetamos tu privacidad: solo te pedimos la información estrictamente necesaria para que la gente sepa qué hacés y en qué zona trabajás. No recopilamos DNI, antecedentes inventados ni números de cuenta bancaria.
@@ -305,7 +305,7 @@ export default function HowItWorks() {
 
       {activeTab === 'empresa' && (
         <section className="container max-w-5xl mx-auto space-y-10 animate-in fade-in duration-300">
-          <div className="text-center max-w-2xl mx-auto"><Building2 size={30} className="mx-auto text-[var(--color-laburante-indigo)]" /><h2 className="mt-3 font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">Guía para Empresas</h2><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">La Empresa busca personas para una necesidad concreta, revisa perfiles, guarda candidatos y contacta directamente. La cuenta de LABURANTE sigue siendo gratuita.</p></div>
+          <div className="text-center max-w-2xl mx-auto"><Building2 size={30} className="mx-auto text-[var(--color-laburante-indigo)]" /><h2 className="mt-3 font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">Para Empresas: encontrá capacidad real</h2><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">Describí lo que necesitás con palabras simples, compará perfiles reales y guardá personas para tus proyectos. Cuando una búsqueda no encaja, LABURANTE puede ayudarte a derivarla hacia empresas similares.</p></div>
           <div className="grid gap-4 md:grid-cols-3">
             {[['1', 'Describí lo que necesitás', 'Escribí una frase natural: “busco una fotógrafa para un evento” o “necesito soporte para mi comercio”.'], ['2', 'Compará perfiles reales', 'Usá zona, modalidad, habilidades, CV, portfolio y recomendaciones. Guardá los que te interesan en un proyecto.'], ['3', 'Contactá sin intermediarios', 'Abrí WhatsApp, email, teléfono o sitio web autorizado. El acuerdo y el pago se hacen directamente entre las partes.']].map(([number, title, description]) => <article key={number} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 font-heading font-bold text-indigo-700">{number}</span><h3 className="mt-4 font-heading text-lg font-bold text-[var(--color-laburante-text)]">{title}</h3><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{description}</p></article>)}
           </div>
@@ -369,10 +369,10 @@ export default function HowItWorks() {
       {/* 7. FINAL CTAS */}
       <section className="container max-w-3xl mx-auto text-center space-y-6 pt-6">
         <h3 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">
-          ¿Listo para empezar a usar LABURANTE?
+          ¿Listo para decir para qué sos bueno?
         </h3>
         <p className="text-sm text-[var(--color-laburante-text-secondary)]">
-          Elegí tu camino. Podés buscar libremente o sumar tu trabajo a la red federal en minutos.
+          Elegí tu camino: buscá a alguien o sumá tu trabajo a una red federal gratuita en minutos.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -387,7 +387,7 @@ export default function HowItWorks() {
             to="/crear-perfil"
             className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-[var(--color-laburante-surface)] border-2 border-[var(--color-laburante-border)] text-[var(--color-laburante-text)] font-heading font-bold text-sm hover:border-[var(--color-laburante-text)] transition-all flex items-center justify-center gap-2"
           >
-            Quiero ofrecer mi trabajo
+            Decir para qué soy bueno
             <ArrowRight size={16} />
           </Link>
         </div>

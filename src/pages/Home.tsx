@@ -32,12 +32,12 @@ export default function Home() {
 
           {/* Core Title */}
           <h1 className="font-heading text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[var(--color-laburante-text)] leading-[1.15] mb-6">
-            Hay gente que sabe hacer cosas.<br className="hidden sm:inline" />
-            Hay gente que necesita que se hagan.
+            ¿Y si al mercado le dijeras vos<br className="hidden sm:inline" />
+            para qué sos bueno?
           </h1>
 
           <p className="text-base sm:text-lg md:text-xl text-[var(--color-laburante-text-secondary)] max-w-2xl mx-auto leading-relaxed mb-10">
-            LABURANTE conecta directamente a quienes necesitan resolver algo con personas que pueden hacerlo: oficios, proyectos, servicios, tareas puntuales y trabajo profesional. Sin comisiones para los LABURANTEs.
+            Decí qué sabés hacer, dónde estás y cómo pueden encontrarte. LABURANTE conecta personas con necesidades reales: oficios, proyectos, servicios, tareas puntuales y trabajo profesional. Gratis para quienes ofrecen su trabajo.
           </p>
 
           {/* TWO MAIN INTENTIONS (CTAs) */}
@@ -54,7 +54,7 @@ export default function Home() {
               to="/crear-perfil"
               className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-[var(--color-laburante-surface)] border-2 border-[var(--color-laburante-border)] text-[var(--color-laburante-text)] font-heading font-semibold text-base shadow-xs hover:border-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)] transition-all flex items-center justify-center gap-2"
             >
-              Quiero ofrecer mi trabajo
+              Decir para qué soy bueno
             </Link>
           </div>
 
@@ -105,10 +105,10 @@ export default function Home() {
         <div className="flex items-end justify-between mb-8">
           <div>
             <h2 className="font-heading text-2xl sm:text-3xl font-bold text-[var(--color-laburante-text)]">
-              Explorá por rubro u oficio
+              También podés buscar por lo que necesitás
             </h2>
             <p className="text-sm text-[var(--color-laburante-text-secondary)] mt-1">
-              Desde oficios tradicionales y mantenimiento hasta profesionales independientes y tecnología.
+              Desde oficios tradicionales hasta proyectos, servicios profesionales y tecnología.
             </p>
           </div>
           <Link
