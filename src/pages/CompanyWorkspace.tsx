@@ -81,8 +81,9 @@ export default function CompanyWorkspace() {
       if (staleIds.length) await (supabase.from('company_candidate_inquiries') as any).update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }).in('id', staleIds).eq('company_id', user.id)
       const normalized = (inquiries.data || []).map((item: any) => staleIds.includes(item.id) ? { ...item, archived_at: new Date().toISOString() } : item)
       const profileIds = normalized.map((item: any) => item.profile_id)
+      const acceptedProfileIds = normalized.filter((item: any) => item.status === 'aceptada').map((item: any) => item.profile_id)
       const { data: profiles } = profileIds.length ? await (supabase.from('profiles') as any).select('id, name, slug, localidad, provincia').in('id', profileIds) : { data: [] }
-      const { data: contactMethods } = profileIds.length ? await (supabase.from('contact_methods') as any).select('profile_id, type, value, is_public').in('profile_id', profileIds).eq('is_public', true) : { data: [] }
+      const { data: contactMethods } = acceptedProfileIds.length ? await (supabase.from('contact_methods') as any).select('profile_id, type, value, is_public').in('profile_id', acceptedProfileIds).eq('is_public', true) : { data: [] }
       const byId = new Map((profiles || []).map((profile: any) => [profile.id, profile]))
       const contactsByProfile = new Map<string, any[]>()
       ;(contactMethods || []).forEach((method: any) => {
