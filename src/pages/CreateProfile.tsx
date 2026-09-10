@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
-import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, MessageCircle, AlertTriangle, Upload, FileText } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, MessageCircle, AlertTriangle, Upload, FileText, Languages } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 
@@ -42,6 +42,7 @@ export default function CreateProfile() {
   const [contactMethods, setContactMethods] = useState<{ type: string; value: string }[]>([
     { type: 'whatsapp', value: '' }
   ])
+  const [languages, setLanguages] = useState<{ language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue'; is_public: boolean }[]>([])
 
   // Explicit voluntary consent checkbox (CRITICAL REQUIREMENT)
   const [consentGranted, setConsentGranted] = useState(false)
@@ -89,6 +90,7 @@ export default function CreateProfile() {
             }))
           )
         }
+        if (existing.languages && existing.languages.length > 0) setLanguages(existing.languages)
         setConsentGranted(true)
       } else if (user.user_metadata) {
         if (user.user_metadata.name) setName(user.user_metadata.name)
@@ -162,6 +164,14 @@ export default function CreateProfile() {
     setContactMethods(updated)
   }
 
+  const handleAddLanguage = () => setLanguages([...languages, { language: '', level: 'intermedio', is_public: true }])
+  const handleRemoveLanguage = (idx: number) => setLanguages(languages.filter((_, i) => i !== idx))
+  const handleLanguageChange = (idx: number, field: 'language' | 'level' | 'is_public', value: string | boolean) => {
+    const updated = [...languages]
+    updated[idx] = { ...updated[idx], [field]: value } as typeof updated[number]
+    setLanguages(updated)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!consentGranted) {
@@ -212,6 +222,7 @@ export default function CreateProfile() {
       skills: skills.filter((s) => s.trim()),
       services: services.filter((s) => s.title.trim()),
       contact_methods: contactMethods.filter((c) => c.value.trim()),
+        languages: languages.filter((entry) => entry.language.trim()),
         photo_url: photoUrl || null,
         resume_url: resumeUrl || null,
         resume_name: resumeFile?.name || existingResumeName || null,
@@ -498,6 +509,21 @@ export default function CreateProfile() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
+          <div className="flex items-center justify-between border-b border-[var(--color-laburante-border)] pb-2">
+            <div className="flex items-center gap-2"><Languages size={17} className="text-[var(--color-laburante-indigo)]" /><h2 className="font-heading text-base font-bold">Idiomas</h2></div>
+            <button type="button" onClick={handleAddLanguage} className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-laburante-indigo)] hover:underline"><Plus size={14} /> Agregar idioma</button>
+          </div>
+          <p className="text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">Mostrá los idiomas que podés usar en trabajos y elegí el nivel real de dominio.</p>
+          {languages.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--color-laburante-border)] p-4 text-xs text-[var(--color-laburante-text-muted)]">Todavía no agregaste idiomas.</p> : <div className="space-y-2">
+            {languages.map((entry, idx) => <div key={idx} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+              <input value={entry.language} onChange={(e) => handleLanguageChange(idx, 'language', e.target.value)} placeholder="Ej: Inglés" className="min-w-0 rounded-xl border border-[var(--color-laburante-border)] px-3.5 py-2 text-sm" />
+              <select value={entry.level} onChange={(e) => handleLanguageChange(idx, 'level', e.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] px-2.5 py-2 text-xs"><option value="basico">Básico</option><option value="intermedio">Intermedio</option><option value="avanzado">Avanzado</option><option value="bilingue">Bilingüe</option></select>
+              <button type="button" onClick={() => handleRemoveLanguage(idx)} className="p-2 text-[var(--color-laburante-text-muted)] hover:text-rose-600" aria-label="Quitar idioma"><Trash2 size={16} /></button>
+            </div>)}
+          </div>}
         </section>
 
         {/* Section 3: Services & Prices */}

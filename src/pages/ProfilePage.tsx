@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2 } from 'lucide-react'
+import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
 import ContactModal from '@/components/profile/ContactModal'
@@ -283,6 +283,19 @@ export default function ProfilePage() {
                 className="px-3 py-1.5 rounded-lg bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-xs font-semibold text-[var(--color-laburante-text)]"
               >
                 {skill}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {profile.languages && profile.languages.filter((entry) => entry.is_public).length > 0 && (
+        <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8">
+          <h2 className="mb-4 flex items-center gap-2 font-heading text-lg font-bold text-[var(--color-laburante-text)]"><Languages size={18} className="text-[var(--color-laburante-indigo)]" /> Idiomas</h2>
+          <div className="flex flex-wrap gap-2">
+            {profile.languages.filter((entry) => entry.is_public).map((entry) => (
+              <span key={entry.language} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] px-3 py-2 text-xs font-semibold text-[var(--color-laburante-text)]">
+                {entry.language}<span className="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--color-laburante-indigo)]">{entry.level === 'basico' ? 'Básico' : entry.level === 'intermedio' ? 'Intermedio' : entry.level === 'avanzado' ? 'Avanzado' : 'Bilingüe'}</span>
               </span>
             ))}
           </div>

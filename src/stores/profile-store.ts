@@ -43,6 +43,7 @@ export interface ProfileWithDetails {
     date?: string
     created_at?: string
   }[]
+  languages?: { language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue'; is_public: boolean }[]
 }
 
 export interface AccountDeletionRecord {
@@ -178,7 +179,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           disponibilidad, modalidad, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
-          contact_methods ( type, value, is_public )
+          contact_methods ( type, value, is_public ),
+          profile_languages ( language, level, is_public )
         `)
         .eq('status', 'activo')
 
@@ -215,6 +217,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           skills: item.skills?.map((s: any) => s.name) || [],
           services: item.services || [],
           contact_methods: item.contact_methods || [],
+          languages: item.profile_languages || [],
           categories: []
         }))
       }
@@ -289,7 +292,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
-          recommendations ( id, from_name, text, context, created_at )
+          recommendations ( id, from_name, text, context, created_at ),
+          profile_languages ( language, level, is_public )
         `)
         .eq('slug', slug)
         .maybeSingle()
@@ -313,6 +317,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           skills: item.skills?.map((s: any) => s.name) || [],
           services: item.services || [],
           contact_methods: item.contact_methods || [],
+          languages: item.profile_languages || [],
           recommendations: item.recommendations || [],
           categories: []
         }
@@ -352,7 +357,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
-          recommendations ( id, from_name, text, context, created_at )
+          recommendations ( id, from_name, text, context, created_at ),
+          profile_languages ( language, level, is_public )
         `)
         .eq('id', userId)
         .maybeSingle()
@@ -380,6 +386,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         skills: item.skills?.map((s: any) => s.name) || [],
         services: item.services || [],
         contact_methods: item.contact_methods || [],
+        languages: item.profile_languages || [],
         recommendations: item.recommendations || [],
         categories: []
       }
@@ -445,9 +452,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         if (profileError) return { error: profileError.message }
 
         // Clean previous related records to replace cleanly
-        await (supabase.from('skills') as any).delete().eq('profile_id', userId)
-        await (supabase.from('services') as any).delete().eq('profile_id', userId)
-        await (supabase.from('contact_methods') as any).delete().eq('profile_id', userId)
+      await (supabase.from('skills') as any).delete().eq('profile_id', userId)
+      await (supabase.from('services') as any).delete().eq('profile_id', userId)
+      await (supabase.from('contact_methods') as any).delete().eq('profile_id', userId)
+      await (supabase.from('profile_languages') as any).delete().eq('profile_id', userId)
       } else {
         // 1. Insert Profile
         const insertPayload: any = {
@@ -511,6 +519,18 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         if (contactRows.length) {
           await (supabase.from('contact_methods') as any).insert(contactRows)
         }
+      }
+
+      if (profileData.languages?.length) {
+        const languageRows = profileData.languages
+          .map((entry: any) => ({
+            profile_id: userId,
+            language: entry.language.trim(),
+            level: entry.level,
+            is_public: entry.is_public !== false,
+          }))
+          .filter((entry: any) => entry.language)
+        if (languageRows.length) await (supabase.from('profile_languages') as any).insert(languageRows)
       }
 
       // Refresh myProfile in state
