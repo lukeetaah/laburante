@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
+import { normalizeSearchText } from '@/lib/search-intent'
 import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
@@ -35,6 +36,7 @@ export default function CreateProfile() {
 
   // Dynamic lists
   const [skills, setSkills] = useState<string[]>([''])
+  const [skillModes, setSkillModes] = useState<('select' | 'custom')[]>(['select'])
   const [services, setServices] = useState<{ title: string; description: string; precio_orientativo: string }[]>([
     { title: '', description: '', precio_orientativo: '' }
   ])
@@ -68,6 +70,7 @@ export default function CreateProfile() {
         setExistingResumeName(existing.resume_name || '')
         if (existing.skills && existing.skills.length > 0) {
           setSkills(existing.skills)
+          setSkillModes(existing.skills.map((skill) => isKnownWorkOption(skill) ? 'select' : 'custom'))
         }
         if (existing.services && existing.services.length > 0) {
           setServices(
@@ -134,12 +137,33 @@ export default function CreateProfile() {
   }
 
   // Skills handlers
-  const handleAddSkill = () => setSkills([...skills, ''])
-  const handleRemoveSkill = (idx: number) => setSkills(skills.filter((_, i) => i !== idx))
+  const workOptions = CATEGORIES.flatMap((category) => category.subcategories || [])
+  const isKnownWorkOption = (value: string) => workOptions.some((option) => normalizeSearchText(option) === normalizeSearchText(value))
+  const handleAddSkill = () => {
+    setSkills([...skills, ''])
+    setSkillModes([...skillModes, 'select'])
+  }
+  const handleRemoveSkill = (idx: number) => {
+    setSkills(skills.filter((_, i) => i !== idx))
+    setSkillModes(skillModes.filter((_, i) => i !== idx))
+  }
   const handleSkillChange = (idx: number, val: string) => {
     const updated = [...skills]
     updated[idx] = val
     setSkills(updated)
+  }
+  const handleSkillModeChange = (idx: number, val: string) => {
+    const updatedModes = [...skillModes]
+    const updatedSkills = [...skills]
+    if (val === '__other__') {
+      updatedModes[idx] = 'custom'
+      updatedSkills[idx] = ''
+    } else {
+      updatedModes[idx] = 'select'
+      updatedSkills[idx] = val
+    }
+    setSkillModes(updatedModes)
+    setSkills(updatedSkills)
   }
 
   // Services handlers
@@ -484,14 +508,29 @@ export default function CreateProfile() {
 
           <div className="space-y-2">
             {skills.map((skill, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={skill}
-                  onChange={(e) => handleSkillChange(idx, e.target.value)}
-                  placeholder="ej: Plomería general, Termofusión, Arreglos rápidos..."
-                  className="flex-1 px-3.5 py-2 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
-                />
+              <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  value={skillModes[idx] === 'custom' ? '__other__' : (isKnownWorkOption(skill) ? workOptions.find((option) => normalizeSearchText(option) === normalizeSearchText(skill)) : '')}
+                  onChange={(e) => handleSkillModeChange(idx, e.target.value)}
+                  className="min-w-0 flex-1 px-3.5 py-2 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
+                >
+                  <option value="">Elegí una categoría de trabajo</option>
+                  {CATEGORIES.filter((category) => category.subcategories?.length).map((category) => (
+                    <optgroup key={category.id} label={`${category.icon} ${category.name}`}>
+                      {category.subcategories?.map((option) => <option key={`${category.id}-${option}`} value={option}>{option}</option>)}
+                    </optgroup>
+                  ))}
+                  <option value="__other__">Otros (especificar)</option>
+                </select>
+                {skillModes[idx] === 'custom' && (
+                  <input
+                    type="text"
+                    value={skill}
+                    onChange={(e) => handleSkillChange(idx, e.target.value)}
+                    placeholder="Especificá tu oficio o especialidad"
+                    className="min-w-0 flex-1 px-3.5 py-2 text-sm rounded-xl border border-amber-300 bg-amber-50/40"
+                  />
+                )}
                 {skills.length > 1 && (
                   <button
                     type="button"
@@ -504,6 +543,7 @@ export default function CreateProfile() {
               </div>
             ))}
           </div>
+          <p className="text-[11px] leading-relaxed text-[var(--color-laburante-text-muted)]">Elegí una opción para que tu perfil aparezca mejor clasificado. El texto libre se habilita únicamente en “Otros”.</p>
         </section>
 
         <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
