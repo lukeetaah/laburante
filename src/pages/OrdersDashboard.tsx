@@ -16,7 +16,8 @@ import {
   ExternalLink,
   ChevronRight,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  Archive
 } from 'lucide-react'
 import { useJobStore, type JobRequestWithDetails } from '@/stores/job-store'
 import { useAuthStore } from '@/stores/auth-store'
@@ -47,6 +48,7 @@ export default function OrdersDashboard() {
   const [activeTab, setActiveTab] = useState<'cliente' | 'profesional'>('cliente')
   const [statusFilter, setStatusFilter] = useState<'todos' | 'activos' | 'completados' | 'cancelados'>('todos')
   const [activityFilter, setActivityFilter] = useState<'todo' | 'pedidos' | 'empresa'>('todo')
+  const [showArchivedCompany, setShowArchivedCompany] = useState(false)
 
   // Modals state
   const [budgetModalJob, setBudgetModalJob] = useState<JobRequestWithDetails | null>(null)
@@ -66,12 +68,17 @@ export default function OrdersDashboard() {
         ;(async () => {
           const { data } = await (supabase.from('company_candidate_inquiries') as any)
             .select('*').eq('profile_id', user.id).order('created_at', { ascending: false })
-          const companyIds = (data || []).map((item: any) => item.company_id)
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const staleIds = (data || []).filter((item: any) => item.status === 'pendiente' && !item.archived_at && new Date(item.created_at) < today).map((item: any) => item.id)
+          if (staleIds.length) await (supabase.from('company_candidate_inquiries') as any).update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }).in('id', staleIds).eq('profile_id', user.id)
+          const normalized = (data || []).map((item: any) => staleIds.includes(item.id) ? { ...item, archived_at: new Date().toISOString() } : item)
+          const companyIds = normalized.map((item: any) => item.company_id)
           const { data: companies } = companyIds.length
             ? await (supabase.from('profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', companyIds)
             : { data: [] }
           const companyById = new Map((companies || []).map((company: any) => [company.id, company]))
-          setCompanyInquiries((data || []).map((item: any) => ({ ...item, company: companyById.get(item.company_id) })))
+          setCompanyInquiries(normalized.map((item: any) => ({ ...item, company: companyById.get(item.company_id) })))
         })()
       }
     }
@@ -129,6 +136,13 @@ export default function OrdersDashboard() {
     })
   }
 
+  const archiveCompanyInquiry = async (inquiryId: string) => {
+    if (!user) return
+    const archivedAt = new Date().toISOString()
+    const { error } = await (supabase.from('company_candidate_inquiries') as any).update({ archived_at: archivedAt, updated_at: archivedAt }).eq('id', inquiryId).eq('profile_id', user.id)
+    if (!error) setCompanyInquiries((items) => items.map((item) => item.id === inquiryId ? { ...item, archived_at: archivedAt } : item))
+  }
+
   return (
     <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">
       {/* Header */}
@@ -175,8 +189,7 @@ export default function OrdersDashboard() {
         {([['todo', 'Todo'], ['pedidos', 'Pedidos privados'], ['empresa', `Empresa (${companyInquiries.length})`]] as const).map(([key, label]) => <button key={key} type="button" onClick={() => setActivityFilter(key)} className={`rounded-xl px-3 py-2 text-xs font-bold ${activityFilter === key ? 'bg-white text-[var(--color-laburante-text)] shadow-xs' : 'text-[var(--color-laburante-text-secondary)] hover:bg-white/70'}`}>{label}</button>)}
       </div>
 
-      {activityFilter !== 'pedidos' && companyInquiries.length > 0 && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Selección Empresa</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">Acá quedan guardadas todas las propuestas de entrevista o contratación. Abrí cada una para revisar la Empresa, el proyecto y el mensaje antes de responder.</p></div>{companyInquiries.map((inquiry) => <article key={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.company?.name || 'Empresa'} · {new Date(inquiry.created_at).toLocaleDateString('es-AR')}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiry.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : inquiry.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{inquiry.status}</span></div>{inquiry.message && <p className="mt-2 line-clamp-2 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<button type="button" onClick={() => setSelectedCompanyInquiry(inquiry)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Ver propuesta y datos <ChevronRight size={14} /></button></article>)}</section>}
-      {activityFilter !== 'pedidos' && companyInquiries.length === 0 && <section className="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 p-6 text-center"><p className="text-sm font-bold text-indigo-950">Todavía no hay propuestas de Empresa</p><p className="mt-1 text-xs text-indigo-900/75">Cuando una Empresa quiera entrevistarte o conversar una contratación, la propuesta va a aparecer acá y también en tus notificaciones.</p></section>}
+      {activityFilter !== 'pedidos' && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Selección Empresa</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">Las propuestas pendientes de días anteriores se archivan automáticamente. Nada se borra: podés consultar el historial cuando quieras.</p></div><button type="button" onClick={() => setShowArchivedCompany((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] font-bold text-indigo-800"><Archive size={14} /> {showArchivedCompany ? 'Ocultar archivadas' : 'Ver archivadas'}</button></div>{companyInquiries.filter((item) => showArchivedCompany || !item.archived_at).length === 0 ? <p className="rounded-xl border border-dashed border-indigo-200 bg-white/70 p-5 text-center text-xs text-indigo-900/75">No hay propuestas {showArchivedCompany ? 'archivadas' : 'activas'} de Empresa.</p> : companyInquiries.filter((item) => showArchivedCompany || !item.archived_at).map((inquiry) => <article key={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.company?.name || 'Empresa'} · {new Date(inquiry.created_at).toLocaleDateString('es-AR')}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiry.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : inquiry.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{inquiry.status}{inquiry.archived_at ? ' · archivada' : ''}</span></div>{inquiry.message && <p className="mt-2 line-clamp-2 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCompanyInquiry(inquiry)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Ver propuesta y datos <ChevronRight size={14} /></button>{!inquiry.archived_at && <button type="button" onClick={() => archiveCompanyInquiry(inquiry.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700" title="Archivar propuesta"><Archive size={14} /> Archivar</button>}</div></article>)}</section>}
 
       {selectedCompanyInquiry && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Detalle de selección Empresa</p><h2 className="mt-1 font-heading text-xl font-bold">{selectedCompanyInquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</h2></div><button type="button" onClick={() => setSelectedCompanyInquiry(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Cerrar"><XCircle size={18} /></button></div><div className="mt-5 space-y-3 text-sm"><div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4"><p className="font-bold text-indigo-950">{selectedCompanyInquiry.company?.name || 'Empresa'}</p><p className="mt-1 text-xs text-indigo-900/75">{[selectedCompanyInquiry.company?.localidad, selectedCompanyInquiry.company?.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}</p>{selectedCompanyInquiry.company?.slug && <Link to={`/p/${selectedCompanyInquiry.company.slug}`} onClick={() => setSelectedCompanyInquiry(null)} className="mt-2 inline-flex text-xs font-semibold text-indigo-700">Ver perfil de la Empresa <ExternalLink size={13} className="ml-1" /></Link>}</div><div><p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Mensaje de la Empresa</p><p className="mt-1 whitespace-pre-line text-sm text-gray-800">{selectedCompanyInquiry.message || 'La Empresa no agregó un mensaje adicional.'}</p></div><p className="text-xs text-gray-500">Recibida el {new Date(selectedCompanyInquiry.created_at).toLocaleString('es-AR')}</p></div>{selectedCompanyInquiry.status === 'pendiente' ? <div className="mt-6 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => respondToCompanyInquiry(selectedCompanyInquiry, 'rechazada')} className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-semibold">No avanzar</button><button type="button" onClick={() => respondToCompanyInquiry(selectedCompanyInquiry, 'aceptada')} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white">Aceptar y conversar</button></div> : <div className="mt-6 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">Ya respondiste esta propuesta como <strong>{selectedCompanyInquiry.status}</strong>. La Empresa recibió tu decisión.</div>}</div></div>}
 
