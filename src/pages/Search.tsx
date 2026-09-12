@@ -33,6 +33,20 @@ export default function Search() {
     })
   }, [searchParams, fetchProfiles])
 
+  // Keep results live while the user edits filters, without querying on every keystroke.
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const params = new URLSearchParams()
+      if (query.trim()) params.set('q', query.trim())
+      if (provincia) params.set('provincia', provincia)
+      if (localidad.trim()) params.set('localidad', localidad.trim())
+      if (category) params.set('categoria', category)
+      if (modalidad && modalidad !== 'todas') params.set('modalidad', modalidad)
+      if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true })
+    }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [query, provincia, localidad, category, modalidad, searchParams, setSearchParams])
+
   const handleApplyFilters = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     const params = new URLSearchParams()

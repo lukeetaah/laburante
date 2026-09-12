@@ -165,6 +165,15 @@ function withoutHybridPercentages(payload: any) {
   return rest
 }
 
+function shuffleProfiles<T>(items: T[]) {
+  const shuffled = [...items]
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+  return shuffled
+}
+
 async function replaceProfileLanguages(profileId: string, languages: any[]) {
   const uniqueRows = Array.from(new Map((languages || [])
     .map((entry: any) => ({
@@ -280,6 +289,15 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }
         realProfiles = realProfiles.map((profile) => ({ profile, rank: score(profile) })).filter((item) => item.rank > 0).sort((a, b) => b.rank - a.rank).map((item) => item.profile)
       }
+
+      const hasRefinement = Boolean(
+        filters.query?.trim() ||
+        filters.category ||
+        filters.provincia ||
+        filters.localidad?.trim() ||
+        (filters.modalidad && filters.modalidad !== 'todas')
+      )
+      if (!hasRefinement) realProfiles = shuffleProfiles(realProfiles)
 
       set({ profiles: realProfiles, loading: false })
     } catch (err) {
