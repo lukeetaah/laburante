@@ -323,7 +323,7 @@ export default function Register() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                    {([
                      ['gratis', 'Gratis', 'Búsqueda, perfiles y selección básica'],
-                     ['pago', 'Solicitar Plan Pago · ARS 39.900/mes', 'La cuenta inicia Gratis y se habilita después de la revisión de LABURANTE'],
+                     ['pago', 'Quiero que me contacten', 'Coordinamos una entrevista para mostrarte el producto y conversar la activación'],
                    ] as const).map(([value, title, detail]) => (
                     <button key={value} type="button" onClick={() => setCompanyPlan(value)} className={`rounded-xl border p-3 text-left transition-colors ${companyPlan === value ? 'border-[var(--color-laburante-indigo)] bg-indigo-50/60' : 'border-[var(--color-laburante-border)]'}`}>
                       <span className="block text-xs font-bold text-[var(--color-laburante-text)]">{title}</span>
@@ -339,7 +339,7 @@ export default function Register() {
           {isCompany && (
             <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900">
               <Building2 size={18} className="mt-0.5 shrink-0" />
-               <p>{companyPlan === 'pago' ? 'Tu solicitud de plan Pago quedó registrada como pendiente. Mientras tanto, tu cuenta funciona como Gratis.' : 'Tu cuenta Gratis permite buscar, revisar perfiles y gestionar selecciones básicas sin costo.'}</p>
+               <p>{companyPlan === 'pago' ? 'Tu solicitud de contacto quedó registrada. Te escribiremos para coordinar una entrevista y mostrarte el producto.' : 'Tu cuenta Gratis permite buscar, revisar perfiles y gestionar selecciones básicas sin costo.'}</p>
             </div>
           )}
 

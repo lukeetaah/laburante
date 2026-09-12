@@ -9,8 +9,8 @@ const benefits = [
 ]
 
 const plans = [
-  { name: 'Gratis', price: 'ARS $0', detail: 'Para conocer la red y seleccionar personas', items: ['Búsqueda y perfiles públicos', 'Guardar perfiles y organizar proyectos', 'Proponer entrevistas o contrataciones', 'Sin vencimiento ni comisión'], tone: 'border-[var(--color-laburante-border)]' },
-  { name: 'Pago', price: 'ARS $39.900/mes', detail: 'Para Empresas que necesitan mover oportunidades', items: ['Todo lo del plan Gratis', 'Publicar oportunidades propias', 'Derivar búsquedas a Empresas similares', 'Presupuesto y plazo visibles para la red', 'Seguimiento centralizado de oportunidades'], tone: 'border-amber-300 bg-amber-50/40' },
+  { name: 'Gratis', price: 'Sin costo', detail: 'Para conocer la red y seleccionar personas', items: ['Búsqueda y perfiles públicos', 'Guardar perfiles y organizar proyectos', 'Proponer entrevistas o contrataciones', 'Sin vencimiento ni comisión'], tone: 'border-[var(--color-laburante-border)]' },
+  { name: 'A coordinar', price: 'Quiero que me contacten', detail: 'Coordinamos una entrevista para mostrarte el producto y conversar los próximos pasos', items: ['Te mostramos cómo funciona', 'Entendemos las necesidades de tu empresa', 'Definimos juntos una posible activación'], tone: 'border-amber-300 bg-amber-50/40' },
 ]
 
 export default function Companies() {
@@ -40,7 +40,7 @@ export default function Companies() {
           <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6 shadow-xs">
             <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-text-muted)]">Cuenta empresa</p>
             <div className="mt-6 space-y-4">
-              {['Filtros avanzados para búsquedas frecuentes', 'Listas de perfiles para comparar', 'Beneficios y límites ampliados según el plan'].map((item) => (
+              {['Conocé la red y sus profesionales', 'Organizá tus búsquedas', 'Coordiná una entrevista para conocer las opciones'].map((item) => (
                 <div key={item} className="flex items-start gap-3 text-sm text-[var(--color-laburante-text)]">
                   <Check size={18} className="mt-0.5 shrink-0 text-emerald-600" />
                   <span>{item}</span>
@@ -48,7 +48,7 @@ export default function Companies() {
               ))}
             </div>
             <p className="mt-8 border-t border-[var(--color-laburante-border)] pt-5 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">
-              La cuenta Gratis no vence ni cobra comisión. El plan Pago cuesta ARS $39.900 por mes y se activa con confirmación comercial y habilitación administrativa; no se cobra nada sin tu autorización.
+              La cuenta Gratis no vence ni cobra comisión. Si necesitás más herramientas, elegí que te contactemos para coordinar una entrevista, mostrarte el producto y conversar la activación.
             </p>
           </div>
         </div>
@@ -70,7 +70,7 @@ export default function Companies() {
               <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]">Modelo claro</p>
               <h2 className="mt-2 font-heading text-2xl font-bold text-[var(--color-laburante-text)]">LABURANTEs gratis. Empresas con capacidad extra.</h2>
             </div>
-            <p className="max-w-md text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">La red abierta sigue siendo gratuita. Las empresas pagan sólo por ahorrar tiempo, ordenar búsquedas y trabajar en equipo.</p>
+            <p className="max-w-md text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">La red abierta sigue siendo gratuita. Si tu empresa necesita más herramientas, coordinamos una entrevista para mostrarte el producto y conversar una activación a medida.</p>
           </div>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {plans.map((plan) => (
@@ -85,8 +85,8 @@ export default function Companies() {
         </div>
               <div className="mt-14 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-text)] p-6 text-white sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300"><PlayCircle size={15} /> Demo real</p><h2 className="mt-2 font-heading text-xl font-bold">Dos caminos, una red.</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-white/70">LABURANTE es gratuito para quien ofrece su trabajo. Empresa puede usar la cuenta Gratis para seleccionar personas; el plan Pago suma publicación y derivación de oportunidades entre Empresas.</p></div>
-            <a href={`https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent('Hola LABURANTE, quiero activar un plan Empresa.')}`} target="_blank" rel="noopener noreferrer" className="btn-amber inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Hablar sobre un plan <ArrowRight size={16} /></a>
+            <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300"><PlayCircle size={15} /> Demo real</p><h2 className="mt-2 font-heading text-xl font-bold">Dos caminos, una red.</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-white/70">LABURANTE es gratuito para quien ofrece su trabajo. Empresa puede empezar con la cuenta Gratis y solicitar una entrevista para conocer otras posibilidades.</p></div>
+            <a href={`https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent('Hola LABURANTE, quiero coordinar una entrevista para conocer el producto de Empresa.')}`} target="_blank" rel="noopener noreferrer" className="btn-amber inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Coordinar una entrevista <ArrowRight size={16} /></a>
           </div>
         </div>
         <div className="mt-14 flex flex-col items-start justify-between gap-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6 sm:flex-row sm:items-center sm:p-8">

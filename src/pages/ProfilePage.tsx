@@ -11,12 +11,16 @@ import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
 
-const contactLabels: Record<string, string> = { linkedin: 'LinkedIn', web: 'Sitio web', portfolio: 'Portfolio' }
+const contactLabels: Record<string, string> = { linkedin: 'LinkedIn', portfolio: 'Portfolio' }
 
 function getContactHref(type: string, value: string) {
   const cleanValue = value.trim()
-  if (['linkedin', 'web', 'portfolio'].includes(type)) return cleanValue.startsWith('http') ? cleanValue : `https://${cleanValue}`
+  if (['linkedin', 'portfolio'].includes(type)) return cleanValue.startsWith('http') ? cleanValue : `https://${cleanValue}`
   return null
+}
+
+function getFriendlyResumeName(name?: string | null) {
+  return name && !/^https?:\/\//i.test(name) ? name : null
 }
 
 export default function ProfilePage() {
@@ -244,14 +248,15 @@ export default function ProfilePage() {
 
         </div>
         <CompanyProfileActions profileId={profile.id} profileName={profile.name} />
-        {(profile.contact_methods || []).some((method) => ['linkedin', 'web', 'portfolio'].includes(method.type) && method.is_public && method.value) && (
+        {(profile.contact_methods || []).some((method) => ['linkedin', 'portfolio'].includes(method.type) && method.is_public && method.value) && (
           <div className="mt-4 border-t border-[var(--color-laburante-border)] pt-4">
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]"><Link2 size={13} /> Portfolio, sitio y LinkedIn</p>
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]"><Link2 size={13} /> Portfolio y LinkedIn</p>
             <div className="flex flex-wrap gap-2">
-            {(profile.contact_methods || []).filter((method) => ['linkedin', 'web', 'portfolio'].includes(method.type) && method.is_public && method.value).map((method) => {
+            {(profile.contact_methods || []).filter((method) => ['linkedin', 'portfolio'].includes(method.type) && method.is_public && method.value).map((method) => {
               const href = getContactHref(method.type, method.value)
+              const isPortfolio = method.type === 'portfolio'
               return <div key={`${method.type}-${method.value}`} className="inline-flex min-w-0 items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3 py-2 text-xs">
-                <Globe size={14} className="shrink-0 text-[var(--color-laburante-indigo)]" /><a href={href || undefined} target={href?.startsWith('http') ? '_blank' : undefined} rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined} className="max-w-[min(60vw,280px)] truncate font-semibold text-[var(--color-laburante-indigo)]"><span className="mr-1 text-[var(--color-laburante-text-muted)]">{contactLabels[method.type] || 'Contacto'}:</span>{method.value}</a><button type="button" onClick={() => copyContact(method.value, method.type)} aria-label={`Copiar ${method.type}`} className="rounded p-1 hover:bg-[var(--color-laburante-surface-alt)]">{copiedContact === method.type ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}</button>{href?.startsWith('http') && <ExternalLink size={12} className="shrink-0 text-[var(--color-laburante-text-muted)]" />}
+                <Globe size={14} className="shrink-0 text-[var(--color-laburante-indigo)]" /><a href={href || undefined} target={href?.startsWith('http') ? '_blank' : undefined} rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined} className="max-w-[min(60vw,280px)] truncate font-semibold text-[var(--color-laburante-indigo)]"><span className="mr-1 text-[var(--color-laburante-text-muted)]">{contactLabels[method.type]}:</span>{isPortfolio ? method.value : 'Ver LinkedIn'}</a><button type="button" onClick={() => copyContact(method.value, method.type)} aria-label={`Copiar ${method.type}`} className="rounded p-1 hover:bg-[var(--color-laburante-surface-alt)]">{copiedContact === method.type ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}</button>{href?.startsWith('http') && <ExternalLink size={12} className="shrink-0 text-[var(--color-laburante-text-muted)]" />}
               </div>
             })}
             </div>
@@ -260,7 +265,7 @@ export default function ProfilePage() {
         <div className="pt-3 text-xs">
           {profile.resume_url ? (
             user ? (
-              <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{profile.resume_name ? `: ${profile.resume_name}` : ''}</a>
+              <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{getFriendlyResumeName(profile.resume_name) ? `: ${getFriendlyResumeName(profile.resume_name)}` : ''}</a>
             ) : (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <span className="inline-flex items-center gap-2 font-semibold text-emerald-700"><FileText size={14} /> CV cargado</span>
