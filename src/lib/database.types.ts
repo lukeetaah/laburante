@@ -92,7 +92,7 @@ export type Database = {
           text: string
           context: string | null
           created_at: string
-          status: 'visible' | 'oculto' | 'reportado'
+          status: 'pendiente' | 'visible' | 'oculto' | 'reportado'
         }
         Insert: Omit<Database['public']['Tables']['recommendations']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['recommendations']['Insert']>

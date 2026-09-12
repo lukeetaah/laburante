@@ -39,12 +39,14 @@ export interface ProfileWithDetails {
     is_public: boolean
   }[]
   recommendations?: {
-    id?: string
+    id: string
+    from_user_id?: string | null
     from_name: string
     text: string
     context: string | null
     date?: string
     created_at?: string
+    status?: 'pendiente' | 'visible' | 'oculto' | 'reportado'
   }[]
   languages?: { language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue' | 'nativo'; is_public: boolean }[]
 }
@@ -95,6 +97,9 @@ interface ProfileState {
   deleteAccount: (profileId: string, payload: { reason: string; explanation: string; userEmail?: string }) => Promise<{ error: string | null; success?: boolean }>
   fetchAccountDeletions: () => Promise<AccountDeletionRecord[]>
   submitRecommendation: (profileId: string, data: { from_name: string; text: string; context?: string }) => Promise<{ error: string | null }>
+  updateRecommendation: (recommendationId: string, data: { text: string; context?: string }) => Promise<{ error: string | null }>
+  moderateRecommendation: (recommendationId: string, status: 'visible' | 'oculto') => Promise<{ error: string | null }>
+  deleteRecommendation: (recommendationId: string) => Promise<{ error: string | null }>
   submitReport: (profileId: string, reason: string, description: string) => Promise<{ error: string | null }>
 }
 
@@ -226,7 +231,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( type, value, is_public ),
-          profile_languages ( language, level, is_public )
+          profile_languages ( language, level, is_public ),
+          recommendations ( id, status )
         `)
         .eq('status', 'activo')
 
@@ -243,7 +249,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await query
       if (error) {
         let legacyQuery = (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( type, value, is_public ), profile_languages ( language, level, is_public )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( type, value, is_public ), profile_languages ( language, level, is_public ), recommendations ( id, status )`)
           .eq('status', 'activo')
         if (filters.provincia) legacyQuery = legacyQuery.eq('provincia', filters.provincia)
         if (filters.localidad) legacyQuery = legacyQuery.ilike('localidad', `%${filters.localidad}%`)
@@ -317,7 +323,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
-          recommendations ( id, from_name, text, context, created_at ),
+          recommendations ( id, from_user_id, from_name, text, context, created_at, status ),
           profile_languages ( language, level, is_public )
         `)
         .eq('slug', slug)
@@ -325,7 +331,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (error) {
         const legacyResult = await (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at ), profile_languages ( language, level, is_public )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
           .eq('slug', slug)
           .maybeSingle()
         data = legacyResult.data
@@ -374,7 +380,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
-          recommendations ( id, from_name, text, context, created_at ),
+          recommendations ( id, from_user_id, from_name, text, context, created_at, status ),
           profile_languages ( language, level, is_public )
         `)
         .eq('id', userId)
@@ -382,7 +388,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (error) {
         const legacyResult = await (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at ), profile_languages ( language, level, is_public )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
           .eq('id', userId)
           .maybeSingle()
         data = legacyResult.data ? { ...legacyResult.data, account_type: legacyResult.data.account_type || userData.user.user_metadata?.account_type || userData.user.user_metadata?.accountType } : legacyResult.data
@@ -921,7 +927,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         text: data.text.trim(),
         context: data.context?.trim() || null,
         from_user_id: userData?.user?.id || null,
-        status: 'visible'
+        status: 'pendiente'
       }).select().single()
 
       if (error) return { error: error.message }
@@ -931,10 +937,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       if (current && (current.id === profileId || current.slug === profileId)) {
         const newRec = {
           id: inserted?.id,
+          from_user_id: userData?.user?.id || null,
           from_name: data.from_name.trim(),
           text: data.text.trim(),
           context: data.context?.trim() || null,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          status: 'pendiente' as const
         }
         set({
           currentProfile: {
@@ -944,10 +952,50 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         })
       }
 
+      const { data: target } = await (supabase.from('profiles') as any).select('slug').eq('id', profileId).maybeSingle()
+      if (target?.slug) {
+        const { useNotificationStore } = await import('@/stores/notification-store')
+        await useNotificationStore.getState().addNotification({
+          userId: profileId,
+          title: 'Tenés una reseña para revisar',
+          message: `${data.from_name.trim()} dejó una reseña sobre tu trabajo. Revisala antes de decidir si querés publicarla.`,
+          type: 'review',
+          link: `/p/${target.slug}#resenas`,
+        })
+      }
+
       return { error: null }
     } catch (err: any) {
       return { error: err.message || 'Error al guardar la reseña.' }
     }
+  },
+
+  updateRecommendation: async (recommendationId, data) => {
+    try {
+      if (!data.text?.trim() || data.text.trim().length < 10) return { error: 'La reseña debe tener al menos 10 caracteres.' }
+      const { error } = await (supabase.from('recommendations') as any).update({ text: data.text.trim(), context: data.context?.trim() || null }).eq('id', recommendationId)
+      if (error) return { error: error.message }
+      set((state) => ({ currentProfile: state.currentProfile ? { ...state.currentProfile, recommendations: state.currentProfile.recommendations?.map((rec) => rec.id === recommendationId ? { ...rec, text: data.text.trim(), context: data.context?.trim() || null } : rec) } : null }))
+      return { error: null }
+    } catch (err: any) { return { error: err.message || 'Error al editar la reseña.' } }
+  },
+
+  moderateRecommendation: async (recommendationId, status) => {
+    try {
+      const { error } = await (supabase.from('recommendations') as any).update({ status }).eq('id', recommendationId)
+      if (error) return { error: error.message }
+      set((state) => ({ currentProfile: state.currentProfile ? { ...state.currentProfile, recommendations: state.currentProfile.recommendations?.map((rec) => rec.id === recommendationId ? { ...rec, status } : rec) } : null }))
+      return { error: null }
+    } catch (err: any) { return { error: err.message || 'Error al actualizar la reseña.' } }
+  },
+
+  deleteRecommendation: async (recommendationId) => {
+    try {
+      const { error } = await (supabase.from('recommendations') as any).delete().eq('id', recommendationId)
+      if (error) return { error: error.message }
+      set((state) => ({ currentProfile: state.currentProfile ? { ...state.currentProfile, recommendations: state.currentProfile.recommendations?.filter((rec) => rec.id !== recommendationId) } : null }))
+      return { error: null }
+    } catch (err: any) { return { error: err.message || 'Error al eliminar la reseña.' } }
   },
 
   submitReport: async (profileId, reason, description) => {

@@ -35,11 +35,18 @@ export default function ProfilePage() {
   const [jobRequestOpen, setJobRequestOpen] = useState(false)
   const [copiedContact, setCopiedContact] = useState('')
   const [imageFailed, setImageFailed] = useState(false)
+  const [editingRecommendationId, setEditingRecommendationId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState('')
+  const [editingContext, setEditingContext] = useState('')
+  const [recommendationMessage, setRecommendationMessage] = useState('')
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
   const updateProfileVisibility = useProfileStore((s) => s.updateProfileVisibility)
   const currentProfile = useProfileStore((s) => s.currentProfile)
   const myProfile = useProfileStore((s) => s.myProfile)
+  const updateRecommendation = useProfileStore((s) => s.updateRecommendation)
+  const moderateRecommendation = useProfileStore((s) => s.moderateRecommendation)
+  const deleteRecommendation = useProfileStore((s) => s.deleteRecommendation)
 
   useEffect(() => {
     if (!slug) return
@@ -357,7 +364,7 @@ export default function ProfilePage() {
       )}
 
       {/* Recommendations / Reseñas de trabajo */}
-      <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
+      <section id="resenas" className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[var(--color-laburante-border)]">
           <div className="flex items-center gap-2">
             <MessageSquare size={18} className="text-[var(--color-laburante-indigo)]" />
@@ -382,8 +389,11 @@ export default function ProfilePage() {
 
         {profile.recommendations && profile.recommendations.length > 0 ? (
           <div className="space-y-3 pt-2">
-            {profile.recommendations.map((rec, idx) => (
-              <div key={idx} className="p-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30 space-y-1">
+            {profile.recommendations.map((rec) => {
+              const canEdit = !!user?.id && user.id === rec.from_user_id
+              const canModerate = isOwnProfile
+              const isEditing = editingRecommendationId === rec.id
+              return <div key={rec.id} className="p-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30 space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-[var(--color-laburante-text)]">{rec.from_name}</span>
@@ -391,18 +401,17 @@ export default function ProfilePage() {
                       Cliente
                     </span>
                   </div>
-                  {rec.date && <span className="text-[var(--color-laburante-text-muted)]">{rec.date}</span>}
+                  <div className="flex items-center gap-2"><span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${rec.status === 'visible' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>{rec.status === 'visible' ? 'Publicada' : 'Pendiente de revisión'}</span>{rec.date && <span className="text-[var(--color-laburante-text-muted)]">{rec.date}</span>}</div>
                 </div>
                 {rec.context && (
                   <p className="text-[11px] text-[var(--color-laburante-indigo)] font-medium">
                     Trabajo realizado: {rec.context}
                   </p>
                 )}
-                <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed pt-1">
-                  "{rec.text}"
-                </p>
+                {isEditing ? <div className="space-y-2"><textarea value={editingText} onChange={(e) => setEditingText(e.target.value)} rows={3} className="w-full rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs" /><input value={editingContext} onChange={(e) => setEditingContext(e.target.value)} placeholder="Trabajo realizado (opcional)" className="w-full rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs" /><div className="flex gap-2"><button type="button" onClick={async () => { const result = await updateRecommendation(rec.id, { text: editingText, context: editingContext }); setRecommendationMessage(result.error || 'Reseña actualizada.'); if (!result.error) setEditingRecommendationId(null) }} className="rounded-lg bg-indigo-700 px-3 py-2 text-[11px] font-bold text-white">Guardar</button><button type="button" onClick={() => setEditingRecommendationId(null)} className="rounded-lg border px-3 py-2 text-[11px]">Cancelar</button></div></div> : <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed pt-1">"{rec.text}"</p>}
+                <div className="flex flex-wrap gap-2 pt-1">{canModerate && rec.status !== 'visible' && <button type="button" onClick={() => moderateRecommendation(rec.id, 'visible')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white">Publicar reseña</button>}{canModerate && rec.status === 'visible' && <button type="button" onClick={() => moderateRecommendation(rec.id, 'oculto')} className="rounded-lg border border-amber-300 px-3 py-1.5 text-[11px] font-semibold text-amber-800">Ocultar</button>}{canEdit && !isEditing && <button type="button" onClick={() => { setEditingRecommendationId(rec.id); setEditingText(rec.text); setEditingContext(rec.context || '') }} className="rounded-lg border border-indigo-200 px-3 py-1.5 text-[11px] font-semibold text-indigo-800">Editar</button>}{canEdit && <button type="button" onClick={async () => { if (!window.confirm('¿Querés eliminar esta reseña?')) return; const result = await deleteRecommendation(rec.id); setRecommendationMessage(result.error || 'Reseña eliminada.') }} className="rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-semibold text-rose-700">Eliminar</button>}</div>
               </div>
-            ))}
+            })}
           </div>
         ) : (
           <div className="p-8 rounded-2xl border border-dashed border-[var(--color-laburante-border)] text-center space-y-3 bg-[var(--color-laburante-surface-alt)]/20">
@@ -427,6 +436,7 @@ export default function ProfilePage() {
             </button>
           </div>
         )}
+        {recommendationMessage && <p className="text-xs font-semibold text-indigo-800">{recommendationMessage}</p>}
       </section>
 
       {/* Signals of Trust (Honest, not fabricated) */}

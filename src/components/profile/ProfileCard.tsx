@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Briefcase, Sparkles } from 'lucide-react'
+import { MapPin, Briefcase, Star } from 'lucide-react'
 import type { ProfileWithDetails } from '@/stores/profile-store'
 import { formatModality } from '@/lib/profile-format'
 
@@ -66,9 +66,10 @@ export default function ProfileCard({ profile }: ProfileCardProps) {
 
       {/* Footer: Modality + View Profile CTA */}
       <div className="pt-4 border-t border-[var(--color-laburante-border)]/70 flex items-center justify-between text-xs mt-2">
-        <div className="flex items-center gap-1.5 text-[var(--color-laburante-text-muted)] font-medium">
+        <div className="flex items-center gap-3 text-[var(--color-laburante-text-muted)] font-medium">
           <Briefcase size={13} />
           <span>{formatModality(profile.modalidad, profile.hybrid_presencial_pct, profile.hybrid_remoto_pct)}</span>
+          {!!profile.recommendations?.length && <span className="inline-flex items-center gap-1 text-amber-700" title="Reseñas publicadas"><Star size={13} className="fill-amber-400" /> {profile.recommendations.length}</span>}
         </div>
         <Link
           to={`/p/${profile.slug}`}

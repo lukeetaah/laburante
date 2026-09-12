@@ -84,10 +84,10 @@ export default function RecommendationModal({
             </div>
             <div className="space-y-1">
               <h3 className="font-heading text-xl font-bold text-[var(--color-laburante-text)]">
-                ¡Reseña publicada con éxito!
+                ¡Reseña enviada para revisión!
               </h3>
               <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed max-w-sm mx-auto">
-                Gracias por compartir tu experiencia real de trabajo con <strong className="text-[var(--color-laburante-text)]">{profileName}</strong>. Tu opinión ayuda a la comunidad a contratar con confianza y transparencia.
+                Gracias por compartir tu experiencia real de trabajo con <strong className="text-[var(--color-laburante-text)]">{profileName}</strong>. La persona recibirá un aviso y decidirá si quiere publicarla.
               </p>
             </div>
             <button
@@ -178,7 +178,7 @@ export default function RecommendationModal({
                   disabled={submitting}
                   className="flex-1 py-2.5 px-4 rounded-xl btn-dark font-heading font-bold text-xs disabled:opacity-50"
                 >
-                  {submitting ? 'Publicando...' : 'Publicar reseña'}
+                  {submitting ? 'Enviando...' : 'Enviar reseña'}
                 </button>
               </div>
             </form>

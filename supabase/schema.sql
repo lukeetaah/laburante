@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS public.recommendations (
     to_profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     text TEXT NOT NULL CHECK (char_length(trim(text)) >= 10),
     context TEXT,
-    status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible', 'oculto', 'reportado')),
+    status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'visible', 'oculto', 'reportado')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -249,10 +249,26 @@ CREATE POLICY "Public read visible recommendations"
     ON public.recommendations FOR SELECT
     USING (status = 'visible');
 
+DROP POLICY IF EXISTS "Owners and authors can read recommendations" ON public.recommendations;
+CREATE POLICY "Owners and authors can read recommendations"
+    ON public.recommendations FOR SELECT
+    USING (auth.uid() = to_profile_id OR auth.uid() = from_user_id);
+
 DROP POLICY IF EXISTS "Anyone can create recommendation" ON public.recommendations;
 CREATE POLICY "Anyone can create recommendation"
     ON public.recommendations FOR INSERT
     WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Owners and authors can update recommendations" ON public.recommendations;
+CREATE POLICY "Owners and authors can update recommendations"
+    ON public.recommendations FOR UPDATE
+    USING (auth.uid() = to_profile_id OR auth.uid() = from_user_id)
+    WITH CHECK (auth.uid() = to_profile_id OR auth.uid() = from_user_id);
+
+DROP POLICY IF EXISTS "Authors can delete recommendations" ON public.recommendations;
+CREATE POLICY "Authors can delete recommendations"
+    ON public.recommendations FOR DELETE
+    USING (auth.uid() = from_user_id);
 
 -- Reports: Anyone can submit a report; read and update only for administrators
 DROP POLICY IF EXISTS "Anyone can submit report" ON public.reports;
