@@ -248,7 +248,21 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
-        {profile.resume_url && <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 pt-3 text-xs font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{profile.resume_name ? `: ${profile.resume_name}` : ''}</a>}
+        <div className="pt-3 text-xs">
+          {profile.resume_url ? (
+            user ? (
+              <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{profile.resume_name ? `: ${profile.resume_name}` : ''}</a>
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <span className="inline-flex items-center gap-2 font-semibold text-emerald-700"><FileText size={14} /> CV cargado</span>
+                <span className="text-[var(--color-laburante-text-secondary)]">Registrate para verlo.</span>
+                <Link to="/registrar" className="font-semibold text-[var(--color-laburante-indigo)] hover:underline">Crear mi cuenta</Link>
+              </div>
+            )
+          ) : (
+            <span className="inline-flex items-center gap-2 text-[var(--color-laburante-text-muted)]"><FileText size={14} /> No tiene CV cargado</span>
+          )}
+        </div>
       </div>
 
       {/* Profile Bio */}

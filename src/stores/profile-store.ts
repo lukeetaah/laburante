@@ -196,7 +196,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await query
       if (error) {
         let legacyQuery = (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( type, value, is_public )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( type, value, is_public ), profile_languages ( language, level, is_public )`)
           .eq('status', 'activo')
         if (filters.provincia) legacyQuery = legacyQuery.eq('provincia', filters.provincia)
         if (filters.localidad) legacyQuery = legacyQuery.ilike('localidad', `%${filters.localidad}%`)
@@ -269,7 +269,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (error) {
         const legacyResult = await (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at ), profile_languages ( language, level, is_public )`)
           .eq('slug', slug)
           .maybeSingle()
         data = legacyResult.data
@@ -326,7 +326,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (error) {
         const legacyResult = await (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_name, text, context, created_at ), profile_languages ( language, level, is_public )`)
           .eq('id', userId)
           .maybeSingle()
         data = legacyResult.data ? { ...legacyResult.data, account_type: legacyResult.data.account_type || userData.user.user_metadata?.account_type || userData.user.user_metadata?.accountType } : legacyResult.data
