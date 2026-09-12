@@ -11,17 +11,10 @@ import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
 
-const contactLabels: Record<string, string> = { whatsapp: 'WhatsApp', telefono: 'Teléfono', email: 'Email', instagram: 'Instagram', linkedin: 'LinkedIn', web: 'Sitio web', portfolio: 'Portfolio' }
+const contactLabels: Record<string, string> = { linkedin: 'LinkedIn', web: 'Sitio web', portfolio: 'Portfolio' }
 
-function getContactHref(type: string, value: string, profileName: string) {
+function getContactHref(type: string, value: string) {
   const cleanValue = value.trim()
-  if (type === 'whatsapp') {
-    const digits = cleanValue.replace(/\D/g, '')
-    return digits ? `https://wa.me/${digits.startsWith('54') ? digits : `549${digits}`}?text=Hola%20${encodeURIComponent(profileName)},%20te%20contacto%20a%20través%20de%20LABURANTE.` : null
-  }
-  if (type === 'telefono') return `tel:${cleanValue.replace(/\s+/g, '')}`
-  if (type === 'email') return `mailto:${cleanValue}`
-  if (type === 'instagram') return `https://instagram.com/${cleanValue.replace(/^@/, '')}`
   if (['linkedin', 'web', 'portfolio'].includes(type)) return cleanValue.startsWith('http') ? cleanValue : `https://${cleanValue}`
   return null
 }
@@ -251,12 +244,12 @@ export default function ProfilePage() {
 
         </div>
         <CompanyProfileActions profileId={profile.id} profileName={profile.name} />
-        {(profile.contact_methods || []).some((method) => method.is_public && method.value) && (
+        {(profile.contact_methods || []).some((method) => ['linkedin', 'web', 'portfolio'].includes(method.type) && method.is_public && method.value) && (
           <div className="mt-4 border-t border-[var(--color-laburante-border)] pt-4">
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]"><Link2 size={13} /> Portfolio, sitio y medios de contacto</p>
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]"><Link2 size={13} /> Portfolio, sitio y LinkedIn</p>
             <div className="flex flex-wrap gap-2">
-            {(profile.contact_methods || []).filter((method) => method.is_public && method.value).map((method) => {
-              const href = getContactHref(method.type, method.value, profile.name)
+            {(profile.contact_methods || []).filter((method) => ['linkedin', 'web', 'portfolio'].includes(method.type) && method.is_public && method.value).map((method) => {
+              const href = getContactHref(method.type, method.value)
               return <div key={`${method.type}-${method.value}`} className="inline-flex min-w-0 items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3 py-2 text-xs">
                 <Globe size={14} className="shrink-0 text-[var(--color-laburante-indigo)]" /><a href={href || undefined} target={href?.startsWith('http') ? '_blank' : undefined} rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined} className="max-w-[min(60vw,280px)] truncate font-semibold text-[var(--color-laburante-indigo)]"><span className="mr-1 text-[var(--color-laburante-text-muted)]">{contactLabels[method.type] || 'Contacto'}:</span>{method.value}</a><button type="button" onClick={() => copyContact(method.value, method.type)} aria-label={`Copiar ${method.type}`} className="rounded p-1 hover:bg-[var(--color-laburante-surface-alt)]">{copiedContact === method.type ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}</button>{href?.startsWith('http') && <ExternalLink size={12} className="shrink-0 text-[var(--color-laburante-text-muted)]" />}
               </div>
