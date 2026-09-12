@@ -30,6 +30,8 @@ import {
   Save,
   BarChart3,
   TrendingUp,
+  KeyRound,
+  Mail,
 } from 'lucide-react'
 
 const REASON_LABELS: Record<string, string> = {
@@ -63,6 +65,8 @@ export default function Admin() {
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [editingProfile, setEditingProfile] = useState<any | null>(null)
   const [editForm, setEditForm] = useState<any>({})
+  const [credentialsOpen, setCredentialsOpen] = useState(false)
+  const [credentialsSaving, setCredentialsSaving] = useState(false)
   const [jobRequests, setJobRequests] = useState<any[]>([])
 
   const loadData = async () => {
@@ -82,12 +86,12 @@ export default function Admin() {
       // 2. Fetch all Profiles
       let profilesData: any[] | null = null
       const resProfiles = await (supabase.from('profiles') as any)
-        .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, disponibilidad, account_type, company_plan, photo_url, resume_url, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(name), services(title), contact_methods(type,value,is_public)')
+        .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, disponibilidad, account_type, company_plan, photo_url, resume_url, resume_name, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(name), services(title), contact_methods(type,value,is_public)')
         .order('created_at', { ascending: false })
 
       if (resProfiles.error) {
         const resFallback = await (supabase.from('profiles') as any)
-          .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, photo_url, resume_url, created_at, skills(name), services(title), contact_methods(type,value,is_public)')
+          .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, photo_url, resume_url, resume_name, created_at, skills(name), services(title), contact_methods(type,value,is_public)')
           .order('created_at', { ascending: false })
         profilesData = resFallback.data
       } else {
@@ -294,8 +298,9 @@ export default function Admin() {
     )
   }
 
-  const openProfileEditor = (profile: any) => {
+  const openProfileEditor = async (profile: any) => {
     setEditingProfile(profile)
+    setCredentialsOpen(false)
     setEditForm({
       name: profile.name || '',
       bio: profile.bio || '',
@@ -306,7 +311,32 @@ export default function Admin() {
       hybrid_remoto_pct: typeof profile.hybrid_remoto_pct === 'number' ? profile.hybrid_remoto_pct : 50,
       disponibilidad: profile.disponibilidad || 'disponible',
       account_type: profile.account_type || 'persona',
+      email: '',
+      password: '',
     })
+    const { data: email } = await (supabase.rpc as any)('admin_get_user_email', { target_user_id: profile.id })
+    setEditForm((current: any) => ({ ...current, email: email || '' }))
+  }
+
+  const handleUpdateCredentials = async () => {
+    if (!editingProfile || (!editForm.email.trim() && !editForm.password)) {
+      setActionMessage('Ingresá un nuevo email o una contraseña para actualizar el acceso.')
+      return
+    }
+    setCredentialsSaving(true)
+    const { error } = await (supabase.rpc as any)('admin_update_user_credentials', {
+      target_user_id: editingProfile.id,
+      new_email: editForm.email.trim() || null,
+      new_password: editForm.password || null,
+    })
+    setCredentialsSaving(false)
+    if (error) {
+      setActionMessage(`No se pudo actualizar el acceso: ${error.message}. Aplicá migration_admin_account_access.sql en Supabase.`)
+      return
+    }
+    setEditForm((current: any) => ({ ...current, password: '' }))
+    setCredentialsOpen(false)
+    setActionMessage('Datos de acceso actualizados correctamente.')
   }
 
   const handleSaveProfile = async () => {
@@ -950,6 +980,14 @@ export default function Admin() {
               <div><p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Edición administrativa</p><h2 className="mt-1 font-heading text-xl font-bold">{editingProfile.name}</h2></div>
               <button type="button" onClick={() => setEditingProfile(null)} className="rounded-lg p-1 text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)]" aria-label="Cerrar"><XCircle size={19} /></button>
             </div>
+            <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 p-3">
+              {editingProfile.photo_url ? <img src={editingProfile.photo_url} alt={`Foto de ${editingProfile.name}`} className="h-16 w-16 rounded-full object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xs text-[var(--color-laburante-text-muted)]">Sin foto</div>}
+              <div className="space-y-1 text-xs">
+                <p className="font-bold">Material del perfil</p>
+                <p className={editingProfile.resume_url ? 'text-emerald-700' : 'text-[var(--color-laburante-text-muted)]'}>{editingProfile.resume_url ? 'CV cargado' : 'Sin CV cargado'}</p>
+                {editingProfile.resume_url && <a href={editingProfile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--color-laburante-indigo)] hover:underline"><Eye size={12} /> Ver CV{editingProfile.resume_name ? `: ${editingProfile.resume_name}` : ''}</a>}
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-xs font-semibold">Nombre<input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
               <label className="text-xs font-semibold">Tipo<select value={editForm.account_type} onChange={(e) => setEditForm({ ...editForm, account_type: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="persona">LABURANTE</option><option value="empresa">EMPRESA</option></select></label>
@@ -968,6 +1006,15 @@ export default function Admin() {
               </div>
             )}
             <label className="mt-3 block text-xs font-semibold">Presentación<textarea value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
+            <div className="mt-4 border-t border-[var(--color-laburante-border)] pt-4">
+              <button type="button" onClick={() => setCredentialsOpen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800"><KeyRound size={14} /> {credentialsOpen ? 'Ocultar cambio de acceso' : 'Cambiar email o contraseña'}</button>
+              {credentialsOpen && <div className="mt-3 grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold">Email de acceso<input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="Cargando email..." className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-semibold">Nueva contraseña<input type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Dejar vacío para no cambiarla" minLength={6} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-sm" /></label>
+                <p className="flex items-center gap-1 text-[11px] text-indigo-900 sm:col-span-2"><Mail size={13} /> El usuario podrá ingresar con el email y la contraseña nuevos.</p>
+                <button type="button" disabled={credentialsSaving} onClick={handleUpdateCredentials} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60 sm:col-span-2"><KeyRound size={14} /> {credentialsSaving ? 'Actualizando...' : 'Guardar datos de acceso'}</button>
+              </div>}
+            </div>
             <button type="button" onClick={handleSaveProfile} className="btn-dark mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold"><Save size={14} /> Guardar cambios</button>
           </div>
         </div>
