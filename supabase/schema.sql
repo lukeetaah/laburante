@@ -58,10 +58,21 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     zona_trabajo TEXT,
     disponibilidad job_disponibilidad NOT NULL DEFAULT 'disponible',
     modalidad job_modalidad NOT NULL DEFAULT 'presencial',
+    hybrid_presencial_pct SMALLINT,
+    hybrid_remoto_pct SMALLINT,
     company_plan TEXT NOT NULL DEFAULT 'gratis' CHECK (company_plan IN ('gratis', 'pago')),
     status profile_status NOT NULL DEFAULT 'activo',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT profiles_hybrid_percentages_valid CHECK (
+        (hybrid_presencial_pct IS NULL AND hybrid_remoto_pct IS NULL)
+        OR (
+            hybrid_presencial_pct BETWEEN 0 AND 100
+            AND hybrid_remoto_pct BETWEEN 0 AND 100
+            AND hybrid_presencial_pct + hybrid_remoto_pct = 100
+            AND modalidad = 'ambas'
+        )
+    )
 );
 
 -- 2. CATEGORIES TABLE

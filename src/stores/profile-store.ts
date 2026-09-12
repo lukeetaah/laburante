@@ -4,6 +4,7 @@ import type { WhatsAppVerificationRequest } from '@/lib/database.types'
 import { SITE_CONFIG } from '@/lib/constants'
 import { interpretSearch, normalizeSearchText } from '@/lib/search-intent'
 import { CATEGORIES } from '@/data/categories'
+import type { WorkModality } from '@/lib/profile-format'
 
 export interface ProfileWithDetails {
   id: string
@@ -19,7 +20,9 @@ export interface ProfileWithDetails {
   localidad: string
   zona_trabajo: string | null
   disponibilidad: 'disponible' | 'ocupado' | 'no_disponible'
-  modalidad: 'presencial' | 'remoto' | 'ambas'
+  modalidad: WorkModality
+  hybrid_presencial_pct?: number | null
+  hybrid_remoto_pct?: number | null
   status: 'activo' | 'oculto' | 'suspendido' | 'eliminado'
   whatsapp_verified?: boolean
   whatsapp_verified_at?: string | null
@@ -128,6 +131,7 @@ function saveLocalDeletions(data: AccountDeletionRecord[]) {
 }
 
 const WA_REQUESTS_KEY = 'laburante_v2_wa_verification_requests'
+const HYBRID_COLUMN_MISSING_RE = /hybrid_(presencial|remoto)_pct|column .* does not exist|Could not find .*hybrid_/i
 
 function getLocalWARequests(): WhatsAppVerificationRequest[] {
   try {
@@ -155,6 +159,11 @@ function generateUUID(): string {
   })
 }
 
+function withoutHybridPercentages(payload: any) {
+  const { hybrid_presencial_pct, hybrid_remoto_pct, ...rest } = payload
+  return rest
+}
+
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
   currentProfile: null,
@@ -166,7 +175,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let query = (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, status, created_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( type, value, is_public ),
@@ -248,7 +257,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, status, created_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
@@ -305,7 +314,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, status, created_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
@@ -387,6 +396,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           zona_trabajo: profileData.zona_trabajo || null,
           disponibilidad: profileData.disponibilidad || 'disponible',
           modalidad: profileData.modalidad || 'presencial',
+          hybrid_presencial_pct: profileData.modalidad === 'ambas' ? profileData.hybrid_presencial_pct : null,
+          hybrid_remoto_pct: profileData.modalidad === 'ambas' ? profileData.hybrid_remoto_pct : null,
           status: targetStatus,
           photo_url: profileData.photo_url || null,
           resume_url: profileData.resume_url || null,
@@ -397,9 +408,16 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           updatePayload.notify_whatsapp = profileData.notify_whatsapp
         }
 
-        const { error: profileError } = await (supabase.from('profiles') as any)
+        let { error: profileError } = await (supabase.from('profiles') as any)
           .update(updatePayload)
           .eq('id', userId)
+
+        if (profileError && HYBRID_COLUMN_MISSING_RE.test(profileError.message || '')) {
+          const retry = await (supabase.from('profiles') as any)
+            .update(withoutHybridPercentages(updatePayload))
+            .eq('id', userId)
+          profileError = retry.error
+        }
 
         if (profileError) return { error: profileError.message }
 
@@ -420,6 +438,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           zona_trabajo: profileData.zona_trabajo || null,
           disponibilidad: profileData.disponibilidad || 'disponible',
           modalidad: profileData.modalidad || 'presencial',
+          hybrid_presencial_pct: profileData.modalidad === 'ambas' ? profileData.hybrid_presencial_pct : null,
+          hybrid_remoto_pct: profileData.modalidad === 'ambas' ? profileData.hybrid_remoto_pct : null,
           status: targetStatus,
           photo_url: profileData.photo_url || null,
           resume_url: profileData.resume_url || null,
@@ -427,7 +447,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           notify_whatsapp: profileData.notify_whatsapp ?? true
         }
 
-        const { error: profileError } = await (supabase.from('profiles') as any).insert(insertPayload)
+        let { error: profileError } = await (supabase.from('profiles') as any).insert(insertPayload)
+
+        if (profileError && HYBRID_COLUMN_MISSING_RE.test(profileError.message || '')) {
+          const retry = await (supabase.from('profiles') as any).insert(withoutHybridPercentages(insertPayload))
+          profileError = retry.error
+        }
 
         if (profileError) return { error: profileError.message }
       }

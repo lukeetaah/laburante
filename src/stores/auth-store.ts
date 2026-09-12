@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
-import { SITE_CONFIG } from '@/lib/constants'
 
 export interface SignUpMetadata {
   name: string
@@ -22,7 +21,7 @@ interface AuthState {
   loading: boolean
   isAdmin: boolean
   setSession: (session: Session | null) => void
-  signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>
+  signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: string | null; needsSignIn?: boolean }>
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   initialize: () => Promise<void>
@@ -102,18 +101,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signUp: async (email, password, metadata) => {
-    const redirectOrigin = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
-      ? window.location.origin
-      : SITE_CONFIG.url
-    const redirectUrl = typeof window !== 'undefined'
-      ? `${redirectOrigin}/crear-perfil?confirmed=true`
-      : undefined
-
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: redirectUrl,
         data: {
           name: metadata.name,
           phone: metadata.phone || '',
@@ -133,8 +124,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     })
     if (error) return { error: error.message }
 
-    // If Supabase requires email verification, session will be null but user object is returned
-    const needsEmailConfirmation = !data.session && !!data.user
     if (data.session) {
       set({
         session: data.session,
@@ -144,7 +133,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       })
       await ensureUserProfile(data.session.user)
     }
-    return { error: null, needsEmailConfirmation }
+    return { error: null, needsSignIn: !data.session && !!data.user }
   },
 
   signIn: async (email, password) => {

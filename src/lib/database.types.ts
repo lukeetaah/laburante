@@ -20,6 +20,8 @@ export type Database = {
           zona_trabajo: string | null
           disponibilidad: 'disponible' | 'ocupado' | 'no_disponible'
           modalidad: 'presencial' | 'remoto' | 'ambas'
+          hybrid_presencial_pct?: number | null
+          hybrid_remoto_pct?: number | null
           status: 'activo' | 'oculto' | 'suspendido' | 'eliminado'
           whatsapp_verified?: boolean
           whatsapp_verified_at?: string | null

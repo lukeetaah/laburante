@@ -14,7 +14,8 @@ export default function AuthNotifier() {
   const [confirmedName, setConfirmedName] = useState('')
 
   useEffect(() => {
-    // Check if the URL contains confirmation tokens from Supabase Auth email redirect
+    // Keep compatibility with older Supabase redirect links while using the
+    // current immediate-access signup flow.
     const hash = window.location.hash
     const search = window.location.search
 
@@ -31,15 +32,14 @@ export default function AuthNotifier() {
         window.history.replaceState(null, '', window.location.pathname + window.location.search)
       }
 
-      // If user came from signup confirmation and is on home page, prompt or guide to /crear-perfil
+      // If user came from an older signup redirect and is on home page, guide to the next step.
       if (location.pathname === '/') {
         const intent = user?.user_metadata?.intent
         const isCompany = isCompanyAccount(user, myProfile)
         if (isCompany) {
           navigate('/empresa')
         } else if (intent === 'ofrecer' || intent === 'ambas') {
-          // Redirect them to complete their profile with context
-          navigate('/crear-perfil?confirmed=true')
+          navigate('/crear-perfil?from=registro')
         }
       }
     }
@@ -59,14 +59,14 @@ export default function AuthNotifier() {
         <div className="flex items-center gap-2.5">
           <CheckCircle2 size={20} className="text-emerald-200 flex-shrink-0" />
           <p className="font-medium leading-tight">
-            🎉 <strong>¡Cuenta confirmada con éxito{confirmedName ? `, ${confirmedName}` : ''}!</strong> Tu correo ya está verificado y tu sesión está activa.
+            <strong>¡Cuenta activa{confirmedName ? `, ${confirmedName}` : ''}!</strong> Tu sesión está lista para continuar en LABURANTE.
           </p>
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
           {location.pathname !== '/crear-perfil' && location.pathname !== '/empresa' && (
             <Link
-              to={isCompanyAccount(user, myProfile) ? '/empresa' : '/crear-perfil?confirmed=true'}
+              to={isCompanyAccount(user, myProfile) ? '/empresa' : '/crear-perfil?from=registro'}
               onClick={() => setShowConfirmedNotice(false)}
               className="py-1.5 px-4 rounded-xl bg-white text-emerald-950 font-heading font-bold text-xs hover:bg-emerald-50 transition-colors shadow-xs flex items-center gap-1.5"
             >

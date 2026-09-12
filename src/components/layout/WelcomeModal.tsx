@@ -13,7 +13,8 @@ export default function WelcomeModal() {
   const [isOpen, setIsOpen] = useState(false)
 
   useEffect(() => {
-    // Check if the current URL has confirmation tokens or type=signup
+    // Keep compatibility with older Supabase redirect links while using the
+    // current immediate-access signup experience.
     const hash = window.location.hash
     const search = window.location.search
 
@@ -44,7 +45,7 @@ export default function WelcomeModal() {
 
   const handleGoToProfile = () => {
     setIsOpen(false)
-    navigate(isCompany ? '/empresa' : '/crear-perfil?confirmed=true')
+    navigate(isCompany ? '/empresa' : '/crear-perfil?from=registro')
   }
 
   const handleClose = () => {
@@ -62,13 +63,13 @@ export default function WelcomeModal() {
         {/* Title & Explanation */}
         <div className="space-y-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold uppercase tracking-wider">
-            <Sparkles size={13} /> Correo verificado con éxito
+            <Sparkles size={13} /> Cuenta activa
           </div>
           <h2 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)]">
             ¡Hola, {userName}!
           </h2>
           <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-            Tu cuenta ya está activa y confirmada en <strong>LABURANTE</strong>.
+            Tu cuenta ya está activa en <strong>LABURANTE</strong>.
           </p>
         </div>
 

@@ -34,7 +34,7 @@ const STEPS: StepData[] = [
     description: 'Ingresás lo que necesitás (plomero, gasista, electricista, diseñadora, etc.) y seleccionás tu provincia y localidad. No hay algoritmos que oculten laburantes.',
     highlights: [
       'Alcance real para las 23 provincias argentinas y CABA',
-      'Filtros por modalidad presencial, remota o ambas',
+      'Filtros por modalidad presencial, remota o híbrida',
       'Sin pagar créditos para ver resultados'
     ],
     imageSrc: '/assets/demo/step-1-search.png',

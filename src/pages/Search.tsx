@@ -164,7 +164,7 @@ export default function Search() {
                 <option value="todas">Cualquiera</option>
                 <option value="presencial">Presencial</option>
                 <option value="remoto">Remoto</option>
-                <option value="ambas">Ambas</option>
+                <option value="ambas">Híbrido</option>
               </select>
             </div>
 
@@ -312,7 +312,7 @@ export default function Search() {
                 <option value="todas">Cualquiera</option>
                 <option value="presencial">Presencial</option>
                 <option value="remoto">Remoto</option>
-                <option value="ambas">Ambas</option>
+                <option value="ambas">Híbrido</option>
               </select>
             </div>
 

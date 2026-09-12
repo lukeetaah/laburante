@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { PROVINCES } from '@/data/provinces'
-import { Mail, CheckCircle2, ArrowRight, Building2 } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Building2 } from 'lucide-react'
 
 export default function Register() {
   const [searchParams] = useSearchParams()
@@ -22,7 +22,7 @@ export default function Register() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [successEmail, setSuccessEmail] = useState<string | null>(null)
+  const [accountCreatedEmail, setAccountCreatedEmail] = useState<string | null>(null)
   const [retryAt, setRetryAt] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
@@ -132,9 +132,9 @@ export default function Register() {
         setRetryAt(nextRetryAt)
         if (retryStorageKey) localStorage.setItem(retryStorageKey, String(nextRetryAt))
       }
-    } else if (res.needsEmailConfirmation) {
+    } else if (res.needsSignIn) {
       if (retryStorageKey) localStorage.removeItem(retryStorageKey)
-      setSuccessEmail(email.trim())
+      setAccountCreatedEmail(email.trim())
     } else {
       if (retryStorageKey) localStorage.removeItem(retryStorageKey)
       const redirectTo = searchParams.get('redirect')
@@ -150,12 +150,12 @@ export default function Register() {
     }
   }
 
-  if (successEmail) {
+  if (accountCreatedEmail) {
     return (
       <div className="container py-12 md:py-20 max-w-md mx-auto">
         <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-6 shadow-xs text-center">
           <div className="h-16 w-16 mx-auto rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
-            <Mail size={32} />
+            <CheckCircle2 size={32} />
           </div>
 
           <div className="space-y-2">
@@ -163,7 +163,7 @@ export default function Register() {
               ¡Cuenta creada!
             </h1>
             <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-              Te enviamos un correo de verificación a <strong className="text-[var(--color-laburante-text)]">{successEmail}</strong>.
+              Tu cuenta para <strong className="text-[var(--color-laburante-text)]">{accountCreatedEmail}</strong> quedó creada. Iniciá sesión para continuar en LABURANTE.
             </p>
           </div>
 
@@ -173,7 +173,7 @@ export default function Register() {
               Siguientes pasos:
             </p>
             <ol className="list-decimal list-inside space-y-1.5 pl-1 leading-relaxed text-[11px]">
-              <li>Abrí el enlace de confirmación que te enviamos a tu email.</li>
+              <li>Ingresá con tu correo y contraseña.</li>
               <li>{isCompany ? 'Ingresá al espacio de Empresa y elegí cómo empezar.' : 'Completá los datos de tu perfil profesional (oficios, fotos y contacto).'}</li>
               <li>{isCompany ? 'Probá la búsqueda gratuita y activá un plan cuando necesites más capacidad.' : 'Tu perfil quedará publicado de inmediato para que te contacten.'}</li>
             </ol>
@@ -190,7 +190,7 @@ export default function Register() {
               to={isCompany ? '/empresa' : '/crear-perfil'}
               className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] text-xs font-semibold text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)] inline-block"
             >
-              {isCompany ? 'Ya lo confirmé, ir al espacio Empresa' : 'Ya lo confirmé, completar mi perfil'}
+              {isCompany ? 'Ir al espacio Empresa' : 'Completar mi perfil'}
             </Link>
           </div>
         </div>
@@ -357,7 +357,7 @@ export default function Register() {
                     : 'border-[var(--color-laburante-border)] text-[var(--color-laburante-text-secondary)]'
                 }`}
               >
-                Ofrecer trabajo
+                Ofrecer mi trabajo
               </button>
               <button
                 type="button"
@@ -368,7 +368,7 @@ export default function Register() {
                     : 'border-[var(--color-laburante-border)] text-[var(--color-laburante-text-secondary)]'
                 }`}
               >
-                Buscar alguien
+                Buscar a alguien
               </button>
               <button
                 type="button"

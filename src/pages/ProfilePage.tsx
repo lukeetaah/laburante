@@ -9,6 +9,7 @@ import JobRequestModal from '@/components/jobs/JobRequestModal'
 import { SITE_CONFIG } from '@/lib/constants'
 import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
 import { isCompanyAccount } from '@/lib/account'
+import { formatModality } from '@/lib/profile-format'
 
 export default function ProfilePage() {
   const { user } = useAuthStore()
@@ -169,9 +170,9 @@ export default function ProfilePage() {
                 <MapPin size={14} className="text-[var(--color-laburante-accent)]" />
                 {profile.localidad}, {profile.provincia}
               </span>
-              <span className="flex items-center gap-1 capitalize">
+              <span className="flex items-center gap-1">
                 <Briefcase size={14} className="text-[var(--color-laburante-text-muted)]" />
-                {profile.modalidad}
+                {formatModality(profile.modalidad, profile.hybrid_presencial_pct, profile.hybrid_remoto_pct)}
               </span>
               <span className="flex items-center gap-1">
                 <Clock size={14} className="text-emerald-600" />

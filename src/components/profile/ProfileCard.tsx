@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { MapPin, Briefcase, Sparkles } from 'lucide-react'
 import type { ProfileWithDetails } from '@/stores/profile-store'
+import { formatModality } from '@/lib/profile-format'
 
 interface ProfileCardProps {
   profile: ProfileWithDetails
@@ -67,7 +68,7 @@ export default function ProfileCard({ profile }: ProfileCardProps) {
       <div className="pt-4 border-t border-[var(--color-laburante-border)]/70 flex items-center justify-between text-xs mt-2">
         <div className="flex items-center gap-1.5 text-[var(--color-laburante-text-muted)] font-medium">
           <Briefcase size={13} />
-          <span className="capitalize">{profile.modalidad}</span>
+          <span>{formatModality(profile.modalidad, profile.hybrid_presencial_pct, profile.hybrid_remoto_pct)}</span>
         </div>
         <Link
           to={`/p/${profile.slug}`}

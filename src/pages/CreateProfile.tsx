@@ -6,6 +6,7 @@ import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
 import { normalizeSearchText } from '@/lib/search-intent'
+import { formatModality, type WorkModality } from '@/lib/profile-format'
 import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
@@ -20,7 +21,11 @@ export default function CreateProfile() {
   const [provincia, setProvincia] = useState('CABA')
   const [localidad, setLocalidad] = useState('')
   const [zonaTrabajo, setZonaTrabajo] = useState('')
-  const [modalidad, setModalidad] = useState<'presencial' | 'remoto' | 'ambas'>('presencial')
+  const [modalidad, setModalidad] = useState<WorkModality>('presencial')
+  const [initialModalidad, setInitialModalidad] = useState<WorkModality>('presencial')
+  const [hybridPresencialPct, setHybridPresencialPct] = useState(50)
+  const [hybridPercentagesEdited, setHybridPercentagesEdited] = useState(false)
+  const hybridRemotoPct = 100 - hybridPresencialPct
   const [disponibilidad, setDisponibilidad] = useState<'disponible' | 'ocupado' | 'no_disponible'>('disponible')
   const [status, setStatus] = useState<'activo' | 'oculto'>('activo')
   const [isEditing, setIsEditing] = useState(false)
@@ -62,7 +67,16 @@ export default function CreateProfile() {
         setProvincia(existing.provincia || 'CABA')
         setLocalidad(existing.localidad || '')
         setZonaTrabajo(existing.zona_trabajo || '')
-        setModalidad(existing.modalidad || 'presencial')
+        const existingModalidad = existing.modalidad || 'presencial'
+        setModalidad(existingModalidad)
+        setInitialModalidad(existingModalidad)
+        if (typeof existing.hybrid_presencial_pct === 'number' && typeof existing.hybrid_remoto_pct === 'number') {
+          setHybridPresencialPct(existing.hybrid_presencial_pct)
+          setHybridPercentagesEdited(true)
+        } else {
+          setHybridPresencialPct(50)
+          setHybridPercentagesEdited(false)
+        }
         setDisponibilidad(existing.disponibilidad || 'disponible')
         setStatus(existing.status === 'oculto' ? 'oculto' : 'activo')
         setExistingPhotoUrl(existing.photo_url || '')
@@ -192,6 +206,18 @@ export default function CreateProfile() {
     setLanguages(updated)
   }
 
+  const handleModalidadChange = (value: WorkModality) => {
+    setModalidad(value)
+    if (value === 'ambas' && initialModalidad !== 'ambas') {
+      setHybridPercentagesEdited(true)
+    }
+  }
+
+  const handleHybridPctChange = (value: number) => {
+    setHybridPresencialPct(value)
+    setHybridPercentagesEdited(true)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!consentGranted) {
@@ -229,18 +255,21 @@ export default function CreateProfile() {
     try {
       const photoUrl = await uploadAsset(photoFile, 'photo')
       const resumeUrl = await uploadAsset(resumeFile, 'resume')
+      const shouldPersistHybridPercentages = modalidad === 'ambas' && (!isEditing || hybridPercentagesEdited || initialModalidad !== 'ambas')
       const payload = {
-      name: name.trim(),
-      bio: bio.trim(),
-      provincia,
-      localidad: localidad.trim(),
-      zona_trabajo: zonaTrabajo.trim(),
-      modalidad,
-      disponibilidad,
-      status,
-      skills: skills.filter((s) => s.trim()),
-      services: services.filter((s) => s.title.trim()),
-      contact_methods: contactMethods.filter((c) => c.value.trim()),
+        name: name.trim(),
+        bio: bio.trim(),
+        provincia,
+        localidad: localidad.trim(),
+        zona_trabajo: zonaTrabajo.trim(),
+        modalidad,
+        hybrid_presencial_pct: shouldPersistHybridPercentages ? hybridPresencialPct : null,
+        hybrid_remoto_pct: shouldPersistHybridPercentages ? hybridRemotoPct : null,
+        disponibilidad,
+        status,
+        skills: skills.filter((s) => s.trim()),
+        services: services.filter((s) => s.title.trim()),
+        contact_methods: contactMethods.filter((c) => c.value.trim()),
         languages: languages.filter((entry) => entry.language.trim()),
         photo_url: photoUrl || null,
         resume_url: resumeUrl || null,
@@ -318,7 +347,7 @@ export default function CreateProfile() {
           <CheckCircle2 size={22} className="text-emerald-600 flex-shrink-0 mt-0.5" />
           <div className="text-xs sm:text-sm space-y-1">
             <p className="font-bold">
-              ¡Tu correo electrónico ha sido verificado con éxito!
+              ¡Tu cuenta está activa!
             </p>
             <p className="text-emerald-800 leading-relaxed">
               Ya precargamos los datos iniciales de tu cuenta. Completá tu presentación, habilidades y confirmá el consentimiento de contacto para que tu perfil quede publicado en LABURANTE.
@@ -412,13 +441,34 @@ export default function CreateProfile() {
               </label>
               <select
                 value={modalidad}
-                onChange={(e) => setModalidad(e.target.value as any)}
+                onChange={(e) => handleModalidadChange(e.target.value as WorkModality)}
                 className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
               >
                 <option value="presencial">Presencial en zona</option>
                 <option value="remoto">100% Remoto</option>
-                <option value="ambas">Ambas modalidades</option>
+                <option value="ambas">Híbrido</option>
               </select>
+              {modalidad === 'ambas' && (
+                <div className="mt-3 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 p-3">
+                  <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--color-laburante-text-secondary)]">
+                    <span>Presencial {hybridPresencialPct}%</span>
+                    <span>Remoto {hybridRemotoPct}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={10}
+                    value={hybridPresencialPct}
+                    onChange={(e) => handleHybridPctChange(Number(e.target.value))}
+                    className="mt-2 w-full accent-[var(--color-laburante-indigo)]"
+                    aria-label="Porcentaje presencial en modalidad híbrida"
+                  />
+                  <p className="mt-1 text-[10px] leading-relaxed text-[var(--color-laburante-text-muted)]">
+                    {formatModality('ambas', hybridPresencialPct, hybridRemotoPct)}. La suma siempre es 100%.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>

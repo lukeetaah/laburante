@@ -5,6 +5,7 @@ import { useProfileStore, type AccountDeletionRecord } from '@/stores/profile-st
 import type { WhatsAppVerificationRequest } from '@/lib/database.types'
 import { SITE_CONFIG } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
+import { formatModality } from '@/lib/profile-format'
 import {
   ShieldAlert,
   Users,
@@ -38,6 +39,8 @@ const REASON_LABELS: Record<string, string> = {
   cambio_datos: 'Creará otro perfil con otros datos',
   otro: 'Otro motivo',
 }
+
+const HYBRID_COLUMN_MISSING_RE = /hybrid_(presencial|remoto)_pct|column .* does not exist|Could not find .*hybrid_/i
 
 export default function Admin() {
   const { user, isAdmin, loading: authLoading } = useAuthStore()
@@ -78,7 +81,7 @@ export default function Admin() {
       // 2. Fetch all Profiles
       let profilesData: any[] | null = null
       const resProfiles = await (supabase.from('profiles') as any)
-        .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, company_plan, created_at, whatsapp_verified, whatsapp_verified_at')
+        .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, disponibilidad, account_type, company_plan, created_at, whatsapp_verified, whatsapp_verified_at')
         .order('created_at', { ascending: false })
 
       if (resProfiles.error) {
@@ -279,6 +282,8 @@ export default function Admin() {
       provincia: profile.provincia || '',
       localidad: profile.localidad || '',
       modalidad: profile.modalidad || 'presencial',
+      hybrid_presencial_pct: typeof profile.hybrid_presencial_pct === 'number' ? profile.hybrid_presencial_pct : 50,
+      hybrid_remoto_pct: typeof profile.hybrid_remoto_pct === 'number' ? profile.hybrid_remoto_pct : 50,
       disponibilidad: profile.disponibilidad || 'disponible',
       account_type: profile.account_type || 'persona',
     })
@@ -289,24 +294,38 @@ export default function Admin() {
       setActionMessage('Completá nombre, provincia y localidad antes de guardar.')
       return
     }
-    const { error } = await (supabase.from('profiles') as any)
+    const updatePayload = {
+      name: editForm.name.trim(),
+      bio: editForm.bio.trim() || null,
+      provincia: editForm.provincia.trim(),
+      localidad: editForm.localidad.trim(),
+      modalidad: editForm.modalidad,
+      hybrid_presencial_pct: editForm.modalidad === 'ambas' ? Number(editForm.hybrid_presencial_pct) : null,
+      hybrid_remoto_pct: editForm.modalidad === 'ambas' ? 100 - Number(editForm.hybrid_presencial_pct) : null,
+      disponibilidad: editForm.disponibilidad,
+      account_type: editForm.account_type,
+      updated_at: new Date().toISOString(),
+    }
+
+    let { error } = await (supabase.from('profiles') as any)
       .update({
-        name: editForm.name.trim(),
-        bio: editForm.bio.trim() || null,
-        provincia: editForm.provincia.trim(),
-        localidad: editForm.localidad.trim(),
-        modalidad: editForm.modalidad,
-        disponibilidad: editForm.disponibilidad,
-        account_type: editForm.account_type,
-        updated_at: new Date().toISOString(),
+        ...updatePayload,
       })
       .eq('id', editingProfile.id)
+
+    if (error && HYBRID_COLUMN_MISSING_RE.test(error.message || '')) {
+      const { hybrid_presencial_pct, hybrid_remoto_pct, ...legacyPayload } = updatePayload
+      const retry = await (supabase.from('profiles') as any)
+        .update(legacyPayload)
+        .eq('id', editingProfile.id)
+      error = retry.error
+    }
 
     if (error) {
       setActionMessage(`No se pudo guardar: ${error.message}`)
       return
     }
-    setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? { ...p, ...editForm } : p))
+    setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? { ...p, ...editForm, hybrid_remoto_pct: editForm.modalidad === 'ambas' ? 100 - Number(editForm.hybrid_presencial_pct) : null } : p))
     setEditingProfile(null)
     setActionMessage('Perfil actualizado desde Administración.')
   }
@@ -802,6 +821,9 @@ export default function Admin() {
                     <p className="text-xs text-[var(--color-laburante-text-secondary)]">
                       {p.localidad}, {p.provincia} · Registrado el {new Date(p.created_at).toLocaleDateString()}
                     </p>
+                    <p className="text-[11px] font-medium text-[var(--color-laburante-text-muted)]">
+                      Modalidad: {formatModality(p.modalidad, p.hybrid_presencial_pct, p.hybrid_remoto_pct)}
+                    </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -904,9 +926,18 @@ export default function Admin() {
               <label className="text-xs font-semibold">Tipo<select value={editForm.account_type} onChange={(e) => setEditForm({ ...editForm, account_type: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="persona">LABURANTE</option><option value="empresa">EMPRESA</option></select></label>
               <label className="text-xs font-semibold">Provincia<input value={editForm.provincia} onChange={(e) => setEditForm({ ...editForm, provincia: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
               <label className="text-xs font-semibold">Localidad<input value={editForm.localidad} onChange={(e) => setEditForm({ ...editForm, localidad: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
-              <label className="text-xs font-semibold">Modalidad<select value={editForm.modalidad} onChange={(e) => setEditForm({ ...editForm, modalidad: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="presencial">Presencial</option><option value="remoto">Remoto</option><option value="ambas">Ambas</option></select></label>
+              <label className="text-xs font-semibold">Modalidad<select value={editForm.modalidad} onChange={(e) => setEditForm({ ...editForm, modalidad: e.target.value, hybrid_presencial_pct: e.target.value === 'ambas' ? editForm.hybrid_presencial_pct || 50 : null })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="presencial">Presencial</option><option value="remoto">Remoto</option><option value="ambas">Híbrido</option></select></label>
               <label className="text-xs font-semibold">Disponibilidad<select value={editForm.disponibilidad} onChange={(e) => setEditForm({ ...editForm, disponibilidad: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="disponible">Disponible</option><option value="ocupado">Ocupado</option><option value="no_disponible">No disponible</option></select></label>
             </div>
+            {editForm.modalidad === 'ambas' && (
+              <div className="mt-3 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 p-3">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-[var(--color-laburante-text-secondary)]">
+                  <span>Presencial {Number(editForm.hybrid_presencial_pct) || 0}%</span>
+                  <span>Remoto {100 - (Number(editForm.hybrid_presencial_pct) || 0)}%</span>
+                </div>
+                <input type="range" min={0} max={100} step={10} value={Number(editForm.hybrid_presencial_pct) || 0} onChange={(e) => setEditForm({ ...editForm, hybrid_presencial_pct: Number(e.target.value), hybrid_remoto_pct: 100 - Number(e.target.value) })} className="mt-2 w-full accent-[var(--color-laburante-indigo)]" aria-label="Porcentaje presencial en modalidad híbrida" />
+              </div>
+            )}
             <label className="mt-3 block text-xs font-semibold">Presentación<textarea value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
             <button type="button" onClick={handleSaveProfile} className="btn-dark mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold"><Save size={14} /> Guardar cambios</button>
           </div>
