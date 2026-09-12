@@ -165,6 +165,43 @@ function withoutHybridPercentages(payload: any) {
   return rest
 }
 
+async function replaceProfileLanguages(profileId: string, languages: any[]) {
+  const uniqueRows = Array.from(new Map((languages || [])
+    .map((entry: any) => ({
+      profile_id: profileId,
+      language: String(entry.language || '').trim(),
+      level: entry.level,
+      is_public: entry.is_public !== false,
+    }))
+    .filter((entry: any) => entry.language)
+    .map((entry: any) => [entry.language.toLocaleLowerCase(), entry])).values())
+
+  if (uniqueRows.some((entry: any) => entry.language.length < 2 || entry.language.length > 40)) {
+    throw new Error('Cada idioma debe tener entre 2 y 40 caracteres.')
+  }
+
+  const { data: previousLanguages, error: previousLanguagesError } = await (supabase.from('profile_languages') as any)
+    .select('language')
+    .eq('profile_id', profileId)
+  if (previousLanguagesError) throw new Error(previousLanguagesError.message)
+
+  if (uniqueRows.length) {
+    const { error: languageError } = await (supabase.from('profile_languages') as any)
+      .upsert(uniqueRows, { onConflict: 'profile_id,language' })
+    if (languageError) throw new Error(languageError.message)
+  }
+
+  const desiredLanguages = new Set(uniqueRows.map((entry: any) => entry.language))
+  const staleLanguages = (previousLanguages || []).map((entry: any) => entry.language).filter((language: string) => !desiredLanguages.has(language))
+  if (staleLanguages.length) {
+    const { error: deleteLanguagesError } = await (supabase.from('profile_languages') as any)
+      .delete()
+      .eq('profile_id', profileId)
+      .in('language', staleLanguages)
+    if (deleteLanguagesError) throw new Error(deleteLanguagesError.message)
+  }
+}
+
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
   currentProfile: null,
@@ -426,7 +463,6 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       await (supabase.from('skills') as any).delete().eq('profile_id', userId)
       await (supabase.from('services') as any).delete().eq('profile_id', userId)
       await (supabase.from('contact_methods') as any).delete().eq('profile_id', userId)
-      await (supabase.from('profile_languages') as any).delete().eq('profile_id', userId)
       } else {
         // 1. Insert Profile
         const insertPayload: any = {
@@ -457,6 +493,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
         if (profileError) return { error: profileError.message }
       }
+
+      await replaceProfileLanguages(userId, profileData.languages || [])
 
       // 2. Insert Skills
       if (profileData.skills?.length) {
@@ -497,18 +535,6 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         if (contactRows.length) {
           await (supabase.from('contact_methods') as any).insert(contactRows)
         }
-      }
-
-      if (profileData.languages?.length) {
-        const languageRows = profileData.languages
-          .map((entry: any) => ({
-            profile_id: userId,
-            language: entry.language.trim(),
-            level: entry.level,
-            is_public: entry.is_public !== false,
-          }))
-          .filter((entry: any) => entry.language)
-        if (languageRows.length) await (supabase.from('profile_languages') as any).insert(languageRows)
       }
 
       // Refresh myProfile in state
