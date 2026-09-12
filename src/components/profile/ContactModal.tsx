@@ -1,4 +1,5 @@
 import { X, MessageCircle, Phone, Mail, Globe, ExternalLink, ShieldCheck } from 'lucide-react'
+import { dedupeContactMethods } from '@/lib/contact-methods'
 
 interface ContactMethod {
   type: 'whatsapp' | 'telefono' | 'email' | 'instagram' | 'linkedin' | 'web' | 'portfolio' | string
@@ -16,7 +17,7 @@ interface ContactModalProps {
 export default function ContactModal({ isOpen, onClose, profileName, contactMethods }: ContactModalProps) {
   if (!isOpen) return null
 
-  const publicMethods = contactMethods.filter((c) => c.is_public && c.value)
+  const publicMethods = dedupeContactMethods(contactMethods.filter((c) => c.is_public && c.value))
 
   const getLabel = (type: string) => ({
     whatsapp: 'WhatsApp', telefono: 'Teléfono', email: 'Correo electrónico', instagram: 'Instagram', linkedin: 'LinkedIn', web: 'Sitio web', portfolio: 'Portfolio',

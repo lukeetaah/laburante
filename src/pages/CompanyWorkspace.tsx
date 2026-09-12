@@ -6,6 +6,7 @@ import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
 import { SITE_CONFIG } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
+import { dedupeContactMethods } from '@/lib/contact-methods'
 import { useNotificationStore } from '@/stores/notification-store'
 
 type Opportunity = { id: string; title: string; description: string; status: string; created_at: string }
@@ -97,7 +98,7 @@ export default function CompanyWorkspace() {
       ;(contactMethods || []).forEach((method: any) => {
         const methods = contactsByProfile.get(method.profile_id) || []
         methods.push(method)
-        contactsByProfile.set(method.profile_id, methods)
+        contactsByProfile.set(method.profile_id, dedupeContactMethods(methods))
       })
       setCandidateInquiries(normalized.map((item: any) => ({
         ...item,

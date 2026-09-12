@@ -5,6 +5,7 @@ import { SITE_CONFIG } from '@/lib/constants'
 import { interpretSearch, normalizeSearchText } from '@/lib/search-intent'
 import { CATEGORIES } from '@/data/categories'
 import type { WorkModality } from '@/lib/profile-format'
+import { dedupeContactMethods } from '@/lib/contact-methods'
 
 export interface ProfileWithDetails {
   id: string
@@ -215,7 +216,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
           skills: item.skills?.map((s: any) => s.name) || [],
           services: item.services || [],
-          contact_methods: item.contact_methods || [],
+          contact_methods: dedupeContactMethods(item.contact_methods || []),
           languages: item.profile_languages || [],
           categories: []
         }))
@@ -285,7 +286,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
           skills: item.skills?.map((s: any) => s.name) || [],
           services: item.services || [],
-          contact_methods: item.contact_methods || [],
+          contact_methods: dedupeContactMethods(item.contact_methods || []),
           languages: item.profile_languages || [],
           recommendations: item.recommendations || [],
           categories: []
@@ -346,7 +347,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
         skills: item.skills?.map((s: any) => s.name) || [],
         services: item.services || [],
-        contact_methods: item.contact_methods || [],
+        contact_methods: dedupeContactMethods(item.contact_methods || []),
         languages: item.profile_languages || [],
         recommendations: item.recommendations || [],
         categories: []
@@ -485,7 +486,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       // 4. Insert Contact Methods (only authorized ones with consent)
       if (profileData.contact_methods?.length) {
-        const contactRows = profileData.contact_methods.map((c: any) => ({
+        const contactRows = dedupeContactMethods(profileData.contact_methods).map((c: any) => ({
           profile_id: userId,
           type: c.type,
           value: c.value,

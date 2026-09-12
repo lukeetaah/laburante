@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
+import { dedupeContactMethods } from '@/lib/contact-methods'
 
 export interface SignUpMetadata {
   name: string
@@ -52,7 +53,7 @@ async function ensureUserProfile(user: User | null) {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') + '-' + user.id.slice(0, 4)
 
-      await (supabase.from('profiles') as any).insert({
+      const { error: profileInsertError } = await (supabase.from('profiles') as any).insert({
         id: user.id,
         name,
         slug,
@@ -67,7 +68,7 @@ async function ensureUserProfile(user: User | null) {
         status: meta.account_type === 'empresa' ? 'oculto' : 'activo',
       })
 
-      if (meta.phone) {
+      if (!profileInsertError && meta.phone && dedupeContactMethods([{ type: 'whatsapp', value: meta.phone }]).length) {
         await (supabase.from('contact_methods') as any).insert({
           profile_id: user.id,
           type: 'whatsapp',
