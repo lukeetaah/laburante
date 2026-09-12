@@ -6,6 +6,7 @@ import type { WhatsAppVerificationRequest } from '@/lib/database.types'
 import { SITE_CONFIG } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 import { formatModality } from '@/lib/profile-format'
+import { getProfileCompletion } from '@/lib/profile-completion'
 import {
   ShieldAlert,
   Users,
@@ -53,7 +54,7 @@ export default function Admin() {
   } = useProfileStore()
 
   const [activeTab, setActiveTab] = useState<'analytics' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions'>('analytics')
-  const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos'>('todos')
+  const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos' | 'incompletos'>('todos')
   const [reports, setReports] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
   const [deletions, setDeletions] = useState<AccountDeletionRecord[]>([])
@@ -81,12 +82,12 @@ export default function Admin() {
       // 2. Fetch all Profiles
       let profilesData: any[] | null = null
       const resProfiles = await (supabase.from('profiles') as any)
-        .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, disponibilidad, account_type, company_plan, created_at, whatsapp_verified, whatsapp_verified_at')
+        .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, disponibilidad, account_type, company_plan, photo_url, resume_url, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(name), services(title), contact_methods(type,value,is_public)')
         .order('created_at', { ascending: false })
 
       if (resProfiles.error) {
         const resFallback = await (supabase.from('profiles') as any)
-          .select('id, name, slug, provincia, localidad, status, disponibilidad, account_type, created_at')
+          .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, photo_url, resume_url, created_at, skills(name), services(title), contact_methods(type,value,is_public)')
           .order('created_at', { ascending: false })
         profilesData = resFallback.data
       } else {
@@ -110,9 +111,28 @@ export default function Admin() {
       const allCombined = [...(profilesData || [])]
       const hydrated = allCombined.map((p: any) => ({
         ...p,
+        completion_percent: getProfileCompletion({ ...p, skills: p.skills || [], services: p.services || [], contact_methods: p.contact_methods || [] }),
         whatsapp_verified: Boolean(p.whatsapp_verified || (localWA[p.id] !== undefined)),
       }))
       setProfiles(hydrated)
+
+      await Promise.all(hydrated
+        .filter((p: any) => Object.prototype.hasOwnProperty.call(p, 'profile_completion_reminder_sent_at') && p.completion_percent < 70 && !p.profile_completion_reminder_sent_at)
+        .map(async (p: any) => {
+          const { error: notificationError } = await (supabase.from('notifications') as any).insert({
+            user_id: p.id,
+            title: 'Completá tu perfil y hacé que te encuentren',
+            message: `Tu perfil está completo en un ${p.completion_percent}%. Sumá qué sabés hacer, una breve presentación y un medio de contacto para aparecer mejor en las búsquedas y recibir oportunidades más acordes a vos.`,
+            type: 'system',
+            link: '/crear-perfil',
+            read: false,
+          })
+          if (!notificationError) {
+            await (supabase.from('profiles') as any)
+              .update({ profile_completion_reminder_sent_at: new Date().toISOString() })
+              .eq('id', p.id)
+          }
+        }))
 
       const { data: jobsData } = await (supabase.from('job_requests') as any)
         .select('id, status, created_at, budget_amount, client_outcome, professional_outcome')
@@ -366,12 +386,14 @@ export default function Admin() {
   const closedJobs = jobRequests.filter((job) => ['completado', 'cancelado'].includes(job.status)).length
   const unresolvedCases = jobRequests.filter((job) => job.status === 'completado' && (!job.client_outcome || !job.professional_outcome)).length
   const completionRate = jobRequests.length ? Math.round((closedJobs / jobRequests.length) * 100) : 0
+  const averageProfileCompletion = profiles.length ? Math.round(profiles.reduce((sum, profile) => sum + (profile.completion_percent || 0), 0) / profiles.length) : 0
 
   const filteredProfiles = profiles.filter((p) => {
     if (profileFilter === 'activos') return p.status === 'activo'
     if (profileFilter === 'privados') return p.status === 'oculto'
     if (profileFilter === 'verificados') return p.whatsapp_verified === true
     if (profileFilter === 'suspendidos') return p.status === 'suspendido'
+    if (profileFilter === 'incompletos') return p.completion_percent < 100
     return true
   })
 
@@ -461,6 +483,10 @@ export default function Admin() {
           <p className="font-heading text-2xl font-bold text-indigo-600 mt-1">
             {pendingWaCount}
           </p>
+        </div>
+        <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/60">
+          <p className="text-xs text-amber-800 font-medium">Completitud promedio</p>
+          <p className="font-heading text-2xl font-bold text-amber-900 mt-1">{averageProfileCompletion}%</p>
         </div>
         <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Bajas registradas</p>
@@ -758,7 +784,7 @@ export default function Admin() {
             <span className="text-xs font-semibold text-[var(--color-laburante-text-muted)] mr-1 flex items-center gap-1">
               <Filter size={13} /> Filtrar:
             </span>
-            {(['todos', 'activos', 'privados', 'verificados', 'suspendidos'] as const).map((f) => (
+            {(['todos', 'activos', 'privados', 'verificados', 'suspendidos', 'incompletos'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setProfileFilter(f)}
@@ -823,6 +849,9 @@ export default function Admin() {
                     </p>
                     <p className="text-[11px] font-medium text-[var(--color-laburante-text-muted)]">
                       Modalidad: {formatModality(p.modalidad, p.hybrid_presencial_pct, p.hybrid_remoto_pct)}
+                    </p>
+                    <p className={`text-[11px] font-bold ${p.completion_percent < 70 ? 'text-rose-700' : p.completion_percent < 100 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      Perfil completado: {p.completion_percent}%
                     </p>
                   </div>
 

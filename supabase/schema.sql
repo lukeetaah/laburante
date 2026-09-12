@@ -421,6 +421,7 @@ CREATE POLICY "Public read public contact methods"
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS whatsapp_verified BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS whatsapp_verified_at TIMESTAMPTZ;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notify_whatsapp BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS profile_completion_reminder_sent_at TIMESTAMPTZ;
 
 -- ==========================================================
 -- 11. ACCOUNT DELETIONS TABLE (Registro de bajas con motivos)
