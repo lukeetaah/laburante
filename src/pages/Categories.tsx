@@ -1,8 +1,19 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CATEGORIES } from '@/data/categories'
-import { ArrowRight, ChevronRight } from 'lucide-react'
+import { Search, ChevronRight } from 'lucide-react'
+import { normalizeSearchText } from '@/lib/search-intent'
 
 export default function Categories() {
+  const [query, setQuery] = useState('')
+  const normalizedQuery = normalizeSearchText(query)
+  const visibleCategories = CATEGORIES.map((category) => {
+    const categoryMatches = normalizeSearchText(category.name).includes(normalizedQuery)
+    const subcategories = category.subcategories || []
+    const matchingSubcategories = subcategories.filter((subcategory) => normalizeSearchText(subcategory).includes(normalizedQuery))
+    return { category, subcategories: !normalizedQuery || categoryMatches ? subcategories : matchingSubcategories }
+  }).filter(({ category, subcategories }) => !normalizedQuery || normalizeSearchText(category.name).includes(normalizedQuery) || subcategories.length > 0)
+
   return (
     <div className="container py-8 md:py-12 max-w-5xl mx-auto space-y-8">
       <div>
@@ -12,10 +23,21 @@ export default function Categories() {
         <p className="text-sm text-[var(--color-laburante-text-secondary)] mt-1">
           Elegí el rubro que estás buscando o donde querés ofrecer tu trabajo.
         </p>
+        <label className="relative mt-5 block max-w-xl">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-laburante-text-muted)]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar una categoría u oficio"
+            aria-label="Buscar una categoría u oficio"
+            className="w-full rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] py-3 pl-10 pr-4 text-sm text-[var(--color-laburante-text)] outline-none focus:border-[var(--color-laburante-indigo)] focus:ring-2 focus:ring-[var(--color-laburante-indigo)]/20"
+          />
+        </label>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {CATEGORIES.map((cat) => (
+      {visibleCategories.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {visibleCategories.map(({ category: cat, subcategories }) => (
           <div
             key={cat.id}
             className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 space-y-4 hover:border-[var(--color-laburante-indigo)] transition-all flex flex-col justify-between"
@@ -28,9 +50,9 @@ export default function Categories() {
                 </h2>
               </div>
 
-              {cat.subcategories && cat.subcategories.length > 0 && (
+              {subcategories && subcategories.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pt-2">
-                  {cat.subcategories.map((sub, idx) => (
+                  {subcategories.map((sub, idx) => (
                     <Link
                       key={idx}
                       to={`/buscar?q=${encodeURIComponent(sub)}`}
@@ -54,7 +76,12 @@ export default function Categories() {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-sm text-[var(--color-laburante-text-secondary)]">
+          No encontramos categorías u oficios con “{query}”.
+        </div>
+      )}
     </div>
   )
 }

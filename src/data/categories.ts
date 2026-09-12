@@ -15,7 +15,7 @@ export const CATEGORIES: CategoryDef[] = [
   { id: 'hogar', name: 'Hogar', slug: 'hogar', icon: '🏠', subcategories: ['Limpieza', 'Jardinero', 'Fumigador', 'Mudanza', 'Aire acondicionado', 'Mantenimiento general'] },
   { id: 'tecnologia', name: 'Tecnología', slug: 'tecnologia', icon: '💻', subcategories: ['Programador', 'Diseñador web', 'Técnico PC', 'Redes', 'Soporte técnico', 'Desarrollo de apps'] },
   { id: 'diseno', name: 'Diseño', slug: 'diseno', icon: '🎨', subcategories: ['Diseño gráfico', 'Diseño UX/UI', 'Diseño de interiores', 'Diseño industrial', 'Ilustración'] },
-  { id: 'profesionales', name: 'Profesionales', slug: 'profesionales', icon: '📋', subcategories: ['Abogado', 'Contador', 'Arquitecto', 'Ingeniero', 'Médico', 'Psicólogo', 'Nutricionista'] },
+  { id: 'profesionales', name: 'Profesionales', slug: 'profesionales', icon: '📋', subcategories: ['Abogado', 'Contador', 'Arquitecto', 'Ingeniero', 'Médico', 'Psicólogo', 'Nutricionista', 'Coach', 'Coach ontológico'] },
   { id: 'educacion', name: 'Educación', slug: 'educacion', icon: '📚', subcategories: ['Profesor particular', 'Profesor de inglés', 'Profesor de música', 'Tutor', 'Apoyo escolar'] },
   { id: 'cuidado', name: 'Cuidado', slug: 'cuidado', icon: '💚', subcategories: ['Niñera', 'Cuidador de adultos mayores', 'Cuidador de mascotas', 'Enfermero/a'] },
   { id: 'gastronomia', name: 'Gastronomía', slug: 'gastronomia', icon: '🍳', subcategories: ['Cocinero', 'Chef a domicilio', 'Pastelero', 'Catering', 'Viandas'] },

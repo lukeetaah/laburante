@@ -255,7 +255,7 @@ export default function ProfilePage() {
             ) : (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <span className="inline-flex items-center gap-2 font-semibold text-emerald-700"><FileText size={14} /> CV cargado</span>
-                <span className="text-[var(--color-laburante-text-secondary)]">Registrate para verlo.</span>
+                <span className="text-[var(--color-laburante-text-secondary)]">Registrate o accedé para verlo.</span>
                 <Link to="/registrar" className="font-semibold text-[var(--color-laburante-indigo)] hover:underline">Crear mi cuenta</Link>
               </div>
             )

@@ -211,7 +211,7 @@ export default function Register() {
               : 'Registro gratuito para ofrecer servicios o buscar trabajadores en todo el país.'}
           </p>
           <div className="mx-auto mt-3 max-w-md rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-[11px] leading-relaxed text-emerald-900">
-            <strong>Alta gratuita para vos.</strong> Cada registro consume capacidad operativa de autenticación y verificación; por eso Supabase puede aplicar una espera técnica temporal para cuidar el servicio.
+            <strong>Crear tu cuenta es gratis.</strong> En algunos momentos puede haber una breve espera para completar el registro. Gracias por tu paciencia.
           </div>
         </div>
 
@@ -223,9 +223,9 @@ export default function Register() {
 
         {retryAt && remainingSeconds > 0 && (
           <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-center text-amber-950">
-            <p className="text-[10px] font-bold uppercase tracking-widest">Espera técnica de alta</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest">Estamos preparando tu cuenta</p>
             <p className="mt-1 font-heading text-3xl font-extrabold tabular-nums">{formattedWait}</p>
-            <p className="mt-1 text-[11px] leading-relaxed">El alta sigue siendo gratuita. Si el servidor recibe otro intento mientras esperás, puede extender el tiempo al próximo intento. Actualizá la página cuando el contador llegue a cero.</p>
+            <p className="mt-1 text-[11px] leading-relaxed">El registro sigue siendo gratuito. Cuando termine la espera, podés continuar con la creación de tu cuenta.</p>
           </div>
         )}
 
