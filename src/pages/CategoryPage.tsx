@@ -7,7 +7,8 @@ import { ArrowLeft, ArrowRight } from 'lucide-react'
 
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>()
-  const category = CATEGORIES.find((c) => c.slug === slug)
+  const category = CATEGORIES.find((c) => c.slug === slug && !c.hidden)
+    || (slug === 'administracion' ? CATEGORIES.find((c) => c.slug === 'negocios-administracion-finanzas') : undefined)
 
   const { profiles, loading, fetchProfiles } = useProfileStore()
 

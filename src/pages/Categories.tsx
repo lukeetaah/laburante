@@ -6,8 +6,9 @@ import { normalizeSearchText } from '@/lib/search-intent'
 
 export default function Categories() {
   const [query, setQuery] = useState('')
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
   const normalizedQuery = normalizeSearchText(query)
-  const visibleCategories = CATEGORIES.map((category) => {
+  const visibleCategories = CATEGORIES.filter((category) => !category.hidden).map((category) => {
     const categoryMatches = normalizeSearchText(category.name).includes(normalizedQuery)
     const subcategories = category.subcategories || []
     const matchingSubcategories = subcategories.filter((subcategory) => normalizeSearchText(subcategory).includes(normalizedQuery))
@@ -36,11 +37,11 @@ export default function Categories() {
       </div>
 
       {visibleCategories.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid items-stretch grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {visibleCategories.map(({ category: cat, subcategories }) => (
           <div
             key={cat.id}
-            className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 space-y-4 hover:border-[var(--color-laburante-indigo)] transition-all flex flex-col justify-between"
+            className={`h-full min-h-[280px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 space-y-4 hover:border-[var(--color-laburante-indigo)] transition-all flex flex-col justify-between ${expandedCategory === cat.id ? 'md:col-span-2 lg:col-span-3' : ''}`}
           >
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -50,9 +51,14 @@ export default function Categories() {
                 </h2>
               </div>
 
-              {subcategories && subcategories.length > 0 && (
+              {subcategories && subcategories.length > 0 && (() => {
+                const isExpanded = expandedCategory === cat.id
+                const visibleSubcategories = isExpanded ? subcategories : subcategories.slice(0, 6)
+                const remaining = subcategories.length - visibleSubcategories.length
+                return (
+                <>
                 <div className="flex flex-wrap gap-1.5 pt-2">
-                  {subcategories.map((sub, idx) => (
+                  {visibleSubcategories.map((sub, idx) => (
                     <Link
                       key={idx}
                       to={`/buscar?q=${encodeURIComponent(sub)}`}
@@ -62,7 +68,10 @@ export default function Categories() {
                     </Link>
                   ))}
                 </div>
-              )}
+                {remaining > 0 || isExpanded ? <button type="button" onClick={() => setExpandedCategory(isExpanded ? null : cat.id)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-laburante-border)] px-2.5 py-1.5 text-xs font-bold text-[var(--color-laburante-indigo)] hover:bg-[var(--color-laburante-surface-alt)]"><span>{isExpanded ? 'Ocultar especialidades' : `+${remaining} especialidades`}</span><ChevronRight size={13} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} /></button> : null}
+                </>
+                )
+              })()}
             </div>
 
             <div className="pt-4 border-t border-[var(--color-laburante-border)]/60">

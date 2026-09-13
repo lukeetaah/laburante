@@ -157,7 +157,7 @@ export default function Search() {
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] focus:ring-2 focus:ring-[var(--color-laburante-indigo)]"
               >
                 <option value="">Todos los rubros</option>
-                {CATEGORIES.map((c) => (
+                {CATEGORIES.filter((c) => !c.hidden).map((c) => (
                   <option key={c.id} value={c.name}>
                     {c.icon} {c.name}
                   </option>
