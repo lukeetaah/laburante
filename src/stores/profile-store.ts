@@ -287,13 +287,26 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       if (filters.query && filters.query.trim()) {
         const interpretation = interpretSearch(filters.query)
         const q = normalizeSearchText(filters.query)
+        const catalogTerms = CATEGORIES.flatMap((category) => category.subcategories || []).map(normalizeSearchText)
+        const catalogQuery = catalogTerms.includes(q)
+        const catalogMatches = new Set([
+          q,
+          ...interpretation.expandedTerms.filter((term) => catalogTerms.includes(term)),
+        ])
         const score = (p: ProfileWithDetails) => {
           const text = normalizeSearchText([p.name, p.bio || '', p.provincia, p.localidad, ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' '))
           const exact = text.includes(q) ? 3 : 0
           const hits = interpretation.expandedTerms.filter((term) => text.includes(term)).length
           return exact + hits
         }
-        realProfiles = realProfiles.map((profile) => ({ profile, rank: score(profile) })).filter((item) => item.rank > 0).sort((a, b) => b.rank - a.rank).map((item) => item.profile)
+        if (catalogQuery) {
+          realProfiles = realProfiles.filter((profile) => {
+            const workText = normalizeSearchText([...(profile.skills || []), ...(profile.services || []).map((service) => service.title)].join(' '))
+            return Array.from(catalogMatches).some((term) => workText.includes(term))
+          })
+        } else {
+          realProfiles = realProfiles.map((profile) => ({ profile, rank: score(profile) })).filter((item) => item.rank > 0).sort((a, b) => b.rank - a.rank).map((item) => item.profile)
+        }
       }
 
       const hasRefinement = Boolean(
