@@ -5,7 +5,7 @@ import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
 import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2 } from 'lucide-react'
 import NotificationBell from '@/components/notifications/NotificationBell'
-import { hasProviderContent } from '@/lib/profile-publication'
+import { hasProviderContent, normalizeProfileIntent } from '@/lib/profile-publication'
 import { useNotificationStore } from '@/stores/notification-store'
 
 export default function Header() {
@@ -28,9 +28,13 @@ export default function Header() {
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Mi cuenta'
   const companyAccount = isCompanyAccount(user, myProfile)
   const hasProviderProfile = myProfile ? hasProviderContent(myProfile) : false
+  const declaredIntent = normalizeProfileIntent(myProfile?.intent) || normalizeProfileIntent(user?.user_metadata?.intent)
+  const hasProviderIntent = declaredIntent === 'ofrecer' || declaredIntent === 'ambas'
   const showOfferLink = !companyAccount && (!user || (profileChecked && !hasProviderProfile))
   const accountPath = companyAccount ? '/empresa' : '/crear-perfil'
-  const offerLabel = user && myProfile && !hasProviderProfile ? 'También ofrecer servicios' : 'Ofrecer mi trabajo'
+  const offerLabel = user && myProfile && hasProviderIntent && !hasProviderProfile
+    ? 'Completar perfil profesional'
+    : 'Ofrecer mi trabajo'
 
   useEffect(() => {
     let active = true

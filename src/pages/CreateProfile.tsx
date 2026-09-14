@@ -60,6 +60,8 @@ export default function CreateProfile() {
   const [error, setError] = useState<string | null>(null)
   const isPublishedProvider = myProfile ? isProviderProfile(myProfile) : false
   const isCompletingProviderProfile = !isEditing || (myProfile ? !hasProviderContent(myProfile) : true)
+  const declaredIntent = normalizeProfileIntent(myProfile?.intent) || normalizeProfileIntent(user?.user_metadata?.intent)
+  const hasProviderIntent = declaredIntent === 'ofrecer' || declaredIntent === 'ambas'
 
   useEffect(() => {
     if (!user) return
@@ -348,9 +350,13 @@ export default function CreateProfile() {
         <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
           <ArrowRight size={20} className="text-amber-700 shrink-0 mt-0.5" />
           <div className="text-xs sm:text-sm space-y-1">
-            <p className="font-bold text-amber-900">También quiero ofrecer mis servicios</p>
+            <p className="font-bold text-amber-900">
+              {hasProviderIntent ? 'Tu perfil profesional todavía no está publicado' : 'También quiero ofrecer mis servicios'}
+            </p>
             <p className="text-amber-800 leading-relaxed text-xs">
-              Tu cuenta existe para buscar o administrar actividad. Completá tus oficios o servicios y guardá el perfil como público para aparecer en el buscador de proveedores.
+              {hasProviderIntent
+                ? 'La intención de ofrecer ya está configurada. Completá los datos requeridos y guardá el perfil como público para aparecer en el buscador de proveedores.'
+                : 'Tu cuenta existe para buscar o administrar actividad. Completá tus oficios o servicios y guardá el perfil como público para aparecer en el buscador de proveedores.'}
             </p>
           </div>
         </div>
