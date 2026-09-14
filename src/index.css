@@ -121,3 +121,13 @@
 .page-enter {
   animation: fadeIn 0.3s ease-out;
 }
+
+[data-contextual-focus="true"] {
+  scroll-margin-top: 5rem;
+  animation: contextual-focus 2.4s ease-out;
+}
+
+@keyframes contextual-focus {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+  20%, 70% { box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.28); }
+}

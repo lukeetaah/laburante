@@ -3,10 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
+import { getPostLoginPath } from '@/lib/contextual-navigation'
 import { CheckCircle2, ArrowRight, Sparkles, UserCheck, MapPin, Phone, Building2 } from 'lucide-react'
 
 export default function WelcomeModal() {
-  const { user } = useAuthStore()
+  const { user, isAdmin } = useAuthStore()
   const myProfile = useProfileStore((state) => state.myProfile)
   const navigate = useNavigate()
   const location = useLocation()
@@ -45,8 +46,12 @@ export default function WelcomeModal() {
 
   const handleGoToProfile = () => {
     setIsOpen(false)
-    navigate(isCompany ? '/empresa' : '/crear-perfil?from=registro')
+    const redirectTo = new URLSearchParams(location.search).get('redirect')
+    navigate(redirectTo && redirectTo.startsWith('/') ? redirectTo : isAdmin ? '/admin' : isCompany ? '/empresa' : getPostLoginPath(myProfile?.intent))
   }
+
+  const redirectTo = new URLSearchParams(location.search).get('redirect')
+  const destination = redirectTo && redirectTo.startsWith('/') ? redirectTo : isAdmin ? '/admin' : isCompany ? '/empresa' : getPostLoginPath(myProfile?.intent)
 
   const handleClose = () => {
     setIsOpen(false)
@@ -105,7 +110,7 @@ export default function WelcomeModal() {
             onClick={handleGoToProfile}
             className="btn-dark w-full py-4 px-6 rounded-2xl font-heading font-bold text-sm shadow-md transition-all hover:scale-[1.01] flex items-center justify-center gap-2"
           >
-            {isCompany ? 'Ir a mi espacio Empresa' : 'Completar y publicar mi perfil ahora'}
+            {destination === '/admin' ? 'Ir a Administración' : destination === '/empresa' ? 'Ir a mi espacio Empresa' : destination === '/buscar' ? 'Ir a buscar profesionales' : destination === '/mis-trabajos' ? 'Ir a mis trabajos' : 'Completar y publicar mi perfil ahora'}
             <ArrowRight size={16} />
           </button>
 

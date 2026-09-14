@@ -33,6 +33,7 @@ import type { JobRequestStatus } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
 import { useNotificationStore } from '@/stores/notification-store'
 import { isCompanyAccount } from '@/lib/account'
+import { focusContextualElement } from '@/lib/contextual-navigation'
 
 const isArchivedInquiry = (item: any) => Boolean(item?.archived_at) || item?.status === 'cerrada'
 
@@ -69,6 +70,7 @@ export default function OrdersDashboard() {
   const [archiveMessage, setArchiveMessage] = useState('')
   const selectedJobId = searchParams.get('pedido')
   const selectedCompanyInquiryId = searchParams.get('seleccion')
+  const explicitTab = searchParams.get('tab')
 
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -111,12 +113,18 @@ export default function OrdersDashboard() {
     }
   }, [user, companyAccount, fetchMyRequests, fetchMyJobs, fetchMyProfile, selectedCompanyInquiryId])
 
-  // If user has a profile, default to professional tab if they have received jobs
+  // Explicit navigation state takes priority over the automatic professional default.
   useEffect(() => {
+    if (explicitTab === 'cliente' || explicitTab === 'profesional') return
+    if (selectedJobId) {
+      if (proJobs.some((job) => job.id === selectedJobId)) setActiveTab('profesional')
+      else if (clientRequests.some((job) => job.id === selectedJobId)) setActiveTab('cliente')
+      return
+    }
     if (proJobs.length > 0 && clientRequests.length === 0) {
       setActiveTab('profesional')
     }
-  }, [proJobs.length, clientRequests.length])
+  }, [explicitTab, selectedJobId, proJobs, clientRequests])
 
   const currentList = activeTab === 'cliente' ? clientRequests : proJobs
 
@@ -144,6 +152,16 @@ export default function OrdersDashboard() {
     }
     return priority(a) - priority(b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
+
+  useEffect(() => {
+    if (!selectedJobId) return
+    return focusContextualElement({ attribute: 'data-request-id', value: selectedJobId })
+  }, [selectedJobId, activeTab, statusFilter, filteredList.length])
+
+  useEffect(() => {
+    if (!selectedCompanyInquiryId) return
+    return focusContextualElement({ attribute: 'data-inquiry-id', value: selectedCompanyInquiryId })
+  }, [selectedCompanyInquiryId, companyInquiries.length, showArchivedCompany])
 
   const activeCount = currentList.filter((i) =>
     !(i as any).archived_at && ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(i.status)
@@ -260,7 +278,7 @@ export default function OrdersDashboard() {
       </div>
       {archiveMessage && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">{archiveMessage}</div>}
 
-      {activityFilter !== 'pedidos' && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Selección Empresa</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">Las propuestas pendientes de días anteriores se archivan automáticamente. Nada se borra: podés consultar el historial cuando quieras.</p></div><button type="button" onClick={() => setShowArchivedCompany((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] font-bold text-indigo-800"><Archive size={14} /> {showArchivedCompany ? 'Ocultar archivadas' : 'Ver archivadas'}</button></div>{companyInquiries.filter((item) => showArchivedCompany || !isArchivedInquiry(item)).length === 0 ? <p className="rounded-xl border border-dashed border-indigo-200 bg-white/70 p-5 text-center text-xs text-indigo-900/75">No hay propuestas {showArchivedCompany ? 'archivadas' : 'activas'} de Empresa.</p> : companyInquiries.filter((item) => showArchivedCompany || !isArchivedInquiry(item)).map((inquiry) => <article key={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.company?.name || 'Empresa'} · {new Date(inquiry.created_at).toLocaleDateString('es-AR')}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiry.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : inquiry.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{inquiry.status}{isArchivedInquiry(inquiry) ? ' · archivada' : ''}</span></div>{inquiry.message && <p className="mt-2 line-clamp-2 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCompanyInquiry(inquiry)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Ver propuesta y datos <ChevronRight size={14} /></button>{!isArchivedInquiry(inquiry) && <button type="button" onClick={() => archiveCompanyInquiry(inquiry.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700" title="Archivar propuesta"><Archive size={14} /> Archivar</button>}</div></article>)}</section>}
+      {activityFilter !== 'pedidos' && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Selección Empresa</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">Las propuestas pendientes de días anteriores se archivan automáticamente. Nada se borra: podés consultar el historial cuando quieras.</p></div><button type="button" onClick={() => setShowArchivedCompany((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] font-bold text-indigo-800"><Archive size={14} /> {showArchivedCompany ? 'Ocultar archivadas' : 'Ver archivadas'}</button></div>{companyInquiries.filter((item) => showArchivedCompany || !isArchivedInquiry(item)).length === 0 ? <p className="rounded-xl border border-dashed border-indigo-200 bg-white/70 p-5 text-center text-xs text-indigo-900/75">No hay propuestas {showArchivedCompany ? 'archivadas' : 'activas'} de Empresa.</p> : companyInquiries.filter((item) => showArchivedCompany || !isArchivedInquiry(item)).map((inquiry) => <article key={inquiry.id} data-inquiry-id={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.company?.name || 'Empresa'} · {new Date(inquiry.created_at).toLocaleDateString('es-AR')}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiry.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : inquiry.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{inquiry.status}{isArchivedInquiry(inquiry) ? ' · archivada' : ''}</span></div>{inquiry.message && <p className="mt-2 line-clamp-2 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCompanyInquiry(inquiry)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Ver propuesta y datos <ChevronRight size={14} /></button>{!isArchivedInquiry(inquiry) && <button type="button" onClick={() => archiveCompanyInquiry(inquiry.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700" title="Archivar propuesta"><Archive size={14} /> Archivar</button>}</div></article>)}</section>}
 
       {selectedCompanyInquiry && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Detalle de selección Empresa</p><h2 className="mt-1 font-heading text-xl font-bold">{selectedCompanyInquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</h2></div><button type="button" onClick={() => setSelectedCompanyInquiry(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Cerrar"><XCircle size={18} /></button></div><div className="mt-5 space-y-3 text-sm"><div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4"><p className="font-bold text-indigo-950">{selectedCompanyInquiry.company?.name || 'Empresa'}</p><p className="mt-1 text-xs text-indigo-900/75">{[selectedCompanyInquiry.company?.localidad, selectedCompanyInquiry.company?.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}</p>{selectedCompanyInquiry.company?.slug && <Link to={`/p/${selectedCompanyInquiry.company.slug}`} onClick={() => setSelectedCompanyInquiry(null)} className="mt-2 inline-flex text-xs font-semibold text-indigo-700">Ver perfil de la Empresa <ExternalLink size={13} className="ml-1" /></Link>}</div><div><p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Mensaje de la Empresa</p><p className="mt-1 whitespace-pre-line text-sm text-gray-800">{selectedCompanyInquiry.message || 'La Empresa no agregó un mensaje adicional.'}</p></div><p className="text-xs text-gray-500">Recibida el {new Date(selectedCompanyInquiry.created_at).toLocaleString('es-AR')}</p></div>{selectedCompanyInquiry.status === 'pendiente' ? <div className="mt-6 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => respondToCompanyInquiry(selectedCompanyInquiry, 'rechazada')} className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-semibold">No avanzar</button><button type="button" onClick={() => respondToCompanyInquiry(selectedCompanyInquiry, 'aceptada')} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white">Aceptar y conversar</button></div> : <div className="mt-6 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">Ya respondiste esta propuesta como <strong>{selectedCompanyInquiry.status}</strong>. La Empresa recibió tu decisión.</div>}</div></div>}
 
@@ -301,6 +319,7 @@ export default function OrdersDashboard() {
           {filteredList.map((job) => (
             <div
               key={job.id}
+              data-request-id={job.id}
               className={`rounded-2xl border bg-[var(--color-laburante-surface)] p-4 sm:p-5 space-y-4 shadow-xs relative overflow-hidden ${
                 selectedJobId === job.id ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-[var(--color-laburante-border)]'
               }`}

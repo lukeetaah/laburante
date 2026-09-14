@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link, useSearchParams } from 'react-router-dom'
+import { useParams, Link, useSearchParams, useLocation } from 'react-router-dom'
 import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
@@ -10,6 +10,7 @@ import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
 import { isProviderProfile } from '@/lib/profile-publication'
+import { focusContextualElement } from '@/lib/contextual-navigation'
 
 const contactLabels: Record<string, string> = { linkedin: 'LinkedIn', portfolio: 'Portfolio' }
 
@@ -26,6 +27,7 @@ function getFriendlyResumeName(name?: string | null) {
 export default function ProfilePage() {
   const { user } = useAuthStore()
   const { slug } = useParams<{ slug: string }>()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const [rawProfile, setRawProfile] = useState<ProfileWithDetails | null>(null)
   const [loading, setLoading] = useState(true)
@@ -65,6 +67,11 @@ export default function ProfilePage() {
   // Prefer store's currentProfile so newly added recommendations reflect immediately
   const normalizedRouteSlug = slug ? decodeURIComponent(slug).trim() : ''
   const profile = (currentProfile && currentProfile.slug === normalizedRouteSlug) ? currentProfile : rawProfile
+
+  useEffect(() => {
+    if (loading || !profile || location.hash !== '#resenas') return
+    return focusContextualElement({ id: 'resenas' })
+  }, [loading, profile?.slug, location.hash])
 
   const handleShare = () => {
     const url = `${window.location.origin}/p/${profile?.slug}`

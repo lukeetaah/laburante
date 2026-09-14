@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Bell,
   CheckCheck,
@@ -15,6 +15,7 @@ import {
 import { useNotificationStore } from '@/stores/notification-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { supabase } from '@/lib/supabase'
+import { navigateToContextualLink, parseContextualLink } from '@/lib/contextual-navigation'
 
 export default function NotificationBell() {
   const { user } = useAuthStore()
@@ -27,7 +28,9 @@ export default function NotificationBell() {
   } = useNotificationStore()
 
   const [isOpen, setIsOpen] = useState(false)
+  const [view, setView] = useState<'new' | 'archived'>('new')
   const menuRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchNotifications()
@@ -81,12 +84,20 @@ export default function NotificationBell() {
     }
   }
 
-  const handleNotificationClick = (id: string, read: boolean) => {
-    if (!read) {
-      markAsRead(id)
+  const handleNotificationClick = async (id: string, read: boolean, link?: string | null) => {
+    const externalLink = link ? !parseContextualLink(link) : false
+    if (externalLink && link) {
+      navigateToContextualLink(navigate, link)
+      setIsOpen(false)
+      if (!read) await markAsRead(id)
+      return
     }
+    if (!read) await markAsRead(id)
     setIsOpen(false)
+    if (link) navigateToContextualLink(navigate, link)
   }
+
+  const visibleNotifications = notifications.filter((notification) => view === 'new' ? !notification.read : notification.read)
 
   return (
     <div className="relative" ref={menuRef}>
@@ -133,20 +144,25 @@ export default function NotificationBell() {
             )}
           </div>
 
+          <div className="grid grid-cols-2 border-b border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-1.5">
+            <button type="button" onClick={() => setView('new')} className={`rounded-lg px-2 py-2 text-[11px] font-bold ${view === 'new' ? 'bg-amber-100 text-amber-900' : 'text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)]'}`}>Novedades ({notifications.filter((n) => !n.read).length})</button>
+            <button type="button" onClick={() => setView('archived')} className={`rounded-lg px-2 py-2 text-[11px] font-bold ${view === 'archived' ? 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)]' : 'text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)]'}`}>Archivadas ({notifications.filter((n) => n.read).length})</button>
+          </div>
+
           {/* Notifications List */}
           <div className="max-h-72 overflow-y-auto divide-y divide-[var(--color-laburante-border)]/50">
-            {notifications.length === 0 ? (
+            {visibleNotifications.length === 0 ? (
               <div className="p-8 text-center space-y-2">
                 <Bell size={24} className="mx-auto text-[var(--color-laburante-text-muted)] opacity-40" />
                 <p className="text-xs text-[var(--color-laburante-text-secondary)] font-medium">
-                  No tenés avisos pendientes
+                  {view === 'new' ? 'No tenés novedades pendientes' : 'No tenés avisos archivados'}
                 </p>
                 <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
                   Acá verás cuando te pidan un presupuesto, acepten una cotización o certifiques tu número.
                 </p>
               </div>
             ) : (
-              notifications.map((n) => (
+              visibleNotifications.map((n) => (
                 <div
                   key={n.id}
                   className={`p-3 transition-colors flex items-start gap-3 text-xs ${
@@ -177,14 +193,14 @@ export default function NotificationBell() {
 
                       <div className="flex items-center gap-2">
                         {n.link && (
-                          <Link
-                            to={n.link}
-                            onClick={() => handleNotificationClick(n.id, n.read)}
+                          <button
+                            type="button"
+                            onClick={() => handleNotificationClick(n.id, n.read, n.link)}
                             className="text-[var(--color-laburante-indigo)] font-semibold hover:underline flex items-center gap-0.5"
                           >
                             <span>Ver</span>
                             <ChevronRight size={10} />
-                          </Link>
+                          </button>
                         )}
                       </div>
                     </div>

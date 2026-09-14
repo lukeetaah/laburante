@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { dedupeContactMethods } from '@/lib/contact-methods'
 import { useNotificationStore } from '@/stores/notification-store'
 import { useOperationalSettings } from '@/lib/operational-settings'
+import { focusContextualElement } from '@/lib/contextual-navigation'
 
 type Opportunity = { id: string; title: string; description: string; status: string; created_at: string }
 
@@ -63,6 +64,8 @@ export default function CompanyWorkspace() {
   const { officialWhatsApp } = useOperationalSettings()
   const [searchParams] = useSearchParams()
   const selectedInquiryId = searchParams.get('seleccion')
+  const selectedOpportunityId = searchParams.get('oportunidad')
+  const selectedOpportunityShareId = searchParams.get('oportunidad-compartida')
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [incoming, setIncoming] = useState<any[]>([])
   const [candidateInquiries, setCandidateInquiries] = useState<any[]>([])
@@ -84,7 +87,7 @@ export default function CompanyWorkspace() {
     setCandidateInquiriesLoaded(false)
     const [own, shared, inquiries] = await Promise.all([
       (supabase.from('company_opportunities') as any).select('*').eq('source_company_id', user.id).order('created_at', { ascending: false }),
-      (supabase.from('company_opportunity_shares') as any).select('id, source_company_id, status, match_reason, created_at, company_opportunities(title, description, budget_amount, estimated_time, origin_platform, origin_note, localidad, provincia)').eq('recipient_company_id', user.id).order('created_at', { ascending: false }),
+      (supabase.from('company_opportunity_shares') as any).select('id, opportunity_id, source_company_id, status, match_reason, created_at, company_opportunities(title, description, budget_amount, estimated_time, origin_platform, origin_note, localidad, provincia)').eq('recipient_company_id', user.id).order('created_at', { ascending: false }),
       (supabase.from('company_candidate_inquiries') as any).select('*').eq('company_id', user.id).order('created_at', { ascending: false }),
     ])
     if (!own.error) setOpportunities(own.data || [])
@@ -126,6 +129,16 @@ export default function CompanyWorkspace() {
     loadOpportunities()
   }, [user, fetchMyProfile])
 
+  useEffect(() => {
+    if (selectedOpportunityId) return focusContextualElement({ attribute: 'data-opportunity-id', value: selectedOpportunityId })
+    if (selectedOpportunityShareId) return focusContextualElement({ attribute: 'data-opportunity-share-id', value: selectedOpportunityShareId })
+  }, [selectedOpportunityId, selectedOpportunityShareId, opportunities.length, incoming.length])
+
+  useEffect(() => {
+    if (!selectedInquiryId) return
+    return focusContextualElement({ attribute: 'data-inquiry-id', value: selectedInquiryId })
+  }, [selectedInquiryId, candidateInquiries.length, candidateInquiriesLoaded])
+
   if (!user) return <div className="container py-20 text-center space-y-4"><Building2 className="mx-auto text-[var(--color-laburante-indigo)]" size={32} /><h1 className="font-heading text-2xl font-bold">Ingresá para ver tu espacio Empresa</h1><Link to="/registrar?tipo=empresa" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Crear cuenta Empresa <ArrowRight size={16} /></Link></div>
   if (!isCompany) return <div className="container py-20 text-center space-y-4"><h1 className="font-heading text-2xl font-bold">Esta sección es para cuentas Empresa</h1><Link to="/empresas" className="text-sm font-semibold text-[var(--color-laburante-indigo)]">Conocé las opciones para empresas</Link></div>
 
@@ -146,13 +159,16 @@ export default function CompanyWorkspace() {
       opportunity_id: created.id, source_company_id: user.id, recipient_company_id: company.id,
       match_reason: company.provincia === user.user_metadata?.provincia ? 'Empresa de la misma provincia' : 'Empresa dentro de la red LABURANTE',
     }))
-    if (recipients.length) await (supabase.from('company_opportunity_shares') as any).upsert(recipients, { onConflict: 'opportunity_id,recipient_company_id' })
+    const { data: createdShares } = recipients.length
+      ? await (supabase.from('company_opportunity_shares') as any).upsert(recipients, { onConflict: 'opportunity_id,recipient_company_id' }).select('id, recipient_company_id')
+      : { data: [] }
+    const shareByRecipient = new Map((createdShares || []).map((share: any) => [share.recipient_company_id, share.id]))
     await Promise.all(recipients.map((recipient: any) => useNotificationStore.getState().addNotification({
       userId: recipient.recipient_company_id,
       title: 'Nueva oportunidad en tu red',
       message: `${title.trim()} fue derivada a tu empresa porque puede ser relevante para tu zona o actividad.${budgetAmount.trim() ? ` Presupuesto informado: ${budgetAmount.trim()}.` : ''}`,
       type: 'job',
-      link: '/empresa',
+      link: shareByRecipient.has(recipient.recipient_company_id) ? `/empresa?oportunidad-compartida=${encodeURIComponent(String(shareByRecipient.get(recipient.recipient_company_id)))}` : '/empresa',
     })))
     setTitle(''); setDescription(''); setOriginPlatform(''); setOriginNote(''); setBudgetAmount(''); setEstimatedTime(''); setLoading(false)
     setMessage(recipients.length ? `Oportunidad publicada y enviada a ${recipients.length} empresas similares.` : 'Oportunidad publicada. Se ofrecerá a nuevas empresas similares cuando entren a la red.')
@@ -172,7 +188,7 @@ export default function CompanyWorkspace() {
           ? `La empresa recibió “${item.company_opportunities?.title || 'tu oportunidad'}” y quiere evaluarla.`
           : `La empresa no avanzó con “${item.company_opportunities?.title || 'tu oportunidad'}”. La red puede seguir encontrando empresas similares.`,
         type: 'status',
-        link: '/empresa',
+        link: item.opportunity_id ? `/empresa?oportunidad=${encodeURIComponent(item.opportunity_id)}` : '/empresa',
       })
     }
   }
@@ -237,7 +253,7 @@ export default function CompanyWorkspace() {
        <div className="space-y-3">
          {candidateInquiries.filter((item) => showArchivedCandidates || !isArchivedInquiry(item)).map((item) => {
            const selected = item.id === selectedCandidateInquiry?.id
-           return <article key={item.id} className={`rounded-xl border bg-white p-4 ${selected ? 'border-indigo-600 ring-2 ring-indigo-500/25' : 'border-indigo-200'}`}>
+           return <article key={item.id} data-inquiry-id={item.id} className={`rounded-xl border bg-white p-4 ${selected ? 'border-indigo-600 ring-2 ring-indigo-500/25' : 'border-indigo-200'}`}>
              <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{item.profile?.name || 'Profesional'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{item.process_type === 'entrevista' ? 'Entrevista' : 'Contratación'} · {new Date(item.created_at).toLocaleDateString('es-AR')}</p></div><span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold uppercase text-indigo-800">{item.status}{isArchivedInquiry(item) ? ' · archivada' : ''}</span></div>
              {item.message && <p className="mt-2 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">{item.message}</p>}
              <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCandidateInquiry(item)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{selected ? 'Selección abierta' : 'Abrir selección'}</button>{!isArchivedInquiry(item) && <button type="button" onClick={() => archiveCandidateInquiry(item.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"><Archive size={14} /> Archivar</button>}</div>
@@ -257,7 +273,8 @@ export default function CompanyWorkspace() {
         {originPlatform && <textarea value={originNote} onChange={(e) => setOriginNote(e.target.value)} placeholder="Qué falló o qué necesitás distinto ahora" rows={2} className="w-full rounded-xl border border-[var(--color-laburante-border)] px-3.5 py-2.5 text-sm" />}
         <button disabled={loading || !isPaidCompany} className="btn-dark inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold disabled:opacity-60">{loading ? 'Publicando...' : isPaidCompany ? 'Publicar y derivar oportunidad' : 'Disponible tras coordinar'} <ArrowRight size={15} /></button>
       </form>
-    <div className="space-y-4"><div className="flex items-center gap-2"><Inbox size={18} className="text-[var(--color-laburante-indigo)]" /><h2 className="font-heading text-xl font-bold">Oportunidades recibidas</h2></div>{incoming.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">Todavía no recibiste derivaciones de otras empresas.</div> : incoming.map((item) => <article key={item.id} className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5"><div className="flex items-start justify-between gap-3"><h3 className="font-heading font-bold">{item.company_opportunities?.title}</h3><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase text-indigo-700">{item.status}</span></div><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{item.company_opportunities?.description}</p>{(item.company_opportunities?.budget_amount || item.company_opportunities?.estimated_time) && <p className="mt-2 text-xs font-semibold text-emerald-800">{item.company_opportunities?.budget_amount ? `Presupuesto: ${item.company_opportunities.budget_amount}` : 'Presupuesto a definir'}{item.company_opportunities?.estimated_time ? ` · Plazo: ${item.company_opportunities.estimated_time}` : ''}</p>}<p className="mt-2 text-[11px] font-semibold text-indigo-800">{item.match_reason}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => updateIncoming(item.id, 'interesada')} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Me interesa</button><button type="button" onClick={() => updateIncoming(item.id, 'descartada')} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-900">Descartar</button></div></article>)}</div>
+      {opportunities.length > 0 && <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5 space-y-3"><div className="flex items-center gap-2"><Send size={17} className="text-[var(--color-laburante-indigo)]" /><h2 className="font-heading text-xl font-bold">Mis oportunidades</h2></div>{opportunities.map((item) => <article key={item.id} data-opportunity-id={item.id} className="rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-4"><div className="flex items-start justify-between gap-3"><h3 className="font-heading font-bold">{item.title}</h3><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase text-indigo-700">{item.status}</span></div><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{item.description}</p></article>)}</section>}
+    <div className="space-y-4"><div className="flex items-center gap-2"><Inbox size={18} className="text-[var(--color-laburante-indigo)]" /><h2 className="font-heading text-xl font-bold">Oportunidades recibidas</h2></div>{incoming.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">Todavía no recibiste derivaciones de otras empresas.</div> : incoming.map((item) => <article key={item.id} data-opportunity-share-id={item.id} className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5"><div className="flex items-start justify-between gap-3"><h3 className="font-heading font-bold">{item.company_opportunities?.title}</h3><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase text-indigo-700">{item.status}</span></div><p className="mt-2 text-sm leading-relaxed text-[var(--color-laburante-text-secondary)]">{item.company_opportunities?.description}</p>{(item.company_opportunities?.budget_amount || item.company_opportunities?.estimated_time) && <p className="mt-2 text-xs font-semibold text-emerald-800">{item.company_opportunities?.budget_amount ? `Presupuesto: ${item.company_opportunities.budget_amount}` : 'Presupuesto a definir'}{item.company_opportunities?.estimated_time ? ` · Plazo: ${item.company_opportunities.estimated_time}` : ''}</p>}<p className="mt-2 text-[11px] font-semibold text-indigo-800">{item.match_reason}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => updateIncoming(item.id, 'interesada')} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Me interesa</button><button type="button" onClick={() => updateIncoming(item.id, 'descartada')} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-900">Descartar</button></div></article>)}</div>
     </section>
     <div className="rounded-2xl bg-[var(--color-laburante-text)] p-6 text-white sm:p-8"><h2 className="font-heading text-xl font-bold">¿Querés conocer más posibilidades?</h2><p className="mt-2 max-w-xl text-sm leading-relaxed text-white/70">Escribinos por WhatsApp con el nombre de tu empresa y el volumen de búsquedas. Coordinamos una entrevista para mostrarte el producto.</p><a href={`https://wa.me/${officialWhatsApp}?text=${encodeURIComponent(`Hola LABURANTE, soy ${companyName} y quiero coordinar una entrevista para conocer el producto de Empresa.`)}`} target="_blank" rel="noopener noreferrer" className="btn-amber mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Coordinar una entrevista <ArrowRight size={16} /></a></div>
   </div>

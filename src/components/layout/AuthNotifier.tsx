@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
+import { getPostLoginPath } from '@/lib/contextual-navigation'
 import { CheckCircle2, ArrowRight, X, Sparkles } from 'lucide-react'
 
 export default function AuthNotifier() {
-  const { user } = useAuthStore()
-  const myProfile = useProfileStore((state) => state.myProfile)
+  const { user, isAdmin } = useAuthStore()
+  const { myProfile, fetchMyProfile } = useProfileStore()
   const location = useLocation()
   const navigate = useNavigate()
   const [showConfirmedNotice, setShowConfirmedNotice] = useState(false)
   const [confirmedName, setConfirmedName] = useState('')
+  const handledConfirmation = useRef(false)
 
   useEffect(() => {
     // Keep compatibility with older Supabase redirect links while using the
@@ -32,18 +34,24 @@ export default function AuthNotifier() {
         window.history.replaceState(null, '', window.location.pathname + window.location.search)
       }
 
-      // If user came from an older signup redirect and is on home page, guide to the next step.
-      if (location.pathname === '/') {
-        const intent = user?.user_metadata?.intent
-        const isCompany = isCompanyAccount(user, myProfile)
-        if (isCompany) {
-          navigate('/empresa')
-        } else if (intent === 'ofrecer' || intent === 'ambas') {
-          navigate('/crear-perfil?from=registro')
-        }
+      // If user came from an older signup redirect and is on home page, use the persisted profile intent.
+      if (location.pathname === '/' && !handledConfirmation.current) {
+        handledConfirmation.current = true
+        const redirectTo = new URLSearchParams(window.location.search).get('redirect')
+        fetchMyProfile().then((profile) => {
+          const currentUser = useAuthStore.getState().user
+          const destination = redirectTo && redirectTo.startsWith('/')
+            ? redirectTo
+            : useAuthStore.getState().isAdmin
+              ? '/admin'
+              : isCompanyAccount(currentUser, profile)
+              ? '/empresa'
+              : getPostLoginPath(profile?.intent)
+          navigate(destination)
+        })
       }
     }
-  }, [user, myProfile, location.pathname, navigate])
+  }, [user, myProfile, location.pathname, navigate, fetchMyProfile])
 
   useEffect(() => {
     if (user?.user_metadata?.name) {
@@ -52,6 +60,8 @@ export default function AuthNotifier() {
   }, [user])
 
   if (!showConfirmedNotice) return null
+
+  const destination = isAdmin ? '/admin' : isCompanyAccount(user, myProfile) ? '/empresa' : getPostLoginPath(myProfile?.intent)
 
   return (
     <div className="bg-emerald-600 text-white py-3.5 px-4 shadow-md sticky top-16 z-40 animate-in slide-in-from-top duration-200">
@@ -66,11 +76,11 @@ export default function AuthNotifier() {
         <div className="flex items-center gap-3 flex-shrink-0">
           {location.pathname !== '/crear-perfil' && location.pathname !== '/empresa' && (
             <Link
-              to={isCompanyAccount(user, myProfile) ? '/empresa' : '/crear-perfil?from=registro'}
+              to={destination}
               onClick={() => setShowConfirmedNotice(false)}
               className="py-1.5 px-4 rounded-xl bg-white text-emerald-950 font-heading font-bold text-xs hover:bg-emerald-50 transition-colors shadow-xs flex items-center gap-1.5"
             >
-              {isCompanyAccount(user, myProfile) ? 'Ir a mi espacio Empresa' : 'Completar mi perfil de trabajo'}
+              {destination === '/admin' ? 'Ir a Administración' : destination === '/empresa' ? 'Ir a mi espacio Empresa' : destination === '/buscar' ? 'Ir a buscar profesionales' : destination === '/mis-trabajos' ? 'Ir a mis trabajos' : 'Completar mi perfil de trabajo'}
               <ArrowRight size={13} />
             </Link>
           )}

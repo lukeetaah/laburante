@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
+import { getPostLoginPath } from '@/lib/contextual-navigation'
 import { LogIn, ArrowRight } from 'lucide-react'
 
 export default function Login() {
@@ -29,7 +30,15 @@ export default function Login() {
     } else {
       const profile = await fetchMyProfile()
       const redirectTo = searchParams.get('redirect')
-      navigate(redirectTo && redirectTo.startsWith('/') ? redirectTo : (isCompanyAccount(useAuthStore.getState().user, profile) ? '/empresa' : '/crear-perfil'))
+      const authState = useAuthStore.getState()
+      const destination = redirectTo && redirectTo.startsWith('/')
+        ? redirectTo
+        : authState.isAdmin
+          ? '/admin'
+          : isCompanyAccount(authState.user, profile)
+            ? '/empresa'
+            : getPostLoginPath(profile?.intent)
+      navigate(destination)
     }
   }
 

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CheckCircle2, ArrowRight, Building2 } from 'lucide-react'
+import { getPostLoginPath } from '@/lib/contextual-navigation'
 
 export default function Register() {
   const [searchParams] = useSearchParams()
@@ -27,6 +29,7 @@ export default function Register() {
   const [now, setNow] = useState(() => Date.now())
 
   const signUp = useAuthStore((s) => s.signUp)
+  const fetchMyProfile = useProfileStore((s) => s.fetchMyProfile)
   const navigate = useNavigate()
   const retryStorageKey = email.trim() ? `laburante_signup_retry:${email.trim().toLowerCase()}` : ''
   const signupLockKey = 'laburante_signup_request_lock'
@@ -142,10 +145,9 @@ export default function Register() {
         navigate(redirectTo)
       } else if (isCompany) {
         navigate('/empresa')
-      } else if (intent === 'ofrecer' || intent === 'ambas') {
-        navigate('/crear-perfil?from=registro')
       } else {
-        navigate('/buscar')
+        const persistedProfile = await fetchMyProfile()
+        navigate(getPostLoginPath(persistedProfile?.intent))
       }
     }
   }
