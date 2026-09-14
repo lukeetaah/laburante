@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import Layout from '@/components/layout/Layout'
@@ -19,6 +19,17 @@ import NotFound from '@/pages/NotFound'
 import Companies from '@/pages/Companies'
 import CompanyWorkspace from '@/pages/CompanyWorkspace'
 import { Analytics } from '@vercel/analytics/react'
+import { addAppBreadcrumb } from '@/lib/sentry'
+
+function NavigationBreadcrumb() {
+  const location = useLocation()
+
+  useEffect(() => {
+    addAppBreadcrumb('route_viewed')
+  }, [location.pathname])
+
+  return null
+}
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -29,6 +40,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <NavigationBreadcrumb />
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Home />} />

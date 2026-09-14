@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
 import { dedupeContactMethods } from '@/lib/contact-methods'
+import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 
 export interface SignUpMetadata {
   name: string
@@ -78,6 +79,7 @@ async function ensureUserProfile(user: User | null) {
       }
     }
   } catch (err) {
+    captureAppError(err, 'ensure_user_profile')
     console.warn('ensureUserProfile skipped:', err)
   }
 }
@@ -102,6 +104,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signUp: async (email, password, metadata) => {
+    addAppBreadcrumb('signup_started')
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -138,6 +141,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signIn: async (email, password) => {
+    addAppBreadcrumb('signin_started')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
     if (data.session) {
@@ -155,6 +159,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await supabase.auth.signOut()
     } catch (e) {
+      captureAppError(e, 'signout')
       console.warn('SignOut error:', e)
     }
     set({ user: null, session: null, isAdmin: false })

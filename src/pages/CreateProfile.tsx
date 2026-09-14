@@ -10,6 +10,7 @@ import { formatModality, type WorkModality } from '@/lib/profile-format'
 import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
+import { captureAppError } from '@/lib/sentry'
 
 export default function CreateProfile() {
   const { user, loading: authLoading } = useAuthStore()
@@ -282,6 +283,7 @@ export default function CreateProfile() {
       if (res.error) setError(res.error)
       else if (res.slug) navigate(`/p/${res.slug}`)
     } catch (uploadError: any) {
+      captureAppError(uploadError, 'profile_asset_upload_or_save')
       setSubmitting(false)
       setError(uploadError.message || 'No se pudo procesar el archivo.')
     }

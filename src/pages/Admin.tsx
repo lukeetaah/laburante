@@ -7,6 +7,7 @@ import { SITE_CONFIG } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 import { formatModality } from '@/lib/profile-format'
 import { getProfileCompletion } from '@/lib/profile-completion'
+import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 import {
   ShieldAlert,
   Users,
@@ -70,6 +71,7 @@ export default function Admin() {
   const [jobRequests, setJobRequests] = useState<any[]>([])
 
   const loadData = async () => {
+    addAppBreadcrumb('admin_data_load_started')
     setLoading(true)
     setActionMessage(null)
     try {
@@ -147,6 +149,7 @@ export default function Admin() {
       const delList = await fetchAccountDeletions()
       setDeletions(delList)
     } catch (err) {
+      captureAppError(err, 'admin_data_load')
       console.warn('Error loading admin data:', err)
     }
     setLoading(false)

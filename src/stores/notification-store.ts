@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { InAppNotification } from '@/lib/database.types'
+import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 
 const LOCAL_NOTIFS_KEY = 'laburante_notifications_cache'
 
@@ -44,6 +45,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   unreadCount: 0,
   loading: false,
   fetchNotifications: async () => {
+    addAppBreadcrumb('notifications_fetch_started')
     set({ loading: true })
     try {
       const { data: userData } = await supabase.auth.getUser()
@@ -73,6 +75,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         }
       }
     } catch (e) {
+      captureAppError(e, 'notifications_fetch')
       console.warn('Supabase notifications fetch failed, using cache:', e)
     }
 
@@ -101,6 +104,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         .update({ read: true })
         .eq('id', id)
     } catch (e) {
+      captureAppError(e, 'notification_mark_read')
       console.warn('Failed to update notification read status in DB:', e)
     }
   },
@@ -122,11 +126,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           .eq('user_id', userData.user.id)
       }
     } catch (e) {
+      captureAppError(e, 'notifications_mark_all_read')
       console.warn('Failed to mark all notifications read in DB:', e)
     }
   },
 
   addNotification: async (payload) => {
+    addAppBreadcrumb('notification_create_started')
     const { data: userData } = await supabase.auth.getUser()
     const currentUserId = userData?.user?.id
     const userId = payload.userId || currentUserId || 'anonymous'
@@ -168,6 +174,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         if (error) console.warn('Could not persist notification:', error.message)
       }
     } catch (e) {
+      captureAppError(e, 'notification_create')
       console.warn('Could not insert notification into Supabase:', e)
     }
   },

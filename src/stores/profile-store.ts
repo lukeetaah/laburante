@@ -6,6 +6,7 @@ import { interpretSearch, normalizeSearchText } from '@/lib/search-intent'
 import { CATEGORIES } from '@/data/categories'
 import type { WorkModality } from '@/lib/profile-format'
 import { dedupeContactMethods } from '@/lib/contact-methods'
+import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 
 export interface ProfileWithDetails {
   id: string
@@ -222,6 +223,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   myProfile: null,
   loading: false,
   fetchProfiles: async (filters = {}) => {
+    addAppBreadcrumb('profile_search_started')
     set({ loading: true })
     try {
       let query = (supabase.from('profiles') as any)
@@ -320,12 +322,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       set({ profiles: realProfiles, loading: false })
     } catch (err) {
+      captureAppError(err, 'profile_search')
       console.warn('Error fetching profiles from Supabase:', err)
       set({ profiles: [], loading: false })
     }
   },
 
   fetchProfileBySlug: async (slug: string) => {
+    addAppBreadcrumb('profile_view_started')
     set({ loading: true })
     try {
       // Check Supabase first
@@ -372,6 +376,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       set({ currentProfile: null, loading: false })
       return null
     } catch (err) {
+      captureAppError(err, 'profile_view')
       console.warn('Error fetching profile by slug:', err)
       set({ currentProfile: null, loading: false })
       return null
@@ -429,6 +434,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       set({ myProfile: profile })
       return profile
     } catch (e) {
+      captureAppError(e, 'profile_load_current')
       console.warn('fetchMyProfile error:', e)
       set({ myProfile: null })
       return null
@@ -436,6 +442,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   },
 
   createProfile: async (profileData) => {
+    addAppBreadcrumb('profile_save_started')
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
       if (userError || !userData?.user) {
@@ -579,11 +586,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       return { error: null, slug }
     } catch (err: any) {
+      captureAppError(err, 'profile_save')
       return { error: err.message || 'Error inesperado al guardar el perfil.' }
     }
   },
 
   updateProfileVisibility: async (profileId, status) => {
+    addAppBreadcrumb('profile_visibility_update_started')
     try {
       const now = new Date().toISOString()
       try {
@@ -610,11 +619,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       return { error: null }
     } catch (e: any) {
+      captureAppError(e, 'profile_visibility_update')
       return { error: e.message || 'Error al actualizar visibilidad.' }
     }
   },
 
   verifyWhatsApp: async (profileId, phone, _code) => {
+    addAppBreadcrumb('whatsapp_verification_started')
     try {
       const now = new Date().toISOString()
       // 1. Update localStorage cache
@@ -654,11 +665,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       return { error: null, success: true }
     } catch (e: any) {
+      captureAppError(e, 'whatsapp_verify')
       return { error: e.message || 'Error al verificar el número de WhatsApp.' }
     }
   },
 
   requestWhatsAppVerification: async (profileId, profileName, profileSlug, phoneDeclared) => {
+    addAppBreadcrumb('whatsapp_verification_request_started')
     try {
       const codeDigits = Math.floor(100000 + Math.random() * 900000).toString()
       const code = `LAB-${codeDigits}`
@@ -712,6 +725,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         requestId: newReq.id,
       }
     } catch (e: any) {
+      captureAppError(e, 'whatsapp_verification_request')
       return {
         error: e.message || 'Error al iniciar la solicitud de verificación.',
         officialPhone: SITE_CONFIG.officialWhatsApp,
@@ -720,6 +734,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   },
 
   fetchPendingWhatsAppVerifications: async () => {
+    addAppBreadcrumb('whatsapp_verification_admin_load_started')
     const local = getLocalWARequests()
     try {
       const { data, error } = await (supabase.from('whatsapp_verification_requests') as any)
@@ -745,12 +760,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return validRequests
       }
     } catch (e) {
+      captureAppError(e, 'whatsapp_verification_admin_load')
       console.warn('Supabase fetchPendingWhatsAppVerifications failed, using local:', e)
     }
     return local
   },
 
   adminApproveWhatsAppVerification: async (requestId, profileId, phone) => {
+    addAppBreadcrumb('whatsapp_verification_approval_started')
     try {
       const now = new Date().toISOString()
 
@@ -821,11 +838,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       return { error: null }
     } catch (e: any) {
+      captureAppError(e, 'whatsapp_verification_admin_approve')
       return { error: e.message || 'Error al aprobar la verificación.' }
     }
   },
 
   adminRejectWhatsAppVerification: async (requestId) => {
+    addAppBreadcrumb('whatsapp_verification_rejection_started')
     try {
       const now = new Date().toISOString()
       const local = getLocalWARequests().map((r) =>
@@ -845,6 +864,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       return { error: null }
     } catch (e: any) {
+      captureAppError(e, 'whatsapp_verification_admin_reject')
       return { error: e.message || 'Error al rechazar verificación.' }
     }
   },
@@ -897,6 +917,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       return { error: null, success: true }
     } catch (e: any) {
+      captureAppError(e, 'account_delete')
       return { error: e.message || 'Error al procesar la baja de la cuenta.' }
     }
   },
@@ -919,12 +940,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return merged
       }
     } catch (e) {
+      captureAppError(e, 'account_deletions_load')
       console.warn('Supabase fetchAccountDeletions failed, using cache:', e)
     }
     return local
   },
 
   submitRecommendation: async (profileId, data) => {
+    addAppBreadcrumb('review_submit_started')
     try {
       if (!data.from_name?.trim()) {
         return { error: 'Por favor ingresá tu nombre o iniciales.' }
@@ -979,6 +1002,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       return { error: null }
     } catch (err: any) {
+      captureAppError(err, 'review_submit')
       return { error: err.message || 'Error al guardar la reseña.' }
     }
   },
@@ -990,7 +1014,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       if (error) return { error: error.message }
       set((state) => ({ currentProfile: state.currentProfile ? { ...state.currentProfile, recommendations: state.currentProfile.recommendations?.map((rec) => rec.id === recommendationId ? { ...rec, text: data.text.trim(), context: data.context?.trim() || null } : rec) } : null }))
       return { error: null }
-    } catch (err: any) { return { error: err.message || 'Error al editar la reseña.' } }
+    } catch (err: any) { captureAppError(err, 'review_update'); return { error: err.message || 'Error al editar la reseña.' } }
   },
 
   moderateRecommendation: async (recommendationId, status) => {
@@ -999,7 +1023,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       if (error) return { error: error.message }
       set((state) => ({ currentProfile: state.currentProfile ? { ...state.currentProfile, recommendations: state.currentProfile.recommendations?.map((rec) => rec.id === recommendationId ? { ...rec, status } : rec) } : null }))
       return { error: null }
-    } catch (err: any) { return { error: err.message || 'Error al actualizar la reseña.' } }
+    } catch (err: any) { captureAppError(err, 'review_moderation'); return { error: err.message || 'Error al actualizar la reseña.' } }
   },
 
   deleteRecommendation: async (recommendationId) => {
@@ -1008,7 +1032,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       if (error) return { error: error.message }
       set((state) => ({ currentProfile: state.currentProfile ? { ...state.currentProfile, recommendations: state.currentProfile.recommendations?.filter((rec) => rec.id !== recommendationId) } : null }))
       return { error: null }
-    } catch (err: any) { return { error: err.message || 'Error al eliminar la reseña.' } }
+    } catch (err: any) { captureAppError(err, 'review_delete'); return { error: err.message || 'Error al eliminar la reseña.' } }
   },
 
   submitReport: async (profileId, reason, description) => {
@@ -1021,6 +1045,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       if (error) return { error: error.message }
       return { error: null }
     } catch (err: any) {
+      captureAppError(err, 'profile_report')
       return { error: err.message || 'Error al enviar reporte.' }
     }
   }

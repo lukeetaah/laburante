@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { JobRequest, JobRequestStatus, JobRequestUrgency } from '@/lib/database.types'
 import { useNotificationStore } from '@/stores/notification-store'
+import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 
 export interface JobRequestWithDetails extends JobRequest {
   pro_name?: string
@@ -77,6 +78,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   error: null,
 
   fetchMyRequests: async () => {
+    addAppBreadcrumb('job_requests_load_started')
     set({ loading: true, error: null })
     let currentUserId: string | null = null
     try {
@@ -114,12 +116,14 @@ export const useJobStore = create<JobState>((set, get) => ({
       const filtered = localItems.filter((i) => !userId || i.client_id === userId || !i.client_id)
       set({ clientRequests: filtered, loading: false })
     } catch (err: any) {
+      captureAppError(err, 'job_requests_load')
       console.warn('fetchMyRequests error, using cache:', err)
       set({ clientRequests: getLocalCache(currentUserId), loading: false })
     }
   },
 
   fetchMyJobs: async () => {
+    addAppBreadcrumb('jobs_load_started')
     set({ loading: true, error: null })
     try {
       const { data: userData } = await supabase.auth.getUser()
@@ -144,12 +148,14 @@ export const useJobStore = create<JobState>((set, get) => ({
       const local = getLocalCache(userId).filter((i) => i.profile_id === userId)
       set({ proJobs: local, loading: false })
     } catch (err: any) {
+      captureAppError(err, 'jobs_load')
       console.warn('fetchMyJobs error:', err)
       set({ proJobs: [], loading: false })
     }
   },
 
   createJobRequest: async (payload) => {
+    addAppBreadcrumb('job_request_create_started')
     try {
       const { data: userData } = await supabase.auth.getUser()
       const userId = userData?.user?.id || null
@@ -247,11 +253,13 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       return { error: null, request: record }
     } catch (e: any) {
+      captureAppError(e, 'job_request_create')
       return { error: e.message || 'Error al enviar la solicitud.' }
     }
   },
 
   sendBudget: async (requestId, budget) => {
+    addAppBreadcrumb('budget_send_started')
     try {
       const { data: userData } = await supabase.auth.getUser()
       const actorId = userData.user?.id
@@ -303,6 +311,7 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       return { error: null }
     } catch (e: any) {
+      captureAppError(e, 'budget_send')
       return { error: e.message || 'Error al enviar el presupuesto.' }
     }
   },
@@ -312,6 +321,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   updateJobStatus: async (requestId, newStatus) => {
+    addAppBreadcrumb('job_status_update_started')
     try {
       const { data: userData } = await supabase.auth.getUser()
       const actorId = userData.user?.id
@@ -363,11 +373,13 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       return { error: null }
     } catch (e: any) {
+      captureAppError(e, 'job_status_update')
       return { error: e.message || 'Error al actualizar el estado.' }
     }
   },
 
   cancelJob: async (requestId, reason, cancelledBy) => {
+    addAppBreadcrumb('job_cancel_started')
     try {
       const { data: userData } = await supabase.auth.getUser()
       const actorId = userData.user?.id
@@ -416,11 +428,13 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       return { error: null }
     } catch (e: any) {
+      captureAppError(e, 'job_cancel')
       return { error: e.message || 'Error al cancelar la solicitud.' }
     }
   },
 
   submitOutcome: async (requestId, role, outcome, note) => {
+    addAppBreadcrumb('job_outcome_submit_started')
     try {
       const now = new Date().toISOString()
       const updateData = {
@@ -443,6 +457,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       }))
       return { error: null }
     } catch (e: any) {
+      captureAppError(e, 'job_outcome_submit')
       return { error: e.message || 'No pudimos guardar el resultado del trabajo.' }
     }
   },
