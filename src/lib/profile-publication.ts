@@ -11,12 +11,11 @@ export function hasProviderContent(profile: Pick<ProfileWithDetails, 'skills' | 
 }
 
 // Public eligibility is intentionally separate from profile completion.
-// Missing/null intent preserves the legacy active-profile baseline; it is not an
-// Ofrecer declaration. New Buscar accounts are kept private by authenticated flows.
+// A missing or NULL intent is not an Ofrecer declaration and remains pending
+// review until an explicit intent is persisted.
 export function isProviderProfile(profile: Pick<ProfileWithDetails, 'account_type' | 'status' | 'intent'>) {
-  const intent = normalizeProfileIntent(profile.intent)
+  if (profile.status !== 'activo' || profile.account_type === 'empresa') return false
 
-  return profile.status === 'activo'
-    && profile.account_type !== 'empresa'
-    && intent !== 'buscar'
+  const intent = normalizeProfileIntent(profile.intent)
+  return intent === 'ofrecer' || intent === 'ambas'
 }

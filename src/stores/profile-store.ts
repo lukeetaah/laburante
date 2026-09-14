@@ -259,15 +259,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       let { data, error } = await query
       if (error) {
-        let legacyQuery = (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, updated_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( type, value, is_public ), profile_languages ( language, level, is_public ), recommendations ( id, status )`)
-          .eq('status', 'activo')
-        if (filters.provincia) legacyQuery = legacyQuery.eq('provincia', filters.provincia)
-        if (filters.localidad) legacyQuery = legacyQuery.ilike('localidad', `%${filters.localidad}%`)
-        if (filters.modalidad && filters.modalidad !== 'todas') legacyQuery = legacyQuery.eq('modalidad', filters.modalidad)
-        const legacyResult = await legacyQuery
-        data = legacyResult.data
-        error = legacyResult.error
+        captureAppError(error, 'profile_search_intent_unavailable')
+        set({ profiles: [], loading: false })
+        return
       }
 
       let realProfiles: ProfileWithDetails[] = []
@@ -280,7 +274,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           services: item.services || [],
           contact_methods: dedupeContactMethods(item.contact_methods || []),
           languages: item.profile_languages || [],
-          categories: []
+          categories: [],
         }))
       }
 
@@ -357,12 +351,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         .maybeSingle()
 
       if (error) {
-        const legacyResult = await (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, updated_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
-          .eq('slug', slug)
-          .maybeSingle()
-        data = legacyResult.data
-        error = legacyResult.error
+        captureAppError(error, 'profile_view_intent_unavailable')
+        set({ currentProfile: null, loading: false })
+        return null
       }
 
       if (!error && data) {
@@ -376,7 +367,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           contact_methods: dedupeContactMethods(item.contact_methods || []),
           languages: item.profile_languages || [],
           recommendations: item.recommendations || [],
-          categories: []
+          categories: [],
         }
         set({ currentProfile: fullProfile, loading: false })
         return fullProfile
@@ -437,7 +428,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         contact_methods: dedupeContactMethods(item.contact_methods || []),
         languages: item.profile_languages || [],
         recommendations: item.recommendations || [],
-        categories: []
+        categories: [],
       }
       set({ myProfile: profile })
       return profile
