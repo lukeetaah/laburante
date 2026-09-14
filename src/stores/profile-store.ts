@@ -640,6 +640,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   updateProfileVisibility: async (profileId, status) => {
     addAppBreadcrumb('profile_visibility_update_started')
     try {
+      if (status === 'activo') {
+        const { data: userData } = await supabase.auth.getUser()
+        const ownIntent = normalizeProfileIntent(userData.user?.user_metadata?.intent)
+        if (userData.user?.id === profileId && ownIntent === 'buscar') {
+          return { error: 'Una cuenta configurada para buscar no puede publicarse como proveedor.' }
+        }
+      }
+
       const now = new Date().toISOString()
       const { error } = await (supabase.from('profiles') as any)
         .update({ status, updated_at: now })

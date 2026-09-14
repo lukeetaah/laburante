@@ -244,12 +244,6 @@ export default function CreateProfile() {
       return
     }
 
-    const hasWorkContent = skills.some((s) => s.trim()) || services.some((s) => s.title.trim())
-    if (status === 'activo' && intent !== 'buscar' && !hasWorkContent) {
-      setError('Agregá al menos una habilidad u oficio, o un servicio concreto, para publicar tu perfil como proveedor.')
-      return
-    }
-
     setSubmitting(true)
     setError(null)
 
@@ -312,10 +306,10 @@ export default function CreateProfile() {
         </h1>
         <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] mt-1">
           {isCompletingProviderProfile
-            ? 'Usá este mismo formulario para activar tu perfil de servicios. Tu cuenta actual se conserva y recién vas a aparecer en el buscador cuando declares qué ofrecés.'
+            ? 'Podés aparecer aunque el perfil esté incompleto. Completalo lo más posible para mejorar tus chances de que te elijan.'
             : isEditing
             ? 'Actualizá tus especialidades, servicios, zona de cobertura o datos de contacto.'
-            : 'Completá lo que sabés hacer para que personas de tu zona puedan encontrarte y contactarte. 100% gratuito.'}
+            : 'Completá lo que sabés hacer para mejorar tus chances de que personas de tu zona te encuentren y contacten. 100% gratuito.'}
         </p>
       </div>
 
@@ -355,7 +349,7 @@ export default function CreateProfile() {
             </p>
             <p className="text-amber-800 leading-relaxed text-xs">
               {hasProviderIntent
-                ? 'La intención de ofrecer ya está configurada. Completá los datos requeridos y guardá el perfil como público para aparecer en el buscador de proveedores.'
+                ? 'La intención de ofrecer ya está configurada. Guardá el perfil como público para aparecer; completalo lo más posible para mejorar tus chances.'
                 : 'Tu cuenta existe para buscar o administrar actividad. Completá tus oficios o servicios y guardá el perfil como público para aparecer en el buscador de proveedores.'}
             </p>
           </div>
@@ -371,7 +365,7 @@ export default function CreateProfile() {
               ¡Cuenta creada! Paso 2 de 2: Completá tu perfil profesional
             </p>
             <p className="text-amber-800 leading-relaxed text-xs">
-              Ya precargamos tus datos de contacto iniciales. Solo agregá qué tareas realizás, tu zona habitual y confirmá la publicación para empezar a recibir pedidos de presupuesto.
+              Ya precargamos tus datos de contacto iniciales. Podés confirmar la publicación aunque el perfil esté incompleto; agregá qué tareas realizás, tu zona habitual y tus datos para mejorar tus chances.
             </p>
           </div>
         </div>
@@ -530,8 +524,8 @@ export default function CreateProfile() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {([
                   ['buscar', 'Buscar a alguien', 'Usar la cuenta para encontrar profesionales.'],
-                  ['ofrecer', 'Ofrecer mi trabajo', 'Publicar cuando el perfil esté completo.'],
-                  ['ambas', 'Ambas cosas', 'Buscar y también ofrecer servicios.'],
+                  ['ofrecer', 'Ofrecer mi trabajo', 'Podés aparecer aunque el perfil esté incompleto.'],
+                  ['ambas', 'Ambas cosas', 'Buscar y ofrecer servicios aunque el perfil esté incompleto.'],
                 ] as const).map(([value, title, description]) => (
                   <button
                     key={value}
@@ -549,7 +543,7 @@ export default function CreateProfile() {
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-[var(--color-laburante-text-muted)]">
-                Buscar nunca aparece como proveedor. Ofrecer y Ambas pasan por las mismas reglas de completitud y publicación.
+                Buscar nunca aparece como proveedor. Ofrecer y Ambas pueden aparecer aunque falten datos; completá el perfil para mejorar tus chances.
               </p>
             </div>
           )}
