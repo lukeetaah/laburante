@@ -167,6 +167,9 @@ export default function OrdersDashboard() {
     !(i as any).archived_at && ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(i.status)
   ).length
   const archivedCount = currentList.filter((i) => Boolean((i as any).archived_at)).length
+  const pendingClientCount = clientRequests.filter((item) =>
+    !(item as any).archived_at && ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(item.status)
+  ).length
   const historicalCount = currentList.filter((i) =>
     Boolean((i as any).archived_at) || ['completado', 'cancelado'].includes(i.status)
   ).length
@@ -255,7 +258,7 @@ export default function OrdersDashboard() {
             }`}
           >
             <FileText size={14} />
-            Mis Pedidos ({clientRequests.length})
+            {pendingClientCount > 0 ? `Mis Pedidos (${pendingClientCount})` : 'Mis Pedidos'}
           </button>
 
           <button
@@ -267,7 +270,7 @@ export default function OrdersDashboard() {
             }`}
           >
             <Briefcase size={14} />
-            Trabajos Recibidos ({proJobs.length})
+            Mis Trabajos ({proJobs.length})
           </button>
         </div>
       </div>
@@ -320,9 +323,9 @@ export default function OrdersDashboard() {
             <div
               key={job.id}
               data-request-id={job.id}
-              className={`rounded-2xl border bg-[var(--color-laburante-surface)] p-4 sm:p-5 space-y-4 shadow-xs relative overflow-hidden ${
-                selectedJobId === job.id ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-[var(--color-laburante-border)]'
-              }`}
+                className={`rounded-2xl border bg-[var(--color-laburante-surface)] p-4 sm:p-5 space-y-4 shadow-xs relative overflow-hidden ${
+                (job as any).archived_at ? 'border-gray-300 bg-gray-50/80 opacity-75' : 'border-[var(--color-laburante-border)]'
+              } ${selectedJobId === job.id ? 'ring-2 ring-indigo-500/20' : ''}`}
             >
               {/* Card Header */}
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
