@@ -24,10 +24,11 @@ export function isProviderProfile(profile: Pick<ProfileWithDetails, 'account_typ
   if (intent === 'buscar') return false
 
   const isHistorical = isHistoricalProfile(profile)
-  const hasProfessionalContent = hasProviderContent(profile)
+  const hasHistoricalFallbackContent = intent === null && hasProviderContent(profile)
 
   return profile.status === 'activo'
     && profile.account_type !== 'empresa'
-    && hasProfessionalContent
-    && (isHistorical || getProfileCompletion(profile) === 100)
+    && (isHistorical
+      ? intent !== null || hasHistoricalFallbackContent
+      : getProfileCompletion(profile) === 100)
 }
