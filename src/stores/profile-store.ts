@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { WhatsAppVerificationRequest } from '@/lib/database.types'
-import { SITE_CONFIG } from '@/lib/constants'
 import { interpretSearch, normalizeSearchText } from '@/lib/search-intent'
 import { CATEGORIES } from '@/data/categories'
 import type { WorkModality } from '@/lib/profile-format'
 import { dedupeContactMethods } from '@/lib/contact-methods'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
+import { getOperationalSettings } from '@/lib/operational-settings'
+import { isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 
 export interface ProfileWithDetails {
   id: string
@@ -14,6 +15,7 @@ export interface ProfileWithDetails {
   slug: string
   photo_url: string | null
   account_type?: 'persona' | 'empresa'
+  intent?: ProfileIntent | null
   company_plan?: 'gratis' | 'pago'
   resume_url?: string | null
   resume_name?: string | null
@@ -30,6 +32,7 @@ export interface ProfileWithDetails {
   whatsapp_verified_at?: string | null
   notify_whatsapp?: boolean
   created_at: string
+  updated_at?: string
   categories?: string[]
   skills?: string[]
   services?: { title: string; description: string | null; precio_orientativo?: string | null }[]
@@ -139,6 +142,7 @@ function saveLocalDeletions(data: AccountDeletionRecord[]) {
 
 const WA_REQUESTS_KEY = 'laburante_v2_wa_verification_requests'
 const HYBRID_COLUMN_MISSING_RE = /hybrid_(presencial|remoto)_pct|column .* does not exist|Could not find .*hybrid_/i
+const PROFILE_INTENT_COLUMN_MISSING_RE = /column .*intent.*does not exist|Could not find .*intent.*column|schema cache.*intent/i
 
 function getLocalWARequests(): WhatsAppVerificationRequest[] {
   try {
@@ -168,6 +172,11 @@ function generateUUID(): string {
 
 function withoutHybridPercentages(payload: any) {
   const { hybrid_presencial_pct, hybrid_remoto_pct, ...rest } = payload
+  return rest
+}
+
+function withoutProfileIntent(payload: any) {
+  const { intent, ...rest } = payload
   return rest
 }
 
@@ -229,7 +238,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let query = (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, created_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at, updated_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( type, value, is_public ),
@@ -251,7 +260,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await query
       if (error) {
         let legacyQuery = (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( type, value, is_public ), profile_languages ( language, level, is_public ), recommendations ( id, status )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, updated_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( type, value, is_public ), profile_languages ( language, level, is_public ), recommendations ( id, status )`)
           .eq('status', 'activo')
         if (filters.provincia) legacyQuery = legacyQuery.eq('provincia', filters.provincia)
         if (filters.localidad) legacyQuery = legacyQuery.ilike('localidad', `%${filters.localidad}%`)
@@ -263,11 +272,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       let realProfiles: ProfileWithDetails[] = []
       if (!error && data) {
-        const localWA = getLocalVerifiedWA()
         realProfiles = (data as any[]).map((item: any) => ({
           ...item,
-          whatsapp_verified: Boolean(item.whatsapp_verified || (localWA[item.id] !== undefined)),
-          whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
+          whatsapp_verified: Boolean(item.whatsapp_verified),
+          whatsapp_verified_at: item.whatsapp_verified_at || null,
           skills: item.skills?.map((s: any) => s.name) || [],
           services: item.services || [],
           contact_methods: dedupeContactMethods(item.contact_methods || []),
@@ -275,6 +283,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           categories: []
         }))
       }
+
+      realProfiles = realProfiles.filter(isProviderProfile)
 
       if (filters.category) {
         const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
@@ -336,7 +346,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, created_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
@@ -348,7 +358,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (error) {
         const legacyResult = await (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, updated_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
           .eq('slug', slug)
           .maybeSingle()
         data = legacyResult.data
@@ -357,11 +367,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (!error && data) {
         const item = data as any
-        const localWA = getLocalVerifiedWA()
         const fullProfile: ProfileWithDetails = {
           ...item,
-          whatsapp_verified: Boolean(item.whatsapp_verified || (localWA[item.id] !== undefined)),
-          whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
+          whatsapp_verified: Boolean(item.whatsapp_verified),
+          whatsapp_verified_at: item.whatsapp_verified_at || null,
           skills: item.skills?.map((s: any) => s.name) || [],
           services: item.services || [],
           contact_methods: dedupeContactMethods(item.contact_methods || []),
@@ -394,7 +403,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, created_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
@@ -406,7 +415,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (error) {
         const legacyResult = await (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, updated_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
           .eq('id', userId)
           .maybeSingle()
         data = legacyResult.data ? { ...legacyResult.data, account_type: legacyResult.data.account_type || userData.user.user_metadata?.account_type || userData.user.user_metadata?.accountType } : legacyResult.data
@@ -419,11 +428,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       const item = data as any
-      const localWA = getLocalVerifiedWA()
       const profile: ProfileWithDetails = {
         ...item,
-        whatsapp_verified: Boolean(item.whatsapp_verified || (localWA[item.id] !== undefined)),
-        whatsapp_verified_at: item.whatsapp_verified_at || localWA[item.id]?.at || null,
+        whatsapp_verified: Boolean(item.whatsapp_verified),
+        whatsapp_verified_at: item.whatsapp_verified_at || null,
         skills: item.skills?.map((s: any) => s.name) || [],
         services: item.services || [],
         contact_methods: dedupeContactMethods(item.contact_methods || []),
@@ -452,10 +460,22 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       const userId = userData.user.id
 
       // Check if user already has an existing profile (update vs insert)
-      const { data: existingProfile } = await (supabase.from('profiles') as any)
-        .select('id, slug, status, whatsapp_verified, whatsapp_verified_at')
+      let { data: existingProfile, error: existingProfileError } = await (supabase.from('profiles') as any)
+        .select('id, slug, status, intent, whatsapp_verified, whatsapp_verified_at')
         .eq('id', userId)
         .maybeSingle()
+
+      let intentColumnAvailable = !existingProfileError
+      if (existingProfileError && PROFILE_INTENT_COLUMN_MISSING_RE.test(existingProfileError.message || '')) {
+        const legacyProfile = await (supabase.from('profiles') as any)
+          .select('id, slug, status, whatsapp_verified, whatsapp_verified_at')
+          .eq('id', userId)
+          .maybeSingle()
+        existingProfile = legacyProfile.data
+        existingProfileError = legacyProfile.error
+        intentColumnAvailable = false
+      }
+      if (existingProfileError) return { error: existingProfileError.message }
 
       let slug = existingProfile?.slug
       if (!slug) {
@@ -466,7 +486,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           .replace(/^-+|-+$/g, '') + '-' + Math.random().toString(36).substring(2, 6)
       }
 
-      const targetStatus = profileData.status || existingProfile?.status || 'activo'
+      const explicitIntent = normalizeProfileIntent(profileData.intent)
+      const existingIntent = normalizeProfileIntent(existingProfile?.intent)
+      const intentFromAuth = normalizeProfileIntent(userData.user.user_metadata?.intent)
+      const intentToPersist = explicitIntent || existingIntent || (!intentColumnAvailable || !existingProfile ? intentFromAuth : null)
+      const requestedStatus = profileData.status || existingProfile?.status || 'activo'
+      const targetStatus = !intentColumnAvailable && intentToPersist === 'buscar'
+        ? 'oculto'
+        : requestedStatus
 
       if (existingProfile) {
         // 1. Update Profile
@@ -484,7 +511,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           photo_url: profileData.photo_url || null,
           resume_url: profileData.resume_url || null,
           resume_name: profileData.resume_name || null,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          ...(intentColumnAvailable && intentToPersist ? { intent: intentToPersist } : {})
         }
         if (profileData.notify_whatsapp !== undefined) {
           updatePayload.notify_whatsapp = profileData.notify_whatsapp
@@ -501,12 +529,19 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           profileError = retry.error
         }
 
+        if (profileError && intentColumnAvailable && PROFILE_INTENT_COLUMN_MISSING_RE.test(profileError.message || '')) {
+          const retry = await (supabase.from('profiles') as any)
+            .update(withoutProfileIntent(updatePayload))
+            .eq('id', userId)
+          profileError = retry.error
+        }
+
         if (profileError) return { error: profileError.message }
 
         // Clean previous related records to replace cleanly
-      await (supabase.from('skills') as any).delete().eq('profile_id', userId)
-      await (supabase.from('services') as any).delete().eq('profile_id', userId)
-      await (supabase.from('contact_methods') as any).delete().eq('profile_id', userId)
+        await (supabase.from('skills') as any).delete().eq('profile_id', userId)
+        await (supabase.from('services') as any).delete().eq('profile_id', userId)
+        await (supabase.from('contact_methods') as any).delete().eq('profile_id', userId)
       } else {
         // 1. Insert Profile
         const insertPayload: any = {
@@ -525,7 +560,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           photo_url: profileData.photo_url || null,
           resume_url: profileData.resume_url || null,
           resume_name: profileData.resume_name || null,
-          notify_whatsapp: profileData.notify_whatsapp ?? true
+          notify_whatsapp: profileData.notify_whatsapp ?? true,
+          ...(intentColumnAvailable && intentToPersist ? { intent: intentToPersist } : {})
         }
 
         let { error: profileError } = await (supabase.from('profiles') as any).insert(insertPayload)
@@ -535,7 +571,17 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           profileError = retry.error
         }
 
+        if (profileError && intentColumnAvailable && PROFILE_INTENT_COLUMN_MISSING_RE.test(profileError.message || '')) {
+          const retry = await (supabase.from('profiles') as any).insert(withoutProfileIntent(insertPayload))
+          profileError = retry.error
+        }
+
         if (profileError) return { error: profileError.message }
+      }
+
+      if (explicitIntent && (!intentColumnAvailable || intentFromAuth !== explicitIntent)) {
+        const { error: metadataError } = await supabase.auth.updateUser({ data: { intent: explicitIntent } })
+        if (metadataError && !intentColumnAvailable) return { error: metadataError.message }
       }
 
       await replaceProfileLanguages(userId, profileData.languages || [])
@@ -595,16 +641,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     addAppBreadcrumb('profile_visibility_update_started')
     try {
       const now = new Date().toISOString()
-      try {
-        await (supabase.from('profiles') as any)
-          .update({
-            status,
-            updated_at: now,
-          })
-          .eq('id', profileId)
-      } catch (e) {
-        console.warn('Supabase profile status update error:', e)
-      }
+      const { error } = await (supabase.from('profiles') as any)
+        .update({ status, updated_at: now })
+        .eq('id', profileId)
+      if (error) return { error: error.message }
 
       set((s) => {
         const updateObj = (p: ProfileWithDetails | null) =>
@@ -628,22 +668,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     addAppBreadcrumb('whatsapp_verification_started')
     try {
       const now = new Date().toISOString()
-      // 1. Update localStorage cache
+      const { error } = await (supabase.from('profiles') as any)
+        .update({ whatsapp_verified: true, whatsapp_verified_at: now })
+        .eq('id', profileId)
+      if (error) return { error: error.message }
+
       const localWA = getLocalVerifiedWA()
       localWA[profileId] = { phone, at: now }
       saveLocalVerifiedWA(localWA)
-
-      // 2. Update Supabase if possible
-      try {
-        await (supabase.from('profiles') as any)
-          .update({
-            whatsapp_verified: true,
-            whatsapp_verified_at: now,
-          })
-          .eq('id', profileId)
-      } catch (e) {
-        console.warn('Supabase whatsapp_verified update skipped:', e)
-      }
 
       // 3. Update Zustand state
       set((s) => {
@@ -721,14 +753,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       return {
         error: null,
         code,
-        officialPhone: SITE_CONFIG.officialWhatsApp,
+        officialPhone: (await getOperationalSettings()).officialWhatsApp,
         requestId: newReq.id,
       }
     } catch (e: any) {
       captureAppError(e, 'whatsapp_verification_request')
       return {
         error: e.message || 'Error al iniciar la solicitud de verificación.',
-        officialPhone: SITE_CONFIG.officialWhatsApp,
+        officialPhone: (await getOperationalSettings()).officialWhatsApp,
       }
     }
   },
@@ -770,40 +802,25 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     addAppBreadcrumb('whatsapp_verification_approval_started')
     try {
       const now = new Date().toISOString()
+      const { error: requestError } = await (supabase.from('whatsapp_verification_requests') as any)
+        .update({ status: 'aprobado', reviewed_at: now })
+        .eq('id', requestId)
+      if (requestError) return { error: requestError.message }
 
-      // 1. Update local requests
+      const { error: profileError } = await (supabase.from('profiles') as any)
+        .update({ whatsapp_verified: true, whatsapp_verified_at: now })
+        .eq('id', profileId)
+      if (profileError) return { error: profileError.message }
+
       const local = getLocalWARequests().map((r) =>
         r.id === requestId || (r.profile_id === profileId && r.status === 'pendiente')
           ? { ...r, status: 'aprobado' as const, reviewed_at: now }
           : r
       )
       saveLocalWARequests(local)
-
-      // 2. Update local verified WA
       const localWA = getLocalVerifiedWA()
       localWA[profileId] = { phone, at: now }
       saveLocalVerifiedWA(localWA)
-
-      // 3. Update Supabase request
-      try {
-        await (supabase.from('whatsapp_verification_requests') as any)
-          .update({ status: 'aprobado', reviewed_at: now })
-          .eq('id', requestId)
-      } catch (e) {
-        console.warn('Supabase update request skipped:', e)
-      }
-
-      // 4. Update Supabase profile
-      try {
-        await (supabase.from('profiles') as any)
-          .update({
-            whatsapp_verified: true,
-            whatsapp_verified_at: now,
-          })
-          .eq('id', profileId)
-      } catch (e) {
-        console.warn('Supabase update profile skipped:', e)
-      }
 
       // 5. Update Zustand store
       set((s) => {

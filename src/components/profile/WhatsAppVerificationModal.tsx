@@ -13,7 +13,7 @@ import {
 import { useProfileStore } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNotificationStore } from '@/stores/notification-store'
-import { SITE_CONFIG } from '@/lib/constants'
+import { useOperationalSettings } from '@/lib/operational-settings'
 
 interface WhatsAppVerificationModalProps {
   isOpen: boolean
@@ -35,6 +35,7 @@ export default function WhatsAppVerificationModal({
   const { requestWhatsAppVerification, verifyWhatsApp, adminApproveWhatsAppVerification } = useProfileStore()
   const { isAdmin } = useAuthStore()
   const { addNotification } = useNotificationStore()
+  const { officialWhatsApp } = useOperationalSettings()
 
   const [verificationCode, setVerificationCode] = useState('')
   const [requestId, setRequestId] = useState('')
@@ -91,7 +92,7 @@ export default function WhatsAppVerificationModal({
   const verificationText = `Hola LABURANTE! Envío este mensaje desde mi WhatsApp para certificar la titularidad de mi número (+${cleanPhone}) en mi perfil "${profileName}". Código de verificación: ${verificationCode}`
 
   const handleOpenWhatsApp = () => {
-    const url = `https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent(verificationText)}`
+    const url = `https://wa.me/${officialWhatsApp}?text=${encodeURIComponent(verificationText)}`
     window.open(url, '_blank')
     setStep('waiting')
   }

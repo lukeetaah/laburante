@@ -3,10 +3,14 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore, type AccountDeletionRecord } from '@/stores/profile-store'
 import type { WhatsAppVerificationRequest } from '@/lib/database.types'
-import { SITE_CONFIG } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 import { formatModality } from '@/lib/profile-format'
 import { getProfileCompletion } from '@/lib/profile-completion'
+import { normalizeSearchText } from '@/lib/search-intent'
+import { PROVINCES } from '@/data/provinces'
+import { CATEGORIES } from '@/data/categories'
+import { saveOperationalSetting, useOperationalSettings } from '@/lib/operational-settings'
+import { isProviderProfile, normalizeProfileIntent } from '@/lib/profile-publication'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 import {
   ShieldAlert,
@@ -56,8 +60,12 @@ export default function Admin() {
     adminRejectWhatsAppVerification,
   } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions'>('analytics')
+  const [activeTab, setActiveTab] = useState<'analytics' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions' | 'settings'>('analytics')
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos' | 'incompletos'>('todos')
+  const [adminFilters, setAdminFilters] = useState({
+    query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '',
+    providerKind: 'todos', verification: 'todos', completion: 'todos', dateFrom: '', dateTo: '',
+  })
   const [reports, setReports] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
   const [deletions, setDeletions] = useState<AccountDeletionRecord[]>([])
@@ -69,6 +77,13 @@ export default function Admin() {
   const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [credentialsSaving, setCredentialsSaving] = useState(false)
   const [jobRequests, setJobRequests] = useState<any[]>([])
+  const operationalSettings = useOperationalSettings()
+  const [settingsForm, setSettingsForm] = useState('')
+  const [settingsSaving, setSettingsSaving] = useState(false)
+
+  useEffect(() => {
+    setSettingsForm(operationalSettings.officialWhatsApp)
+  }, [operationalSettings.officialWhatsApp])
 
   const loadData = async () => {
     addAppBreadcrumb('admin_data_load_started')
@@ -88,7 +103,7 @@ export default function Admin() {
       // 2. Fetch all Profiles
       let profilesData: any[] | null = null
       const resProfiles = await (supabase.from('profiles') as any)
-        .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, disponibilidad, account_type, company_plan, photo_url, resume_url, resume_name, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(name), services(title), contact_methods(type,value,is_public)')
+        .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, disponibilidad, account_type, company_plan, photo_url, resume_url, resume_name, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(name), services(title), contact_methods(type,value,is_public)')
         .order('created_at', { ascending: false })
 
       if (resProfiles.error) {
@@ -105,20 +120,13 @@ export default function Admin() {
       const waReqs = await fetchPendingWhatsAppVerifications()
       setWaRequests(waReqs)
 
-      // Local WhatsApp cache hydration
-      let localWA: Record<string, any> = {}
-      try {
-        const raw = localStorage.getItem('laburante_v2_verified_wa')
-        if (raw) localWA = JSON.parse(raw)
-      } catch {}
-
       // Verification requests are audit records, never a source of profiles.
       // Recreating a profile from a stale local request made deleted accounts reappear.
       const allCombined = [...(profilesData || [])]
       const hydrated = allCombined.map((p: any) => ({
         ...p,
         completion_percent: getProfileCompletion({ ...p, skills: p.skills || [], services: p.services || [], contact_methods: p.contact_methods || [] }),
-        whatsapp_verified: Boolean(p.whatsapp_verified || (localWA[p.id] !== undefined)),
+        whatsapp_verified: Boolean(p.whatsapp_verified),
       }))
       setProfiles(hydrated)
 
@@ -185,7 +193,7 @@ export default function Admin() {
           <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed">
             <li>Registrate o iniciá sesión con tu email.</li>
             <li>En la consola de Supabase, andá a <strong>Authentication → Users</strong>.</li>
-            <li>Buscá tu usuario y en <strong>User Metadata</strong> agregá <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-700">"role": "admin"</code>.</li>
+            <li>Buscá tu usuario y en <strong>App Metadata</strong> agregá <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-700">"role": "admin"</code>.</li>
             <li>Volvé a iniciar sesión y tendrás acceso completo a este panel.</li>
           </ol>
         </div>
@@ -255,7 +263,11 @@ export default function Admin() {
 
   const handleToggleProfileVisibility = async (profileId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'oculto' ? 'activo' : 'oculto'
-    await updateProfileVisibility(profileId, nextStatus)
+    const result = await updateProfileVisibility(profileId, nextStatus)
+    if (result.error) {
+      setActionMessage(`No se pudo actualizar la visibilidad: ${result.error}`)
+      return
+    }
     setProfiles((prev) =>
       prev.map((p) => (p.id === profileId ? { ...p, status: nextStatus } : p))
     )
@@ -269,15 +281,15 @@ export default function Admin() {
   const handleToggleWhatsAppVerified = async (profileId: string, currentVerified: boolean) => {
     const nextVal = !currentVerified
     const now = new Date().toISOString()
-    try {
-      await (supabase.from('profiles') as any)
-        .update({
-          whatsapp_verified: nextVal,
-          whatsapp_verified_at: nextVal ? now : null,
-        })
-        .eq('id', profileId)
-    } catch (e) {
-      console.warn('Supabase update error:', e)
+    const { error } = await (supabase.from('profiles') as any)
+      .update({
+        whatsapp_verified: nextVal,
+        whatsapp_verified_at: nextVal ? now : null,
+      })
+      .eq('id', profileId)
+    if (error) {
+      setActionMessage(`No se pudo actualizar la certificación de WhatsApp: ${error.message}`)
+      return
     }
 
     try {
@@ -422,13 +434,61 @@ export default function Admin() {
   const averageProfileCompletion = profiles.length ? Math.round(profiles.reduce((sum, profile) => sum + (profile.completion_percent || 0), 0) / profiles.length) : 0
 
   const filteredProfiles = profiles.filter((p) => {
-    if (profileFilter === 'activos') return p.status === 'activo'
-    if (profileFilter === 'privados') return p.status === 'oculto'
-    if (profileFilter === 'verificados') return p.whatsapp_verified === true
-    if (profileFilter === 'suspendidos') return p.status === 'suspendido'
-    if (profileFilter === 'incompletos') return p.completion_percent < 100
+    if (profileFilter === 'activos' && p.status !== 'activo') return false
+    if (profileFilter === 'privados' && p.status !== 'oculto') return false
+    if (profileFilter === 'verificados' && p.whatsapp_verified !== true) return false
+    if (profileFilter === 'suspendidos' && p.status !== 'suspendido') return false
+    if (profileFilter === 'incompletos' && p.completion_percent >= 100) return false
+    const filters = adminFilters
+    const searchable = normalizeSearchText([p.name, p.slug, p.bio, p.provincia, p.localidad, ...(p.skills || []).map((skill: any) => skill.name), ...(p.services || []).map((service: any) => service.title)].filter(Boolean).join(' '))
+    if (filters.query && !searchable.includes(normalizeSearchText(filters.query))) return false
+    if (filters.provincia && p.provincia !== filters.provincia) return false
+    if (filters.localidad && p.localidad !== filters.localidad) return false
+    if (filters.modalidad && p.modalidad !== filters.modalidad) return false
+    if (filters.disponibilidad && p.disponibilidad !== filters.disponibilidad) return false
+    if (filters.accountType && p.account_type !== filters.accountType) return false
+    const declaredIntent = normalizeProfileIntent(p.intent)
+    const historicalProvider = declaredIntent === null && isProviderProfile({
+      ...p,
+      skills: p.skills || [],
+      services: p.services || [],
+      contact_methods: p.contact_methods || [],
+    })
+    if (filters.providerKind === 'proveedor' && !(declaredIntent === 'ofrecer' || declaredIntent === 'ambas' || historicalProvider)) return false
+    if (filters.providerKind === 'buscar' && declaredIntent !== 'buscar') return false
+    if (filters.providerKind === 'sin_declarar' && declaredIntent !== null) return false
+    if (filters.verification === 'verificado' && !p.whatsapp_verified) return false
+    if (filters.verification === 'pendiente' && p.whatsapp_verified) return false
+    if (filters.completion === 'completo' && p.completion_percent < 100) return false
+    if (filters.completion === 'incompleto' && p.completion_percent >= 100) return false
+    if (filters.dateFrom && new Date(p.created_at) < new Date(`${filters.dateFrom}T00:00:00`)) return false
+    if (filters.dateTo && new Date(p.created_at) > new Date(`${filters.dateTo}T23:59:59`)) return false
+    if (filters.category) {
+      const category = CATEGORIES.find((item) => item.name === filters.category)
+      const categoryText = normalizeSearchText([category?.name, ...(category?.subcategories || [])].filter(Boolean).join(' '))
+      const workText = normalizeSearchText([...(p.skills || []).map((skill: any) => skill.name), ...(p.services || []).map((service: any) => service.title)].join(' '))
+      if (!categoryText.split(' ').some((term) => term.length > 3 && workText.includes(term))) return false
+    }
     return true
   })
+
+  const selectedProvince = PROVINCES.find((province) => province.name === adminFilters.provincia)
+  const setAdminFilter = (key: keyof typeof adminFilters, value: string) => setAdminFilters((current) => ({ ...current, [key]: value }))
+  const resetAdminFilters = () => {
+    setProfileFilter('todos')
+    setAdminFilters({ query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '', providerKind: 'todos', verification: 'todos', completion: 'todos', dateFrom: '', dateTo: '' })
+  }
+  const handleSaveSettings = async () => {
+    const digits = settingsForm.replace(/\D/g, '')
+    if (digits.length < 8) {
+      setActionMessage('Ingresá un número oficial de WhatsApp válido.')
+      return
+    }
+    setSettingsSaving(true)
+    const result = await saveOperationalSetting('official_whatsapp', digits)
+    setSettingsSaving(false)
+    setActionMessage(result.error ? `No se pudo guardar la configuración: ${result.error.message}. Aplicá migration_admin_settings_and_job_archiving.sql.` : 'Configuración operativa guardada. Los nuevos enlaces usarán este número.')
+  }
 
   const handleApproveWA = async (req: WhatsAppVerificationRequest) => {
     const res = await adminApproveWhatsAppVerification(req.id, req.profile_id, req.phone_declared)
@@ -600,6 +660,13 @@ export default function Admin() {
         >
           <Trash2 size={16} />
           Bajas y Motivos ({deletions.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'settings' ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
+        >
+          <KeyRound size={16} /> Configuración
         </button>
       </div>
 
@@ -832,6 +899,28 @@ export default function Admin() {
             ))}
           </div>
 
+          <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/40 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold text-[var(--color-laburante-text)]">Filtros de auditoría</p>
+              <button type="button" onClick={resetAdminFilters} className="text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline">Limpiar filtros</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <input value={adminFilters.query} onChange={(event) => setAdminFilter('query', event.target.value)} placeholder="Nombre, oficio, contacto..." className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs sm:col-span-2" />
+              <select value={adminFilters.accountType} onChange={(event) => setAdminFilter('accountType', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="">Tipo de cuenta</option><option value="persona">Persona</option><option value="empresa">Empresa</option></select>
+              <select value={adminFilters.providerKind} onChange={(event) => setAdminFilter('providerKind', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="todos">Intención: todas</option><option value="proveedor">Ofrece servicios</option><option value="buscar">Solo busca</option><option value="sin_declarar">Sin declarar</option></select>
+              <select value={adminFilters.provincia} onChange={(event) => { setAdminFilter('provincia', event.target.value); setAdminFilter('localidad', '') }} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="">Provincia</option>{PROVINCES.map((province) => <option key={province.name} value={province.name}>{province.name}</option>)}</select>
+              <select value={adminFilters.localidad} onChange={(event) => setAdminFilter('localidad', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="">Localidad</option>{(selectedProvince?.localidades || []).map((localidad) => <option key={localidad} value={localidad}>{localidad}</option>)}</select>
+              <select value={adminFilters.category} onChange={(event) => setAdminFilter('category', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="">Categoría / rubro</option>{CATEGORIES.filter((category) => !category.hidden).map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}</select>
+              <select value={adminFilters.modalidad} onChange={(event) => setAdminFilter('modalidad', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="">Modalidad</option><option value="presencial">Presencial</option><option value="remoto">Remoto</option><option value="ambas">Ambas</option></select>
+              <select value={adminFilters.disponibilidad} onChange={(event) => setAdminFilter('disponibilidad', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="">Disponibilidad</option><option value="disponible">Disponible</option><option value="ocupado">Ocupado</option><option value="no_disponible">No disponible</option></select>
+              <select value={adminFilters.verification} onChange={(event) => setAdminFilter('verification', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="todos">WhatsApp: todos</option><option value="verificado">Verificado</option><option value="pendiente">Sin verificar</option></select>
+              <select value={adminFilters.completion} onChange={(event) => setAdminFilter('completion', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="todos">Completitud: todas</option><option value="completo">100%</option><option value="incompleto">Incompleto</option></select>
+              <label className="flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-[11px] text-[var(--color-laburante-text-muted)]">Desde<input type="date" value={adminFilters.dateFrom} onChange={(event) => setAdminFilter('dateFrom', event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs text-[var(--color-laburante-text)]" /></label>
+              <label className="flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-[11px] text-[var(--color-laburante-text-muted)]">Hasta<input type="date" value={adminFilters.dateTo} onChange={(event) => setAdminFilter('dateTo', event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs text-[var(--color-laburante-text)]" /></label>
+            </div>
+            <p className="text-[11px] text-[var(--color-laburante-text-muted)]">Mostrando {filteredProfiles.length} de {profiles.length} cuentas.</p>
+          </div>
+
           <div className="space-y-3">
             {filteredProfiles.length === 0 ? (
               <div className="p-8 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
@@ -951,6 +1040,22 @@ export default function Admin() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'settings' && (
+        <div className="max-w-2xl space-y-4">
+          <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
+            <div className="flex items-center gap-2 text-indigo-900"><KeyRound size={18} /><h2 className="font-heading text-lg font-bold">Configuración operativa</h2></div>
+            <p className="mt-2 text-xs leading-relaxed text-indigo-950/75">Estos valores se guardan en Supabase y reemplazan los enlaces operativos sin tocar los botones ni la verificación existente.</p>
+          </section>
+          <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5 space-y-3">
+            <label className="block text-xs font-bold text-[var(--color-laburante-text)]">WhatsApp oficial de LABURANTE</label>
+            <input value={settingsForm} onChange={(event) => setSettingsForm(event.target.value)} placeholder="549..." inputMode="tel" className="w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2.5 text-sm" />
+            <p className="text-[11px] text-[var(--color-laburante-text-muted)]">Actual: {operationalSettings.officialWhatsAppFormatted}. Usá el formato internacional, sin espacios ni símbolos.</p>
+            {operationalSettings.source === 'fallback' && <p className="text-[11px] font-semibold text-amber-800">No se pudo confirmar la configuración remota. El valor mostrado es un respaldo integrado y no se considera confirmado por Admin hasta leer Supabase.</p>}
+            <button type="button" onClick={handleSaveSettings} disabled={settingsSaving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"><Save size={14} /> {settingsSaving ? 'Guardando...' : 'Guardar configuración'}</button>
+          </section>
         </div>
       )}
 

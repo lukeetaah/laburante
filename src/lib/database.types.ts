@@ -11,6 +11,7 @@ export type Database = {
           slug: string
           photo_url: string | null
           account_type?: 'persona' | 'empresa'
+          intent?: 'buscar' | 'ofrecer' | 'ambas' | null
           company_plan?: 'gratis' | 'pago'
           resume_url?: string | null
           resume_name?: string | null
@@ -134,6 +135,7 @@ export type Database = {
           professional_outcome: string | null
           outcome_note: string | null
           outcome_updated_at: string | null
+          archived_at?: string | null
           created_at: string
           updated_at: string
         }
@@ -167,6 +169,17 @@ export type Database = {
         }
         Insert: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['notifications']['Insert']>
+      }
+      admin_settings: {
+        Row: {
+          key: string
+          value: string
+          description: string | null
+          is_public: boolean
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['admin_settings']['Row'], 'updated_at'>
+        Update: Partial<Database['public']['Tables']['admin_settings']['Insert']>
       }
       whatsapp_verification_requests: {
         Row: {

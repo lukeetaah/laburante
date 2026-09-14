@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, Building2, Check, Search, ShieldCheck, Users, PlayCircle } from 'lucide-react'
-import { SITE_CONFIG } from '@/lib/constants'
+import { useOperationalSettings } from '@/lib/operational-settings'
 
 const benefits = [
   { icon: Search, title: 'Búsquedas que ahorran tiempo', text: 'Filtrá por rubro, ubicación y modalidad para llegar rápido a perfiles relevantes.' },
@@ -14,6 +14,8 @@ const plans = [
 ]
 
 export default function Companies() {
+  const { officialWhatsApp } = useOperationalSettings()
+
   return (
     <div className="page-enter">
       <section className="border-b border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
@@ -86,7 +88,7 @@ export default function Companies() {
               <div className="mt-14 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-text)] p-6 text-white sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300"><PlayCircle size={15} /> Demo real</p><h2 className="mt-2 font-heading text-xl font-bold">Dos caminos, una red.</h2><p className="mt-1 max-w-xl text-sm leading-relaxed text-white/70">LABURANTE es gratuito para quien ofrece su trabajo. Empresa puede empezar con la cuenta Gratis y solicitar una entrevista para conocer otras posibilidades.</p></div>
-            <a href={`https://wa.me/${SITE_CONFIG.officialWhatsApp}?text=${encodeURIComponent('Hola LABURANTE, quiero coordinar una entrevista para conocer el producto de Empresa.')}`} target="_blank" rel="noopener noreferrer" className="btn-amber inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Coordinar una entrevista <ArrowRight size={16} /></a>
+            <a href={`https://wa.me/${officialWhatsApp}?text=${encodeURIComponent('Hola LABURANTE, quiero coordinar una entrevista para conocer el producto de Empresa.')}`} target="_blank" rel="noopener noreferrer" className="btn-amber inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold">Coordinar una entrevista <ArrowRight size={16} /></a>
           </div>
         </div>
         <div className="mt-14 flex flex-col items-start justify-between gap-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-6 sm:flex-row sm:items-center sm:p-8">

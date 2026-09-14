@@ -11,6 +11,7 @@ import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User,
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 import { captureAppError } from '@/lib/sentry'
+import { hasProviderContent, isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 
 export default function CreateProfile() {
   const { user, loading: authLoading } = useAuthStore()
@@ -29,6 +30,7 @@ export default function CreateProfile() {
   const hybridRemotoPct = 100 - hybridPresencialPct
   const [disponibilidad, setDisponibilidad] = useState<'disponible' | 'ocupado' | 'no_disponible'>('disponible')
   const [status, setStatus] = useState<'activo' | 'oculto'>('activo')
+  const [intent, setIntent] = useState<ProfileIntent | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
@@ -56,6 +58,8 @@ export default function CreateProfile() {
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const isPublishedProvider = myProfile ? isProviderProfile(myProfile) : false
+  const isCompletingProviderProfile = !isEditing || (myProfile ? !hasProviderContent(myProfile) : true)
 
   useEffect(() => {
     if (!user) return
@@ -80,6 +84,7 @@ export default function CreateProfile() {
         }
         setDisponibilidad(existing.disponibilidad || 'disponible')
         setStatus(existing.status === 'oculto' ? 'oculto' : 'activo')
+        setIntent(normalizeProfileIntent(existing.intent) || normalizeProfileIntent(user.user_metadata?.intent) || null)
         setExistingPhotoUrl(existing.photo_url || '')
         setExistingResumeUrl(existing.resume_url || '')
         setExistingResumeName(existing.resume_name || '')
@@ -113,6 +118,7 @@ export default function CreateProfile() {
         if (user.user_metadata.phone) {
           setContactMethods([{ type: 'whatsapp', value: user.user_metadata.phone }])
         }
+        setIntent(normalizeProfileIntent(user.user_metadata.intent))
       }
     })
   }, [user, fetchMyProfile])
@@ -236,6 +242,12 @@ export default function CreateProfile() {
       return
     }
 
+    const hasWorkContent = skills.some((s) => s.trim()) || services.some((s) => s.title.trim())
+    if (status === 'activo' && intent !== 'buscar' && !hasWorkContent) {
+      setError('Agregá al menos una habilidad u oficio, o un servicio concreto, para publicar tu perfil como proveedor.')
+      return
+    }
+
     setSubmitting(true)
     setError(null)
 
@@ -268,6 +280,7 @@ export default function CreateProfile() {
         hybrid_remoto_pct: shouldPersistHybridPercentages ? hybridRemotoPct : null,
         disponibilidad,
         status,
+        intent,
         skills: skills.filter((s) => s.trim()),
         services: services.filter((s) => s.title.trim()),
         contact_methods: contactMethods.filter((c) => c.value.trim()),
@@ -296,7 +309,9 @@ export default function CreateProfile() {
           {isEditing ? 'Editar mi perfil profesional' : 'Ofrecé tu trabajo en LABURANTE'}
         </h1>
         <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] mt-1">
-          {isEditing
+          {isCompletingProviderProfile
+            ? 'Usá este mismo formulario para activar tu perfil de servicios. Tu cuenta actual se conserva y recién vas a aparecer en el buscador cuando declares qué ofrecés.'
+            : isEditing
             ? 'Actualizá tus especialidades, servicios, zona de cobertura o datos de contacto.'
             : 'Completá lo que sabés hacer para que personas de tu zona puedan encontrarte y contactarte. 100% gratuito.'}
         </p>
@@ -309,7 +324,7 @@ export default function CreateProfile() {
       )}
 
       {/* Banner: Editing existing published profile */}
-      {isEditing && myProfile && (
+      {isEditing && myProfile && isPublishedProvider && (
         <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="text-xs sm:text-sm space-y-0.5">
             <p className="font-bold text-indigo-900 flex items-center gap-1.5">
@@ -326,6 +341,18 @@ export default function CreateProfile() {
           >
             Ver mi perfil público →
           </Link>
+        </div>
+      )}
+
+      {isEditing && myProfile && !isPublishedProvider && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
+          <ArrowRight size={20} className="text-amber-700 shrink-0 mt-0.5" />
+          <div className="text-xs sm:text-sm space-y-1">
+            <p className="font-bold text-amber-900">También quiero ofrecer mis servicios</p>
+            <p className="text-amber-800 leading-relaxed text-xs">
+              Tu cuenta existe para buscar o administrar actividad. Completá tus oficios o servicios y guardá el perfil como público para aparecer en el buscador de proveedores.
+            </p>
+          </div>
         </div>
       )}
 
@@ -488,6 +515,38 @@ export default function CreateProfile() {
               </select>
             </div>
           </div>
+
+          {!((myProfile?.account_type || user.user_metadata?.account_type) === 'empresa') && (
+            <div className="pt-3 mt-2 border-t border-[var(--color-laburante-border)]">
+              <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-2">
+                Intención de este perfil
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {([
+                  ['buscar', 'Buscar a alguien', 'Usar la cuenta para encontrar profesionales.'],
+                  ['ofrecer', 'Ofrecer mi trabajo', 'Publicar cuando el perfil esté completo.'],
+                  ['ambas', 'Ambas cosas', 'Buscar y también ofrecer servicios.'],
+                ] as const).map(([value, title, description]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setIntent(value)}
+                    className={`p-3 rounded-2xl border text-left transition-colors ${
+                      intent === value
+                        ? 'border-[var(--color-laburante-indigo)] bg-indigo-50/70 ring-2 ring-indigo-500/20'
+                        : 'border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)]'
+                    }`}
+                  >
+                    <p className="font-heading font-bold text-xs">{title}</p>
+                    <p className="text-[11px] leading-relaxed mt-0.5 opacity-80">{description}</p>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-[var(--color-laburante-text-muted)]">
+                Buscar nunca aparece como proveedor. Ofrecer y Ambas pasan por las mismas reglas de completitud y publicación.
+              </p>
+            </div>
+          )}
 
           {/* Visibility: Public vs Private */}
           <div className="pt-3 mt-2 border-t border-[var(--color-laburante-border)]">

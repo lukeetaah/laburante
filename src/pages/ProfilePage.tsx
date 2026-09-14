@@ -6,10 +6,10 @@ import { useAuthStore } from '@/stores/auth-store'
 import ReportModal from '@/components/profile/ReportModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
 import JobRequestModal from '@/components/jobs/JobRequestModal'
-import { SITE_CONFIG } from '@/lib/constants'
 import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
+import { isProviderProfile } from '@/lib/profile-publication'
 
 const contactLabels: Record<string, string> = { linkedin: 'LinkedIn', portfolio: 'Portfolio' }
 
@@ -111,6 +111,7 @@ export default function ProfilePage() {
 
   const isOwnProfile = user?.id === profile.id
   const isCompanyViewer = isCompanyAccount(user, myProfile)
+  const isPublicProvider = isProviderProfile(profile)
 
   return (
     <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">
@@ -210,7 +211,12 @@ export default function ProfilePage() {
         {/* Action Buttons: Request Budget + Contact + Review + Share */}
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
           {isOwnProfile && <p className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs font-semibold text-indigo-900">Este es tu perfil. Podés editarlo desde Mi perfil; las solicitudes y reseñas se realizan entre cuentas distintas.</p>}
-          {profile.status !== 'oculto' && !isOwnProfile && !isCompanyViewer && (
+          {!isPublicProvider && !isOwnProfile && (
+            <p className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
+              Este perfil todavía no ofrece servicios públicamente en LABURANTE.
+            </p>
+          )}
+          {isPublicProvider && !isOwnProfile && !isCompanyViewer && (
             <>
               <button
                 onClick={() => setJobRequestOpen(true)}
@@ -230,12 +236,13 @@ export default function ProfilePage() {
             </>
           )}
 
-          {profile.status !== 'oculto' && !isOwnProfile && isCompanyViewer && (
+          {isPublicProvider && !isOwnProfile && isCompanyViewer && (
             <div className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs leading-relaxed text-indigo-950">
               <strong>Selección para Empresas:</strong> no necesitás pedir un presupuesto para entrevistar a esta persona. Guardala en un proyecto y enviá una propuesta de entrevista o contratación desde las herramientas de Empresa.
             </div>
           )}
 
+          {isPublicProvider && (
           <button
             onClick={() => setRecommendationOpen(true)}
             className="py-3.5 px-4 rounded-2xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-amber-900 font-heading font-semibold text-xs transition-colors flex items-center gap-1.5"
@@ -244,6 +251,7 @@ export default function ProfilePage() {
             <Star size={15} className="text-amber-500 fill-amber-500" />
             Dejar reseña
           </button>
+          )}
 
           <button
             onClick={handleShare}
@@ -254,7 +262,7 @@ export default function ProfilePage() {
           </button>
 
         </div>
-        <CompanyProfileActions profileId={profile.id} profileName={profile.name} />
+        {isPublicProvider && <CompanyProfileActions profileId={profile.id} profileName={profile.name} />}
         {(profile.contact_methods || []).some((method) => ['linkedin', 'portfolio'].includes(method.type) && method.is_public && method.value) && (
           <div className="mt-4 border-t border-[var(--color-laburante-border)] pt-4">
             <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]"><Link2 size={13} /> Portfolio y LinkedIn</p>
@@ -364,7 +372,7 @@ export default function ProfilePage() {
       )}
 
       {/* Recommendations / Reseñas de trabajo */}
-      <section id="resenas" className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
+      {isPublicProvider && <section id="resenas" className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[var(--color-laburante-border)]">
           <div className="flex items-center gap-2">
             <MessageSquare size={18} className="text-[var(--color-laburante-indigo)]" />
@@ -437,7 +445,7 @@ export default function ProfilePage() {
           </div>
         )}
         {recommendationMessage && <p className="text-xs font-semibold text-indigo-800">{recommendationMessage}</p>}
-      </section>
+      </section>}
 
       {/* Signals of Trust (Honest, not fabricated) */}
       <section className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-xs text-[var(--color-laburante-text-secondary)] space-y-2">
@@ -472,20 +480,20 @@ export default function ProfilePage() {
         profileName={profile.name}
       />
 
-      <RecommendationModal
+      {isPublicProvider && <RecommendationModal
         isOpen={recommendationOpen}
         onClose={() => setRecommendationOpen(false)}
         profileId={profile.id}
         profileName={profile.name}
-      />
+      />}
 
-      <JobRequestModal
+      {isPublicProvider && <JobRequestModal
         isOpen={jobRequestOpen}
         onClose={() => setJobRequestOpen(false)}
         profileId={profile.id}
         profileName={profile.name}
         profileSlug={profile.slug}
-      />
+      />}
     </div>
   )
 }

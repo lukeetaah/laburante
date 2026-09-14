@@ -48,6 +48,7 @@ interface JobState {
   updateJobStatus: (requestId: string, status: JobRequestStatus) => Promise<{ error: string | null }>
   cancelJob: (requestId: string, reason: string, cancelledBy: 'cliente' | 'profesional') => Promise<{ error: string | null }>
   submitOutcome: (requestId: string, role: 'cliente' | 'profesional', outcome: string, note?: string) => Promise<{ error: string | null }>
+  archiveJob: (requestId: string, archived: boolean) => Promise<{ error: string | null }>
 }
 
 const LOCAL_STORAGE_KEY = 'laburante_job_requests_cache'
@@ -195,6 +196,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         professional_outcome: null,
         outcome_note: null,
         outcome_updated_at: null,
+        archived_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         pro_name: payload.pro_name,
@@ -237,7 +239,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           title: 'Solicitud registrada',
           message: `Tu pedido “${record.title}” quedó guardado. Vas a recibir un aviso cuando ${record.pro_name} lo revise o responda.`,
           type: 'job',
-          link: '/mis-trabajos',
+          link: `/mis-trabajos?tab=cliente&pedido=${newId}`,
         })
       }
 
@@ -247,7 +249,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           title: 'Nuevo pedido de presupuesto',
           message: `${record.client_name} necesita ayuda con: ${record.title}. Revisá el pedido y decidí si querés enviar un presupuesto.`,
           type: 'job',
-          link: '/pedidos',
+          link: `/mis-trabajos?tab=profesional&pedido=${newId}`,
         })
       }
 
@@ -305,7 +307,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           title: 'Recibiste un presupuesto',
           message: `Ya podés revisar el presupuesto para “${job.title}” y decidir cómo seguir.`,
           type: 'budget',
-          link: '/pedidos',
+          link: `/mis-trabajos?tab=cliente&pedido=${requestId}`,
         })
       }
 
@@ -367,7 +369,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           title: newStatus === 'aceptado' ? 'Presupuesto aceptado' : 'Actualización de tu solicitud',
           message: messages[newStatus] || `La solicitud “${job?.title || 'de trabajo'}” cambió a ${newStatus}.`,
           type: newStatus === 'aceptado' ? 'budget' : 'status',
-          link: '/pedidos',
+          link: `/mis-trabajos?tab=${actorId === job?.client_id ? 'profesional' : 'cliente'}&pedido=${requestId}`,
         })
       }
 
@@ -422,7 +424,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           title: 'Solicitud cancelada',
           message: `La solicitud “${job?.title || 'de trabajo'}” fue cancelada. Motivo: ${reason.trim() || 'sin detalle'}.`,
           type: 'status',
-          link: '/pedidos',
+          link: `/mis-trabajos?tab=${actorId === job?.client_id ? 'profesional' : 'cliente'}&pedido=${requestId}`,
         })
       }
 
@@ -459,6 +461,38 @@ export const useJobStore = create<JobState>((set, get) => ({
     } catch (e: any) {
       captureAppError(e, 'job_outcome_submit')
       return { error: e.message || 'No pudimos guardar el resultado del trabajo.' }
+    }
+  },
+
+  archiveJob: async (requestId, archived) => {
+    addAppBreadcrumb('job_archive_update_started')
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const archivedAt = archived ? new Date().toISOString() : null
+      const updateData = {
+        archived_at: archivedAt,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error } = await (supabase.from('job_requests') as any)
+        .update(updateData)
+        .eq('id', requestId)
+      if (error) return { error: error.message || 'No se pudo actualizar el archivado.' }
+
+      const local = getLocalCache(userData.user?.id).map((item) =>
+        item.id === requestId ? { ...item, ...updateData } : item
+      )
+      saveLocalCache(local as JobRequestWithDetails[], userData.user?.id)
+
+      set((s) => ({
+        proJobs: s.proJobs.map((item) => item.id === requestId ? { ...item, ...updateData } : item),
+        clientRequests: s.clientRequests.map((item) => item.id === requestId ? { ...item, ...updateData } : item),
+      }))
+
+      return { error: null }
+    } catch (e: any) {
+      captureAppError(e, 'job_archive_update')
+      return { error: e.message || 'No se pudo actualizar el archivado.' }
     }
   },
 }))

@@ -3,6 +3,9 @@ import { supabase } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
 import { dedupeContactMethods } from '@/lib/contact-methods'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
+import { normalizeProfileIntent } from '@/lib/profile-publication'
+
+const PROFILE_INTENT_COLUMN_MISSING_RE = /column .*intent.*does not exist|Could not find .*intent.*column|schema cache.*intent/i
 
 export interface SignUpMetadata {
   name: string
@@ -31,9 +34,8 @@ interface AuthState {
 
 const checkIsAdmin = (user: User | null): boolean => {
   if (!user) return false
-  const userRole = user.user_metadata?.role
   const appRole = (user as any).app_metadata?.role
-  return userRole === 'admin' || appRole === 'admin'
+  return appRole === 'admin'
 }
 
 async function ensureUserProfile(user: User | null) {
@@ -47,6 +49,7 @@ async function ensureUserProfile(user: User | null) {
     if (!existing) {
       const meta = user.user_metadata || {}
       const name = meta.name || user.email?.split('@')[0] || 'Profesional'
+      const intent = normalizeProfileIntent(meta.intent)
       const slug = name
         .toLowerCase()
         .normalize('NFD')
@@ -54,7 +57,7 @@ async function ensureUserProfile(user: User | null) {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') + '-' + user.id.slice(0, 4)
 
-      const { error: profileInsertError } = await (supabase.from('profiles') as any).insert({
+      const profilePayload = {
         id: user.id,
         name,
         slug,
@@ -67,7 +70,19 @@ async function ensureUserProfile(user: User | null) {
         // después de revisar la solicitud desde el panel.
         company_plan: meta.account_type === 'empresa' ? 'gratis' : undefined,
         status: meta.account_type === 'empresa' ? 'oculto' : 'activo',
-      })
+        ...(intent ? { intent } : {}),
+      }
+      let { error: profileInsertError } = await (supabase.from('profiles') as any).insert(profilePayload)
+      if (profileInsertError && PROFILE_INTENT_COLUMN_MISSING_RE.test(profileInsertError.message || '')) {
+        const { intent: _intent, ...legacyPayload } = {
+          ...profilePayload,
+          // Until the additive migration is applied, a new Buscar account
+          // must remain out of the public provider fallback.
+          status: intent === 'buscar' ? 'oculto' : profilePayload.status,
+        }
+        const retry = await (supabase.from('profiles') as any).insert(legacyPayload)
+        profileInsertError = retry.error
+      }
 
       if (!profileInsertError && meta.phone && dedupeContactMethods([{ type: 'whatsapp', value: meta.phone }]).length) {
         await (supabase.from('contact_methods') as any).insert({

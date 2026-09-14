@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Briefcase,
   FileText,
@@ -48,11 +48,13 @@ export default function OrdersDashboard() {
     acceptBudget,
     updateJobStatus,
     submitOutcome,
+    archiveJob,
     loading,
   } = useJobStore()
+  const [searchParams] = useSearchParams()
 
   const [activeTab, setActiveTab] = useState<'cliente' | 'profesional'>('cliente')
-  const [statusFilter, setStatusFilter] = useState<'todos' | 'activos' | 'completados' | 'cancelados'>('todos')
+  const [statusFilter, setStatusFilter] = useState<'activos' | 'completados' | 'cancelados' | 'archivados' | 'todos'>('activos')
   const [activityFilter, setActivityFilter] = useState<'todo' | 'pedidos' | 'empresa'>('todo')
   const [showArchivedCompany, setShowArchivedCompany] = useState(false)
 
@@ -65,6 +67,19 @@ export default function OrdersDashboard() {
   const [companyInquiries, setCompanyInquiries] = useState<any[]>([])
   const [selectedCompanyInquiry, setSelectedCompanyInquiry] = useState<any | null>(null)
   const [archiveMessage, setArchiveMessage] = useState('')
+  const selectedJobId = searchParams.get('pedido')
+  const selectedCompanyInquiryId = searchParams.get('seleccion')
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    const estado = searchParams.get('estado')
+    const actividad = searchParams.get('actividad')
+    if (tab === 'cliente' || tab === 'profesional') setActiveTab(tab)
+    if (estado === 'activos' || estado === 'completados' || estado === 'cancelados' || estado === 'archivados' || estado === 'todos') setStatusFilter(estado)
+    if (actividad === 'todo' || actividad === 'pedidos' || actividad === 'empresa') setActivityFilter(actividad)
+    if (selectedJobId) setStatusFilter('todos')
+    if (selectedCompanyInquiryId) setActivityFilter('empresa')
+  }, [searchParams, selectedJobId, selectedCompanyInquiryId])
 
   useEffect(() => {
     fetchMyRequests()
@@ -85,11 +100,16 @@ export default function OrdersDashboard() {
             ? await (supabase.from('profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', companyIds)
             : { data: [] }
           const companyById = new Map((companies || []).map((company: any) => [company.id, company]))
-          setCompanyInquiries(normalized.map((item: any) => ({ ...item, company: companyById.get(item.company_id) })))
+          const hydrated = normalized.map((item: any) => ({ ...item, company: companyById.get(item.company_id) }))
+          setCompanyInquiries(hydrated)
+          if (selectedCompanyInquiryId) {
+            const selected = hydrated.find((item: any) => item.id === selectedCompanyInquiryId)
+            if (selected) setSelectedCompanyInquiry(selected)
+          }
         })()
       }
     }
-  }, [user, companyAccount, fetchMyRequests, fetchMyJobs, fetchMyProfile])
+  }, [user, companyAccount, fetchMyRequests, fetchMyJobs, fetchMyProfile, selectedCompanyInquiryId])
 
   // If user has a profile, default to professional tab if they have received jobs
   useEffect(() => {
@@ -101,20 +121,36 @@ export default function OrdersDashboard() {
   const currentList = activeTab === 'cliente' ? clientRequests : proJobs
 
   const filteredList = currentList.filter((item) => {
+    const archived = Boolean((item as any).archived_at)
     if (statusFilter === 'activos') {
-      return ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(item.status)
+      return !archived && ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(item.status)
     }
     if (statusFilter === 'completados') {
-      return item.status === 'completado'
+      return !archived && item.status === 'completado'
     }
     if (statusFilter === 'cancelados') {
-      return item.status === 'cancelado'
+      return !archived && item.status === 'cancelado'
+    }
+    if (statusFilter === 'archivados') {
+      return archived
     }
     return true
+  }).sort((a, b) => {
+    const priority = (item: JobRequestWithDetails) => {
+      if ((item as any).archived_at) return 3
+      if (['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(item.status)) return 0
+      if (item.status === 'completado') return 1
+      return 2
+    }
+    return priority(a) - priority(b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 
   const activeCount = currentList.filter((i) =>
-    ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(i.status)
+    !(i as any).archived_at && ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(i.status)
+  ).length
+  const archivedCount = currentList.filter((i) => Boolean((i as any).archived_at)).length
+  const historicalCount = currentList.filter((i) =>
+    Boolean((i as any).archived_at) || ['completado', 'cancelado'].includes(i.status)
   ).length
 
   const handleOpenWhatsApp = (phone: string, text: string) => {
@@ -133,6 +169,15 @@ export default function OrdersDashboard() {
     if (!result.error) setOutcomeModal(null)
   }
 
+  const handleArchiveJob = async (jobId: string, archived: boolean) => {
+    const result = await archiveJob(jobId, archived)
+    if (result.error) {
+      setArchiveMessage(`${result.error} Aplicá migration_admin_settings_and_job_archiving.sql en Supabase.`)
+    } else {
+      setArchiveMessage(archived ? 'Pedido archivado. Sigue disponible desde el filtro Archivados.' : 'Pedido restaurado a la vista principal.')
+    }
+  }
+
   const respondToCompanyInquiry = async (inquiry: any, status: 'aceptada' | 'rechazada') => {
     if (!user) return
     const { error } = await (supabase.from('company_candidate_inquiries') as any).update({ status, updated_at: new Date().toISOString() }).eq('id', inquiry.id).eq('profile_id', user.id)
@@ -144,7 +189,7 @@ export default function OrdersDashboard() {
       title: status === 'aceptada' ? 'Aceptaron tu propuesta' : 'No avanzarán con tu propuesta',
       message: status === 'aceptada' ? 'La persona aceptó conversar. Podés coordinar la entrevista y completar tu proceso interno de proveedor.' : 'La persona rechazó esta propuesta por ahora.',
       type: 'status',
-      link: '/empresa',
+      link: `/empresa?seleccion=${encodeURIComponent(inquiry.id)}`,
     })
   }
 
@@ -223,7 +268,7 @@ export default function OrdersDashboard() {
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[var(--color-laburante-border)]">
         <div className="flex items-center gap-2">
-          {(['todos', 'activos', 'completados', 'cancelados'] as const).map((filterKey) => (
+          {(['activos', 'completados', 'cancelados', 'archivados', 'todos'] as const).map((filterKey) => (
             <button
               key={filterKey}
               onClick={() => setStatusFilter(filterKey)}
@@ -243,22 +288,29 @@ export default function OrdersDashboard() {
             {activeCount} {activeCount === 1 ? 'trabajo activo' : 'trabajos activos'}
           </span>
         )}
+        {archivedCount > 0 && (
+          <span className="text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-1 rounded-full">
+            {archivedCount} archivado{archivedCount === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
 
       {/* Content List */}
       {filteredList.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {filteredList.map((job) => (
             <div
               key={job.id}
-              className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-6 shadow-xs relative overflow-hidden"
+              className={`rounded-2xl border bg-[var(--color-laburante-surface)] p-4 sm:p-5 space-y-4 shadow-xs relative overflow-hidden ${
+                selectedJobId === job.id ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-[var(--color-laburante-border)]'
+              }`}
             >
               {/* Card Header */}
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs px-2.5 py-0.5 rounded-md font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
-                      {activeTab === 'cliente' ? 'Pedido enviado' : 'Solicitud recibida'}
+                      {(job as any).archived_at ? 'Archivado' : activeTab === 'cliente' ? 'Pedido enviado' : 'Solicitud recibida'}
                     </span>
                     <span className="text-[11px] text-[var(--color-laburante-text-muted)]">
                       {new Date(job.created_at).toLocaleDateString()} a las{' '}
@@ -444,6 +496,25 @@ export default function OrdersDashboard() {
                       Cancelar solicitud
                     </button>
                   )}
+                  {(job as any).archived_at ? (
+                    <button
+                      type="button"
+                      onClick={() => handleArchiveJob(job.id, false)}
+                      className="py-2.5 px-3 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 ml-auto inline-flex items-center gap-1.5"
+                    >
+                      <Archive size={14} /> Desarchivar
+                    </button>
+                  ) : (
+                    ['completado', 'cancelado'].includes(job.status) && (
+                      <button
+                        type="button"
+                        onClick={() => handleArchiveJob(job.id, true)}
+                        className="py-2.5 px-3 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 ml-auto inline-flex items-center gap-1.5"
+                      >
+                        <Archive size={14} /> Archivar
+                      </button>
+                    )
+                  )}
                 </div>
               )}
 
@@ -502,6 +573,25 @@ export default function OrdersDashboard() {
                       Trabajo completado exitosamente y guardado en tu historial.
                     </div>
                   )}
+                  {(job as any).archived_at ? (
+                    <button
+                      type="button"
+                      onClick={() => handleArchiveJob(job.id, false)}
+                      className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-semibold text-gray-700 inline-flex items-center gap-1.5"
+                    >
+                      <Archive size={14} /> Desarchivar
+                    </button>
+                  ) : (
+                    ['completado', 'cancelado'].includes(job.status) && (
+                      <button
+                        type="button"
+                        onClick={() => handleArchiveJob(job.id, true)}
+                        className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-semibold text-gray-700 inline-flex items-center gap-1.5"
+                      >
+                        <Archive size={14} /> Archivar
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -516,17 +606,25 @@ export default function OrdersDashboard() {
 
           <div className="space-y-1 max-w-sm mx-auto">
             <h3 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
-              {activeTab === 'cliente' ? 'No tenés pedidos registrados' : 'No tenés solicitudes recibidas aún'}
+              {statusFilter === 'activos' && historicalCount > 0
+                ? 'No hay pedidos activos ahora'
+                : activeTab === 'cliente' ? 'No tenés pedidos registrados' : 'No tenés solicitudes recibidas aún'}
             </h3>
             <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
-              {activeTab === 'cliente'
+              {statusFilter === 'activos' && historicalCount > 0
+                ? `Tenés ${historicalCount} ${historicalCount === 1 ? 'pedido histórico' : 'pedidos históricos'} completado${historicalCount === 1 ? '' : 's'} o cancelado${historicalCount === 1 ? '' : 's'}. Cambiá el filtro para consultarlos.`
+                : activeTab === 'cliente'
                 ? 'Cuando solicites un presupuesto a cualquier trabajador desde su perfil, podrás seguir su estado paso a paso aquí.'
                 : 'Asegurate de tener tu perfil profesional activo para que los vecinos puedan enviarte solicitudes directas.'}
             </p>
           </div>
 
           <div className="pt-2">
-            {activeTab === 'cliente' ? (
+            {statusFilter === 'activos' && historicalCount > 0 ? (
+              <button type="button" onClick={() => setStatusFilter('todos')} className="btn-dark py-3 px-6 rounded-xl font-heading font-bold text-xs inline-flex items-center gap-2">
+                Ver historial <ArrowRight size={14} />
+              </button>
+            ) : activeTab === 'cliente' ? (
               <Link to="/buscar" className="btn-dark py-3 px-6 rounded-xl font-heading font-bold text-xs inline-flex items-center gap-2">
                 Buscar trabajadores <ArrowRight size={14} />
               </Link>

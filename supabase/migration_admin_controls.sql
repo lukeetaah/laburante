@@ -6,8 +6,7 @@ SECURITY DEFINER
 SET search_path = public, auth
 AS $$
 BEGIN
-  IF COALESCE(auth.jwt() -> 'user_metadata' ->> 'role', '') <> 'admin'
-     AND COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
+  IF COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
     RAISE EXCEPTION 'Solo un administrador puede eliminar cuentas';
   END IF;
 
@@ -45,8 +44,7 @@ SECURITY DEFINER
 SET search_path = public, auth
 AS $$
 BEGIN
-  IF COALESCE(auth.jwt() -> 'user_metadata' ->> 'role', '') <> 'admin'
-     AND COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
+  IF COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
     RAISE EXCEPTION 'Solo un administrador puede limpiar verificaciones';
   END IF;
   DELETE FROM public.whatsapp_verification_requests AS requests
@@ -61,10 +59,8 @@ DROP POLICY IF EXISTS "Admins can manage categories" ON public.categories;
 CREATE POLICY "Admins can manage categories"
   ON public.categories FOR ALL
   USING (
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
     (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   )
   WITH CHECK (
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
     (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );

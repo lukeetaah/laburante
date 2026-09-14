@@ -25,8 +25,7 @@ SET search_path = public, auth
 AS $$
 DECLARE
   is_admin BOOLEAN := (
-    COALESCE(auth.jwt() -> 'user_metadata' ->> 'role', '') = 'admin'
-    OR COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
+    COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
   );
 BEGIN
   IF NOT is_admin THEN

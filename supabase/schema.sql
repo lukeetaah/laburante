@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     hybrid_presencial_pct SMALLINT,
     hybrid_remoto_pct SMALLINT,
     company_plan TEXT NOT NULL DEFAULT 'gratis' CHECK (company_plan IN ('gratis', 'pago')),
+    intent TEXT CONSTRAINT profiles_intent_valid CHECK (intent IS NULL OR intent IN ('buscar', 'ofrecer', 'ambas')),
     status profile_status NOT NULL DEFAULT 'activo',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -280,7 +281,6 @@ DROP POLICY IF EXISTS "Admins can read all reports" ON public.reports;
 CREATE POLICY "Admins can read all reports"
     ON public.reports FOR SELECT
     USING (
-        (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
         (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     );
 
@@ -288,7 +288,6 @@ DROP POLICY IF EXISTS "Admins can update reports" ON public.reports;
 CREATE POLICY "Admins can update reports"
     ON public.reports FOR UPDATE
     USING (
-        (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
         (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     );
 
@@ -296,7 +295,6 @@ DROP POLICY IF EXISTS "Admins can update any profile" ON public.profiles;
 CREATE POLICY "Admins can update any profile"
     ON public.profiles FOR UPDATE
     USING (
-        (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
         (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     );
 
@@ -310,8 +308,7 @@ SET search_path = public, auth
 AS $$
 DECLARE
   is_admin BOOLEAN := (
-    COALESCE(auth.jwt() -> 'user_metadata' ->> 'role', '') = 'admin'
-    OR COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
+    COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
   );
 BEGIN
   IF NOT is_admin THEN
@@ -367,6 +364,7 @@ CREATE TABLE IF NOT EXISTS public.job_requests (
     budget_created_at TIMESTAMPTZ,
     cancel_reason TEXT,
     cancelled_by TEXT CHECK (cancelled_by IN ('cliente', 'profesional')),
+    archived_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -375,6 +373,7 @@ CREATE TABLE IF NOT EXISTS public.job_requests (
 CREATE INDEX IF NOT EXISTS idx_job_requests_profile ON public.job_requests(profile_id);
 CREATE INDEX IF NOT EXISTS idx_job_requests_client ON public.job_requests(client_id);
 CREATE INDEX IF NOT EXISTS idx_job_requests_status ON public.job_requests(status);
+CREATE INDEX IF NOT EXISTS idx_job_requests_archived ON public.job_requests(client_id, profile_id, archived_at);
 
 -- RLS FOR JOB REQUESTS
 ALTER TABLE public.job_requests ENABLE ROW LEVEL SECURITY;
@@ -440,7 +439,39 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notify_whatsapp BOOLEAN NOT
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS profile_completion_reminder_sent_at TIMESTAMPTZ;
 
 -- ==========================================================
--- 11. ACCOUNT DELETIONS TABLE (Registro de bajas con motivos)
+-- 11. OPERATIONAL SETTINGS (Valores públicos editables por Admin)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.admin_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    description TEXT,
+    is_public BOOLEAN NOT NULL DEFAULT false,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read public admin settings" ON public.admin_settings;
+CREATE POLICY "Public read public admin settings"
+    ON public.admin_settings FOR SELECT
+    USING (is_public = true);
+
+DROP POLICY IF EXISTS "Admins manage admin settings" ON public.admin_settings;
+CREATE POLICY "Admins manage admin settings"
+    ON public.admin_settings FOR ALL
+    USING (
+        (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    )
+    WITH CHECK (
+        (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    );
+
+INSERT INTO public.admin_settings (key, value, description, is_public)
+VALUES ('official_whatsapp', '5491178202409', 'Numero oficial usado para verificaciones y contacto administrativo por WhatsApp.', true)
+ON CONFLICT (key) DO NOTHING;
+
+-- ==========================================================
+-- 12. ACCOUNT DELETIONS TABLE (Registro de bajas con motivos)
 -- ==========================================================
 CREATE TABLE IF NOT EXISTS public.account_deletions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

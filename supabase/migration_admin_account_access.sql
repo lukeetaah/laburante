@@ -6,8 +6,7 @@ SECURITY DEFINER
 SET search_path = public, auth
 AS $$
 BEGIN
-  IF COALESCE(auth.jwt() -> 'user_metadata' ->> 'role', '') <> 'admin'
-     AND COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
+  IF COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
     RAISE EXCEPTION 'Solo un administrador puede consultar accesos';
   END IF;
   RETURN (SELECT email FROM auth.users WHERE id = target_user_id);
@@ -21,8 +20,7 @@ SECURITY DEFINER
 SET search_path = public, auth, extensions
 AS $$
 BEGIN
-  IF COALESCE(auth.jwt() -> 'user_metadata' ->> 'role', '') <> 'admin'
-     AND COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
+  IF COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
     RAISE EXCEPTION 'Solo un administrador puede actualizar accesos';
   END IF;
   IF target_user_id IS NULL OR NOT EXISTS (SELECT 1 FROM auth.users WHERE id = target_user_id) THEN

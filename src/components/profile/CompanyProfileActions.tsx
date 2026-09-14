@@ -102,7 +102,7 @@ export default function CompanyProfileActions({ profileId, profileName }: Props)
       title: process === 'entrevista' ? 'Una empresa quiere entrevistarte' : 'Una empresa quiere contratarte',
       message: `${user.user_metadata?.name || 'Una empresa'} ${process === 'entrevista' ? 'quiere coordinar una entrevista' : 'quiere conversar sobre una contratación directa'} para conocerte mejor.${note ? ` Mensaje: ${note}` : ''}`,
       type: 'job',
-      link: '/pedidos',
+      link: `/mis-trabajos?actividad=empresa&seleccion=${encodeURIComponent(data?.id || '')}`,
     })
     setFeedback('Propuesta enviada. La persona recibirá el aviso y podrá responderte desde su cuenta.')
     setMessage('')
@@ -122,7 +122,7 @@ export default function CompanyProfileActions({ profileId, profileName }: Props)
       title: 'Una Empresa actualizó su propuesta',
       message: `${user.user_metadata?.name || 'Una empresa'} refrescó su propuesta de ${process === 'entrevista' ? 'entrevista' : 'contratación'} para que puedas revisarla nuevamente.${note ? ` Mensaje: ${note}` : ''}`,
       type: 'job',
-      link: '/pedidos',
+      link: `/mis-trabajos?actividad=empresa&seleccion=${encodeURIComponent(existingInquiry.id)}`,
     })
     setFeedback('Propuesta refrescada. La persona recibirá el aviso actualizado.')
     setRefreshAvailable(false)

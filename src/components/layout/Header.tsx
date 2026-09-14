@@ -5,11 +5,14 @@ import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
 import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2 } from 'lucide-react'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import { hasProviderContent } from '@/lib/profile-publication'
+import { useNotificationStore } from '@/stores/notification-store'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { user, isAdmin, signOut } = useAuthStore()
   const { myProfile, fetchMyProfile } = useProfileStore()
+  const unreadCount = useNotificationStore((state) => state.unreadCount)
   const [profileChecked, setProfileChecked] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -24,8 +27,10 @@ export default function Header() {
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Mi cuenta'
   const companyAccount = isCompanyAccount(user, myProfile)
-  const showOfferLink = !companyAccount && (!user || (profileChecked && !myProfile))
+  const hasProviderProfile = myProfile ? hasProviderContent(myProfile) : false
+  const showOfferLink = !companyAccount && (!user || (profileChecked && !hasProviderProfile))
   const accountPath = companyAccount ? '/empresa' : '/crear-perfil'
+  const offerLabel = user && myProfile && !hasProviderProfile ? 'También ofrecer servicios' : 'Ofrecer mi trabajo'
 
   useEffect(() => {
     let active = true
@@ -96,6 +101,9 @@ export default function Header() {
             >
               <Briefcase size={16} />
               Mis Trabajos
+              {unreadCount > 0 && (
+                <span className="ml-0.5 h-2 w-2 rounded-full bg-rose-500" aria-label="Hay novedades" />
+              )}
             </Link>
           )}
           <Link
@@ -124,7 +132,7 @@ export default function Header() {
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-laburante-accent)] hover:bg-amber-50 transition-colors"
           >
             <UserPlus size={16} />
-            Ofrecer mi trabajo
+            {offerLabel}
           </Link>}
         </nav>
 
@@ -201,10 +209,16 @@ export default function Header() {
           {companyAccount ? (
             <Link to="/empresa" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
               <Building2 size={16} /> Espacio Empresa
+              {unreadCount > 0 && (
+                <span className="ml-auto h-2 w-2 rounded-full bg-rose-500" aria-label="Hay novedades" />
+              )}
             </Link>
           ) : (
             <Link to="/mis-trabajos" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
               <Briefcase size={16} /> Mis Trabajos
+              {unreadCount > 0 && (
+                <span className="ml-auto h-2 w-2 rounded-full bg-rose-500" aria-label="Hay novedades" />
+              )}
             </Link>
           )}
           <Link to="/como-funciona" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
@@ -214,7 +228,7 @@ export default function Header() {
             <Building2 size={16} /> Empresas
           </Link>}
           {showOfferLink && <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-accent)] font-medium">
-            <UserPlus size={16} /> Ofrecer mi trabajo
+            <UserPlus size={16} /> {offerLabel}
           </Link>}
           {isAdmin && (
             <Link to="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-indigo-700 font-bold bg-indigo-50/70">

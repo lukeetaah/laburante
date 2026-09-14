@@ -175,7 +175,7 @@ export default function Register() {
             <ol className="list-decimal list-inside space-y-1.5 pl-1 leading-relaxed text-[11px]">
               <li>Ingresá con tu correo y contraseña.</li>
               <li>{isCompany ? 'Ingresá al espacio de Empresa y elegí cómo empezar.' : 'Completá los datos de tu perfil profesional (oficios, fotos y contacto).'}</li>
-              <li>{isCompany ? 'Probá la búsqueda gratuita y activá un plan cuando necesites más capacidad.' : 'Tu perfil quedará publicado de inmediato para que te contacten.'}</li>
+              <li>{isCompany ? 'Probá la búsqueda gratuita y activá un plan cuando necesites más capacidad.' : 'Completá el mismo formulario de perfil y publicalo cuando esté completo y quieras ofrecer tu trabajo.'}</li>
             </ol>
           </div>
 

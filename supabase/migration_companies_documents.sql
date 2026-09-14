@@ -26,7 +26,6 @@ ALTER TABLE public.company_saved_profiles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Admins read all profiles" ON public.profiles;
 CREATE POLICY "Admins read all profiles" ON public.profiles FOR SELECT USING (
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
   (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
 );
 
