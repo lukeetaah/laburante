@@ -28,6 +28,7 @@ import JobStatusStepper from '@/components/jobs/JobStatusStepper'
 import BudgetModal from '@/components/jobs/BudgetModal'
 import CancelJobModal from '@/components/jobs/CancelJobModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
+import ReportModal from '@/components/profile/ReportModal'
 import OutcomeModal from '@/components/jobs/OutcomeModal'
 import type { JobRequestStatus } from '@/lib/database.types'
 import { supabase } from '@/lib/supabase'
@@ -65,6 +66,7 @@ export default function OrdersDashboard() {
   const [reviewModalJob, setReviewModalJob] = useState<JobRequestWithDetails | null>(null)
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
   const [outcomeModal, setOutcomeModal] = useState<{ job: JobRequestWithDetails; role: 'cliente' | 'profesional'; blocking?: boolean } | null>(null)
+  const [reportJob, setReportJob] = useState<{ job: JobRequestWithDetails; profileId: string; profileName: string } | null>(null)
   const [companyInquiries, setCompanyInquiries] = useState<any[]>([])
   const [selectedCompanyInquiry, setSelectedCompanyInquiry] = useState<any | null>(null)
   const [archiveMessage, setArchiveMessage] = useState('')
@@ -201,16 +203,16 @@ export default function OrdersDashboard() {
 
   const respondToCompanyInquiry = async (inquiry: any, status: 'aceptada' | 'rechazada') => {
     if (!user) return
-    const { error } = await (supabase.from('company_candidate_inquiries') as any).update({ status, updated_at: new Date().toISOString() }).eq('id', inquiry.id).eq('profile_id', user.id)
+    const operationAt = new Date().toISOString()
+    const { error } = await (supabase.from('company_candidate_inquiries') as any).update({ status, updated_at: operationAt }).eq('id', inquiry.id).eq('profile_id', user.id)
     if (error) return
     setCompanyInquiries((items) => items.map((item) => item.id === inquiry.id ? { ...item, status } : item))
     setSelectedCompanyInquiry(null)
     await useNotificationStore.getState().addNotification({
-      userId: inquiry.company_id,
-      title: status === 'aceptada' ? 'Aceptaron tu propuesta' : 'No avanzarán con tu propuesta',
-      message: status === 'aceptada' ? 'La persona aceptó conversar. Podés coordinar la entrevista y completar tu proceso interno de proveedor.' : 'La persona rechazó esta propuesta por ahora.',
-      type: 'status',
-      link: `/empresa?seleccion=${encodeURIComponent(inquiry.id)}`,
+      kind: 'company_candidate_inquiry',
+      inquiryId: inquiry.id,
+      event: 'responded',
+      operationAt,
     })
   }
 
@@ -518,6 +520,13 @@ export default function OrdersDashboard() {
                       Cancelar solicitud
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setReportJob({ job, profileId: job.profile_id, profileName: job.pro_name || 'Profesional' })}
+                    className="py-2.5 px-3 rounded-xl border border-rose-200 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                  >
+                    <AlertTriangle size={13} className="inline-block mr-1" /> Reportar problema
+                  </button>
                   {(job as any).archived_at ? (
                     <button
                       type="button"
@@ -594,6 +603,15 @@ export default function OrdersDashboard() {
                       <CheckCircle2 size={16} className="text-emerald-600" />
                       Trabajo completado exitosamente y guardado en tu historial.
                     </div>
+                  )}
+                  {job.client_id && (
+                    <button
+                      type="button"
+                      onClick={() => setReportJob({ job, profileId: job.client_id as string, profileName: job.client_name })}
+                      className="rounded-xl border border-rose-200 px-4 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                    >
+                      <AlertTriangle size={13} className="mr-1 inline-block" /> Reportar problema
+                    </button>
                   )}
                   {(job as any).archived_at ? (
                     <button
@@ -706,6 +724,17 @@ export default function OrdersDashboard() {
           profileName={reviewModalJob.pro_name || 'Profesional'}
           isOpen={true}
           onClose={() => setReviewModalJob(null)}
+        />
+      )}
+
+      {reportJob && (
+        <ReportModal
+          isOpen={true}
+          onClose={() => setReportJob(null)}
+          profileId={reportJob.profileId}
+          profileName={reportJob.profileName}
+          jobRequestId={reportJob.job.id}
+          jobRequestLabel={reportJob.job.title}
         />
       )}
     </div>

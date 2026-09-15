@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useSearchParams, useLocation } from 'react-router-dom'
-import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages } from 'lucide-react'
+import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages, Edit3 } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
 import ReportModal from '@/components/profile/ReportModal'
 import RecommendationModal from '@/components/profile/RecommendationModal'
 import JobRequestModal from '@/components/jobs/JobRequestModal'
 import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
+import EmailPreferencesToggle from '@/components/notifications/EmailPreferencesToggle'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
 import { isProviderProfile } from '@/lib/profile-publication'
@@ -217,7 +218,27 @@ export default function ProfilePage() {
 
         {/* Action Buttons: Request Budget + Contact + Review + Share */}
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
-          {isOwnProfile && <p className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs font-semibold text-indigo-900">Este es tu perfil. Podés editarlo desde Mi perfil; las solicitudes y reseñas se realizan entre cuentas distintas.</p>}
+          {isOwnProfile && (
+            <div className="w-full space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 text-xs">
+                <div className="space-y-0.5">
+                  <p className="font-bold text-indigo-950 font-heading">Estás viendo tu propio perfil</p>
+                  <p className="text-indigo-800 leading-relaxed">
+                    Podés actualizar tu información, servicios y fotos cuando quieras. Las solicitudes y reseñas se realizan entre cuentas distintas.
+                  </p>
+                </div>
+                <Link
+                  to="/crear-perfil"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-900 text-white font-heading font-bold text-xs hover:bg-indigo-950 transition-colors shrink-0 shadow-xs"
+                >
+                  <Edit3 size={13} />
+                  <span>Editar mi perfil</span>
+                </Link>
+              </div>
+
+              <EmailPreferencesToggle variant="inline" />
+            </div>
+          )}
           {!isPublicProvider && !isOwnProfile && (
             <p className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
               Este perfil todavía no ofrece servicios públicamente en LABURANTE.

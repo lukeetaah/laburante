@@ -92,17 +92,16 @@ export default function CompanyProfileActions({ profileId, profileName }: Props)
       profile_id: profileId,
       process_type: process,
       message: note || null,
-    }).select('id').single()
+    }).select('id, created_at, updated_at').single()
     if (error) {
       setFeedback(error.message?.includes('company_candidate_inquiries') ? 'Falta aplicar la migración de selección Empresa en Supabase.' : 'No se pudo enviar la propuesta. Intentá nuevamente.')
       return
     }
     await useNotificationStore.getState().addNotification({
-      userId: profileId,
-      title: process === 'entrevista' ? 'Una empresa quiere entrevistarte' : 'Una empresa quiere contratarte',
-      message: `${user.user_metadata?.name || 'Una empresa'} ${process === 'entrevista' ? 'quiere coordinar una entrevista' : 'quiere conversar sobre una contratación directa'} para conocerte mejor.${note ? ` Mensaje: ${note}` : ''}`,
-      type: 'job',
-      link: `/mis-trabajos?actividad=empresa&seleccion=${encodeURIComponent(data?.id || '')}`,
+      kind: 'company_candidate_inquiry',
+      inquiryId: data.id,
+      event: 'created',
+      operationAt: data.created_at,
     })
     setFeedback('Propuesta enviada. La persona recibirá el aviso y podrá responderte desde su cuenta.')
     setMessage('')
@@ -112,17 +111,17 @@ export default function CompanyProfileActions({ profileId, profileName }: Props)
   const refreshProposal = async () => {
     if (!user || !existingInquiry || existingInquiry.status !== 'pendiente') return
     const note = message.trim()
+    const operationAt = new Date().toISOString()
     const { error } = await (supabase.from('company_candidate_inquiries') as any)
-      .update({ process_type: process, message: note || null, status: 'pendiente', archived_at: null, updated_at: new Date().toISOString() })
+      .update({ process_type: process, message: note || null, status: 'pendiente', archived_at: null, updated_at: operationAt })
       .eq('id', existingInquiry.id)
       .eq('company_id', user.id)
     if (error) return setFeedback('No se pudo refrescar la propuesta. Intentá nuevamente.')
     await useNotificationStore.getState().addNotification({
-      userId: profileId,
-      title: 'Una Empresa actualizó su propuesta',
-      message: `${user.user_metadata?.name || 'Una empresa'} refrescó su propuesta de ${process === 'entrevista' ? 'entrevista' : 'contratación'} para que puedas revisarla nuevamente.${note ? ` Mensaje: ${note}` : ''}`,
-      type: 'job',
-      link: `/mis-trabajos?actividad=empresa&seleccion=${encodeURIComponent(existingInquiry.id)}`,
+      kind: 'company_candidate_inquiry',
+      inquiryId: existingInquiry.id,
+      event: 'refreshed',
+      operationAt,
     })
     setFeedback('Propuesta refrescada. La persona recibirá el aviso actualizado.')
     setRefreshAvailable(false)

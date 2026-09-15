@@ -7,11 +7,12 @@ import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
 import { normalizeSearchText } from '@/lib/search-intent'
 import { formatModality, type WorkModality } from '@/lib/profile-format'
-import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages, Mail } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 import { captureAppError } from '@/lib/sentry'
 import { hasProviderContent, isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
+import { loadEmailNotificationsEnabled, saveEmailNotificationsEnabled } from '@/lib/notification-preferences'
 
 export default function CreateProfile() {
   const { user, loading: authLoading } = useAuthStore()
@@ -55,6 +56,7 @@ export default function CreateProfile() {
 
   // Explicit voluntary consent checkbox (CRITICAL REQUIREMENT)
   const [consentGranted, setConsentGranted] = useState(false)
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true)
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,6 +67,8 @@ export default function CreateProfile() {
 
   useEffect(() => {
     if (!user) return
+
+    void loadEmailNotificationsEnabled(user.id).then(setEmailNotificationsEnabled)
 
     fetchMyProfile().then((existing) => {
       if (existing) {
@@ -290,7 +294,14 @@ export default function CreateProfile() {
       setSubmitting(false)
 
       if (res.error) setError(res.error)
-      else if (res.slug) navigate(`/p/${res.slug}`)
+      else if (res.slug) {
+        const preferenceResult = await saveEmailNotificationsEnabled(user.id, emailNotificationsEnabled)
+        if (preferenceResult.error) {
+          setError(`El perfil se guardó, pero no pudimos guardar la preferencia de emails: ${preferenceResult.error}`)
+          return
+        }
+        navigate(`/p/${res.slug}`)
+      }
     } catch (uploadError: any) {
       captureAppError(uploadError, 'profile_asset_upload_or_save')
       setSubmitting(false)
@@ -828,6 +839,24 @@ export default function CreateProfile() {
               </span>
             </label>
           </div>
+        </section>
+
+        <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
+          <div className="flex items-center gap-2 border-b border-[var(--color-laburante-border)] pb-2">
+            <Mail size={17} className="text-[var(--color-laburante-indigo)]" />
+            <h2 className="font-heading text-base font-bold text-[var(--color-laburante-text)]">Notificaciones por email</h2>
+          </div>
+          <label className="flex items-start gap-3 cursor-pointer rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-4">
+            <input
+              type="checkbox"
+              checked={emailNotificationsEnabled}
+              onChange={(event) => setEmailNotificationsEnabled(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-[var(--color-laburante-border)] text-[var(--color-laburante-indigo)] focus:ring-0 cursor-pointer"
+            />
+            <span className="text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">
+              Recibir también por email las novedades importantes de tu cuenta. La campanita de LABURANTE sigue funcionando aunque desactives esta opción.
+            </span>
+          </label>
         </section>
 
         {/* Submit Button */}

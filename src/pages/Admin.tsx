@@ -11,6 +11,7 @@ import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
 import { saveOperationalSetting, useOperationalSettings } from '@/lib/operational-settings'
 import { isProviderProfile, normalizeProfileIntent } from '@/lib/profile-publication'
+import { useNotificationStore } from '@/stores/notification-store'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 import {
   ShieldAlert,
@@ -37,6 +38,9 @@ import {
   TrendingUp,
   KeyRound,
   Mail,
+  ClipboardList,
+  Archive,
+  DollarSign,
 } from 'lucide-react'
 
 const REASON_LABELS: Record<string, string> = {
@@ -60,7 +64,7 @@ export default function Admin() {
     adminRejectWhatsAppVerification,
   } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions' | 'settings'>('analytics')
+  const [activeTab, setActiveTab] = useState<'analytics' | 'jobs' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions' | 'settings'>('analytics')
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos' | 'incompletos'>('todos')
   const [adminFilters, setAdminFilters] = useState({
     query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '',
@@ -77,6 +81,7 @@ export default function Admin() {
   const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [credentialsSaving, setCredentialsSaving] = useState(false)
   const [jobRequests, setJobRequests] = useState<any[]>([])
+  const [selectedJob, setSelectedJob] = useState<any | null>(null)
   const operationalSettings = useOperationalSettings()
   const [settingsForm, setSettingsForm] = useState('')
   const [settingsSaving, setSettingsSaving] = useState(false)
@@ -91,14 +96,23 @@ export default function Admin() {
     setActionMessage(null)
     try {
       // 1. Fetch Reports
-      const { data: reportsData } = await (supabase.from('reports') as any)
+      const reportsResult = await (supabase.from('reports') as any)
         .select(`
-          id, reason, description, status, created_at, profile_id,
+          id, reason, description, status, created_at, profile_id, reporter_id, job_request_id,
           profiles ( name, slug, status, localidad, provincia )
         `)
         .order('created_at', { ascending: false })
 
-      if (reportsData) setReports(reportsData)
+      let loadedReports = reportsResult.data || []
+      if (reportsResult.error) {
+        const legacyReports = await (supabase.from('reports') as any)
+          .select(`
+            id, reason, description, status, created_at, profile_id, reporter_id,
+            profiles ( name, slug, status, localidad, provincia )
+          `)
+          .order('created_at', { ascending: false })
+        loadedReports = (legacyReports.data || []).map((report: any) => ({ ...report, job_request_id: null }))
+      }
 
       // 2. Fetch all Profiles
       let profilesData: any[] | null = null
@@ -114,6 +128,12 @@ export default function Admin() {
       } else {
         profilesData = resProfiles.data
       }
+
+      const profileById = new Map((profilesData || []).map((profile: any) => [profile.id, profile]))
+      setReports(loadedReports.map((report: any) => ({
+        ...report,
+        reporter: report.reporter_id ? profileById.get(report.reporter_id) : null,
+      })))
 
       // 3. Fetch WhatsApp verification requests
       await (supabase.rpc as any)('admin_cleanup_orphan_verifications')
@@ -133,15 +153,11 @@ export default function Admin() {
       await Promise.all(hydrated
         .filter((p: any) => Object.prototype.hasOwnProperty.call(p, 'profile_completion_reminder_sent_at') && p.completion_percent < 70 && !p.profile_completion_reminder_sent_at)
         .map(async (p: any) => {
-          const { error: notificationError } = await (supabase.from('notifications') as any).insert({
-            user_id: p.id,
-            title: 'Completá tu perfil y hacé que te encuentren',
-            message: `Tu perfil está completo en un ${p.completion_percent}%. Sumá qué sabés hacer, una breve presentación y un medio de contacto para aparecer mejor en las búsquedas y recibir oportunidades más acordes a vos.`,
-            type: 'system',
-            link: '/crear-perfil',
-            read: false,
+          const reminder = await useNotificationStore.getState().addNotification({
+            kind: 'admin_profile_reminder',
+            profileId: p.id,
           })
-          if (!notificationError) {
+          if (!reminder.error) {
             await (supabase.from('profiles') as any)
               .update({ profile_completion_reminder_sent_at: new Date().toISOString() })
               .eq('id', p.id)
@@ -149,9 +165,21 @@ export default function Admin() {
         }))
 
       const { data: jobsData } = await (supabase.from('job_requests') as any)
-        .select('id, status, created_at, budget_amount, client_outcome, professional_outcome')
+        .select('*')
         .order('created_at', { ascending: false })
-      setJobRequests(jobsData || [])
+      const reportsByJob = new Map<string, any[]>()
+      loadedReports.forEach((report: any) => {
+        if (!report.job_request_id) return
+        const linked = reportsByJob.get(report.job_request_id) || []
+        linked.push({ ...report, reporter: report.reporter_id ? profileById.get(report.reporter_id) : null })
+        reportsByJob.set(report.job_request_id, linked)
+      })
+      setJobRequests((jobsData || []).map((job: any) => ({
+        ...job,
+        client_profile: job.client_id ? profileById.get(job.client_id) : null,
+        professional_profile: profileById.get(job.profile_id) || null,
+        linked_reports: reportsByJob.get(job.id) || [],
+      })))
 
       // 4. Fetch Deletions
       const delList = await fetchAccountDeletions()
@@ -217,6 +245,60 @@ export default function Admin() {
       setActionMessage(`Reporte marcado como ${newStatus}.`)
       loadData()
     }
+  }
+
+  const loadJobAudit = async (jobId: string) => {
+    const { data } = await (supabase.from('admin_job_request_actions') as any)
+      .select('id, job_request_id, admin_user_id, action, previous_status, new_status, previous_archived_at, new_archived_at, created_at')
+      .eq('job_request_id', jobId)
+      .order('created_at', { ascending: false })
+    return (data || []).map((event: any) => ({
+      ...event,
+      admin: profiles.find((profile) => profile.id === event.admin_user_id) || null,
+    }))
+  }
+
+  const openJobDetails = async (job: any) => {
+    const audit = await loadJobAudit(job.id)
+    setSelectedJob({ ...job, audit })
+    setActiveTab('jobs')
+  }
+
+  const openJobDetailsById = async (jobId: string) => {
+    const job = jobRequests.find((item) => item.id === jobId)
+    if (job) await openJobDetails(job)
+  }
+
+  const handleAdminJobAction = async (job: any, action: 'finalized' | 'cancelled' | 'archived' | 'unarchived') => {
+    const labels: Record<string, string> = {
+      finalized: 'finalización',
+      cancelled: 'cancelación',
+    }
+    if (labels[action] && !window.confirm(`¿Confirmar ${labels[action]} del pedido #${job.id}?`)) return
+
+    const { data, error } = await (supabase.rpc as any)('admin_manage_job_request', {
+      target_job_request_id: job.id,
+      requested_action: action,
+    })
+    if (error) {
+      setActionMessage(`No se pudo actualizar el pedido: ${error.message}`)
+      return
+    }
+
+    const result = Array.isArray(data) ? data[0] : data
+    if (!result) {
+      setActionMessage('La operación no devolvió un pedido actualizado.')
+      return
+    }
+    const updated = {
+      ...job,
+      status: result.status,
+      archived_at: result.archived_at,
+      audit: await loadJobAudit(job.id),
+    }
+    setJobRequests((items) => items.map((item) => item.id === job.id ? { ...item, ...updated } : item))
+    setSelectedJob(updated)
+    setActionMessage('Pedido actualizado y acción administrativa registrada.')
   }
 
   const handleToggleProfileStatus = async (profileId: string, currentStatus: string) => {
@@ -598,6 +680,12 @@ export default function Admin() {
           <BarChart3 size={16} /> Métricas
         </button>
         <button
+          onClick={() => setActiveTab('jobs')}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'jobs' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
+        >
+          <ClipboardList size={16} /> Pedidos ({jobRequests.length})
+        </button>
+        <button
           onClick={() => setActiveTab('verifications')}
           className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'verifications'
@@ -686,6 +774,99 @@ export default function Admin() {
             </section>
             <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5"><h3 className="font-heading font-bold">Lectura rápida</h3><div className="mt-4 space-y-3 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]"><p><strong className="text-[var(--color-laburante-text)]">Presupuestos:</strong> {budgetedJobs} de {jobRequests.length} pedidos recibieron una propuesta.</p><p><strong className="text-[var(--color-laburante-text)]">Cierre:</strong> {unresolvedCases} casos completados todavía necesitan respuesta de una de las partes.</p><p><strong className="text-[var(--color-laburante-text)]">Empresas:</strong> {profiles.filter((p) => p.account_type === 'empresa').length} cuentas registradas para búsquedas y proyectos.</p></div></section>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'jobs' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-xs text-indigo-950">
+            <p className="font-bold">Pedidos administrables</p>
+            <p className="mt-1 leading-relaxed">Consultá el contexto completo del pedido y aplicá únicamente acciones administrativas registradas.</p>
+          </div>
+          {jobRequests.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">No hay pedidos disponibles.</div>
+          ) : (
+            <div className="space-y-3">
+              {jobRequests.map((job) => (
+                <article key={job.id} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-heading font-bold text-sm">{job.title}</h3>
+                        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase text-indigo-800">{job.status}</span>
+                        {job.archived_at && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-700">Archivado</span>}
+                      </div>
+                      <p className="truncate text-[11px] text-[var(--color-laburante-text-muted)]">ID: {job.id}</p>
+                      <p className="text-xs text-[var(--color-laburante-text-secondary)]">Cliente: {job.client_profile?.name || job.client_name || 'Sin perfil'} · Profesional: {job.professional_profile?.name || 'Sin perfil'}</p>
+                      <p className="text-[11px] text-[var(--color-laburante-text-muted)]">{new Date(job.created_at).toLocaleDateString()} · Reportes vinculados: {job.linked_reports?.length || 0}</p>
+                    </div>
+                    <button type="button" onClick={() => openJobDetails(job)} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-700 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-800"><Eye size={14} /> Ver pedido</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {selectedJob && (
+            <div className="rounded-2xl border border-indigo-200 bg-[var(--color-laburante-surface)] p-5 shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-[var(--color-laburante-border)] pb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Detalle administrativo</p>
+                  <h2 className="mt-1 font-heading text-xl font-bold">{selectedJob.title}</h2>
+                  <p className="mt-1 break-all text-[11px] text-[var(--color-laburante-text-muted)]">Pedido #{selectedJob.id} · {new Date(selectedJob.created_at).toLocaleString()}</p>
+                </div>
+                <button type="button" onClick={() => setSelectedJob(null)} className="inline-flex items-center justify-center rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">Cerrar detalle</button>
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <section className="rounded-xl border border-[var(--color-laburante-border)] p-4 text-xs">
+                  <h3 className="font-heading font-bold">Pedido</h3>
+                  <p className="mt-2 whitespace-pre-wrap leading-relaxed text-[var(--color-laburante-text-secondary)]">{selectedJob.description}</p>
+                  <p className="mt-3"><strong>Estado:</strong> {selectedJob.status}</p>
+                  <p><strong>Archivado:</strong> {selectedJob.archived_at ? new Date(selectedJob.archived_at).toLocaleString() : 'No'}</p>
+                  <p><strong>Urgencia:</strong> {selectedJob.urgency}</p>
+                  <p><strong>Fecha preferida:</strong> {selectedJob.preferred_date || 'No informada'}</p>
+                </section>
+                <section className="rounded-xl border border-[var(--color-laburante-border)] p-4 text-xs">
+                  <h3 className="font-heading font-bold">Participantes</h3>
+                  <p className="mt-2"><strong>Cliente:</strong> {selectedJob.client_profile?.name || selectedJob.client_name || 'Sin perfil'}{selectedJob.client_contact ? ` · ${selectedJob.client_contact}` : ''}</p>
+                  <p><strong>Ubicación:</strong> {selectedJob.client_location || 'No informada'}</p>
+                  <p className="mt-2"><strong>Profesional:</strong> {selectedJob.professional_profile?.name || 'Sin perfil'}</p>
+                  {selectedJob.professional_profile?.slug && <Link to={`/p/${selectedJob.professional_profile.slug}`} target="_blank" className="mt-1 inline-block text-[var(--color-laburante-indigo)] underline">Ver perfil profesional</Link>}
+                </section>
+                <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-xs">
+                  <h3 className="flex items-center gap-1.5 font-heading font-bold text-emerald-900"><DollarSign size={15} /> Presupuesto vigente</h3>
+                  <p className="mt-2"><strong>Monto:</strong> {selectedJob.budget_amount || 'No informado'}</p>
+                  <p><strong>Detalles:</strong> {selectedJob.budget_details || 'No informado'}</p>
+                  <p><strong>Tiempo estimado:</strong> {selectedJob.budget_estimated_time || 'No informado'}</p>
+                  <p><strong>Fecha:</strong> {selectedJob.budget_created_at ? new Date(selectedJob.budget_created_at).toLocaleString() : 'No informado'}</p>
+                </section>
+                <section className="rounded-xl border border-[var(--color-laburante-border)] p-4 text-xs">
+                  <h3 className="font-heading font-bold">Resultados disponibles</h3>
+                  <p className="mt-2"><strong>Cliente:</strong> {selectedJob.client_outcome || 'Sin respuesta'}</p>
+                  <p><strong>Profesional:</strong> {selectedJob.professional_outcome || 'Sin respuesta'}</p>
+                  <p><strong>Nota:</strong> {selectedJob.outcome_note || 'Sin nota'}</p>
+                  <p><strong>Actualizado:</strong> {selectedJob.outcome_updated_at ? new Date(selectedJob.outcome_updated_at).toLocaleString() : 'Sin fecha'}</p>
+                </section>
+              </div>
+
+              <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50/50 p-4 text-xs">
+                <h3 className="font-heading font-bold text-amber-950">Reportes vinculados ({selectedJob.linked_reports?.length || 0})</h3>
+                {selectedJob.linked_reports?.length ? <div className="mt-3 space-y-2">{selectedJob.linked_reports.map((report: any) => <article key={report.id} className="rounded-lg border border-amber-200 bg-white p-3"><p><strong>Reporte #{report.id}</strong> · {report.reason.replace(/_/g, ' ')} · {report.status}</p><p className="mt-1">Reportó: {report.reporter?.name || report.reporter_id || 'No identificado'} · {new Date(report.created_at).toLocaleString()}</p>{report.description && <p className="mt-1 whitespace-pre-wrap">{report.description}</p>}<button type="button" onClick={() => openJobDetailsById(report.job_request_id)} className="mt-2 text-[var(--color-laburante-indigo)] underline">Volver al pedido actual</button></article>)}</div> : <p className="mt-2 text-amber-900/75">No hay reportes vinculados. Los reportes históricos sin ID de pedido siguen en la sección Reportes.</p>}
+              </section>
+
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--color-laburante-border)] pt-4">
+                {!['completado', 'cancelado'].includes(selectedJob.status) && <button type="button" onClick={() => handleAdminJobAction(selectedJob, 'finalized')} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white"><Check size={14} /> Finalizar</button>}
+                {!['completado', 'cancelado'].includes(selectedJob.status) && <button type="button" onClick={() => handleAdminJobAction(selectedJob, 'cancelled')} className="inline-flex items-center gap-1.5 rounded-xl bg-rose-700 px-3 py-2 text-xs font-bold text-white"><XCircle size={14} /> Cancelar</button>}
+                {selectedJob.archived_at ? <button type="button" onClick={() => handleAdminJobAction(selectedJob, 'unarchived')} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 px-3 py-2 text-xs font-bold text-gray-800"><Archive size={14} /> Desarchivar</button> : <button type="button" onClick={() => handleAdminJobAction(selectedJob, 'archived')} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 px-3 py-2 text-xs font-bold text-gray-800"><Archive size={14} /> Archivar</button>}
+              </div>
+
+              <section className="mt-4 rounded-xl border border-[var(--color-laburante-border)] p-4 text-xs">
+                <h3 className="font-heading font-bold">Historial administrativo</h3>
+                {selectedJob.audit?.length ? <div className="mt-2 space-y-2">{selectedJob.audit.map((event: any) => <p key={event.id}><strong>{event.action}</strong> · {event.admin?.name || event.admin_user_id} · {new Date(event.created_at).toLocaleString()} · {event.previous_status || 'sin estado'} → {event.new_status || 'sin estado'}</p>)}</div> : <p className="mt-2 text-[var(--color-laburante-text-secondary)]">No hay acciones administrativas registradas.</p>}
+              </section>
+            </div>
+          )}
         </div>
       )}
 
@@ -840,6 +1021,15 @@ export default function Admin() {
                     <p className="bg-[var(--color-laburante-surface-alt)] p-2.5 rounded-xl text-[11px] text-[var(--color-laburante-text)]">
                       "{rep.description}"
                     </p>
+                  )}
+                  {rep.job_request_id && (
+                    <button
+                      type="button"
+                      onClick={() => openJobDetailsById(rep.job_request_id)}
+                      className="text-[var(--color-laburante-indigo)] underline font-semibold"
+                    >
+                      Ver pedido vinculado #{rep.job_request_id}
+                    </button>
                   )}
                 </div>
 

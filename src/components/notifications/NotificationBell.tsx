@@ -16,6 +16,7 @@ import { useNotificationStore } from '@/stores/notification-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { supabase } from '@/lib/supabase'
 import { navigateToContextualLink, parseContextualLink } from '@/lib/contextual-navigation'
+import EmailPreferencesToggle from '@/components/notifications/EmailPreferencesToggle'
 
 export default function NotificationBell() {
   const { user } = useAuthStore()
@@ -209,6 +210,12 @@ export default function NotificationBell() {
               ))
             )}
           </div>
+
+          {user && (
+            <div className="px-3.5 py-2.5 border-t border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30">
+              <EmailPreferencesToggle variant="compact" />
+            </div>
+          )}
 
           {/* Footer */}
           <div className="p-2.5 border-t border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/40 text-center">

@@ -205,7 +205,7 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       // Try inserting into Supabase
       try {
-        const { error } = await (supabase.from('job_requests') as any).insert({
+        const { data: insertedJob, error } = await (supabase.from('job_requests') as any).insert({
           id: newId,
           client_id: userId,
           client_name: record.client_name,
@@ -218,8 +218,10 @@ export const useJobStore = create<JobState>((set, get) => ({
           preferred_date: record.preferred_date,
           photos: record.photos,
           status: 'solicitado',
-        })
+        }).select('id, created_at, updated_at').single()
         if (error) return { error: error.message || 'No se pudo enviar la solicitud.' }
+        if (insertedJob?.created_at) record.created_at = insertedJob.created_at
+        if (insertedJob?.updated_at) record.updated_at = insertedJob.updated_at
       } catch (dbErr) {
         console.warn('Supabase insert failed:', dbErr)
         return { error: 'No se pudo validar la solicitud. Intentá nuevamente.' }
@@ -235,21 +237,21 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       if (userId) {
         await useNotificationStore.getState().addNotification({
-          userId,
-          title: 'Solicitud registrada',
-          message: `Tu pedido “${record.title}” quedó guardado. Vas a recibir un aviso cuando ${record.pro_name} lo revise o responda.`,
-          type: 'job',
-          link: `/mis-trabajos?tab=cliente&pedido=${newId}`,
+          kind: 'job_request',
+          jobRequestId: newId,
+          event: 'created',
+          recipientRole: 'client',
+          operationAt: record.created_at,
         })
       }
 
       if (userId !== payload.profile_id) {
         await useNotificationStore.getState().addNotification({
-          userId: payload.profile_id,
-          title: 'Nuevo pedido de presupuesto',
-          message: `${record.client_name} necesita ayuda con: ${record.title}. Revisá el pedido y decidí si querés enviar un presupuesto.`,
-          type: 'job',
-          link: `/mis-trabajos?tab=profesional&pedido=${newId}`,
+          kind: 'job_request',
+          jobRequestId: newId,
+          event: 'created',
+          recipientRole: 'professional',
+          operationAt: record.created_at,
         })
       }
 
@@ -276,11 +278,15 @@ export const useJobStore = create<JobState>((set, get) => ({
         updated_at: now,
       }
 
+      let persistedBudgetCreatedAt = now
       try {
-        const { error } = await (supabase.from('job_requests') as any)
+        const { data: persistedJob, error } = await (supabase.from('job_requests') as any)
           .update(updateData)
           .eq('id', requestId)
+          .select('budget_created_at')
+          .single()
         if (error) return { error: error.message || 'No se pudo guardar el presupuesto.' }
+        persistedBudgetCreatedAt = persistedJob?.budget_created_at || now
       } catch (e) {
         console.warn('Supabase update skipped, updating local state:', e)
       }
@@ -303,11 +309,10 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       if (job?.client_id && job.client_id !== actorId) {
         await useNotificationStore.getState().addNotification({
-          userId: job.client_id,
-          title: 'Recibiste un presupuesto',
-          message: `Ya podés revisar el presupuesto para “${job.title}” y decidir cómo seguir.`,
-          type: 'budget',
-          link: `/mis-trabajos?tab=cliente&pedido=${requestId}`,
+          kind: 'job_request',
+          jobRequestId: requestId,
+          event: 'budget',
+          operationAt: persistedBudgetCreatedAt,
         })
       }
 
@@ -334,11 +339,15 @@ export const useJobStore = create<JobState>((set, get) => ({
         updated_at: now,
       }
 
+      let persistedUpdatedAt = now
       try {
-        const { error } = await (supabase.from('job_requests') as any)
+        const { data: persistedJob, error } = await (supabase.from('job_requests') as any)
           .update(updateData)
           .eq('id', requestId)
+          .select('updated_at')
+          .single()
         if (error) return { error: error.message || 'No se pudo actualizar el estado.' }
+        persistedUpdatedAt = persistedJob?.updated_at || now
       } catch (e) {
         console.warn('Supabase update skipped, updating local state:', e)
       }
@@ -359,17 +368,11 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       const recipientId = actorId === job?.client_id ? job?.profile_id : job?.client_id
       if (recipientId && recipientId !== actorId) {
-        const messages: Record<string, string> = {
-          aceptado: 'Aceptaron tu presupuesto. Ya pueden coordinar el trabajo.',
-          en_progreso: 'El trabajo pasó a estado en progreso.',
-          completado: 'El trabajo fue marcado como completado. Revisá el resultado y dejá tu devolución.',
-        }
         await useNotificationStore.getState().addNotification({
-          userId: recipientId,
-          title: newStatus === 'aceptado' ? 'Presupuesto aceptado' : 'Actualización de tu solicitud',
-          message: messages[newStatus] || `La solicitud “${job?.title || 'de trabajo'}” cambió a ${newStatus}.`,
-          type: newStatus === 'aceptado' ? 'budget' : 'status',
-          link: `/mis-trabajos?tab=${actorId === job?.client_id ? 'profesional' : 'cliente'}&pedido=${requestId}`,
+          kind: 'job_request',
+          jobRequestId: requestId,
+          event: 'status',
+          operationAt: persistedUpdatedAt,
         })
       }
 
@@ -394,11 +397,15 @@ export const useJobStore = create<JobState>((set, get) => ({
         updated_at: now,
       }
 
+      let persistedUpdatedAt = now
       try {
-        const { error } = await (supabase.from('job_requests') as any)
+        const { data: persistedJob, error } = await (supabase.from('job_requests') as any)
           .update(updateData)
           .eq('id', requestId)
+          .select('updated_at')
+          .single()
         if (error) return { error: error.message || 'No se pudo cancelar la solicitud.' }
+        persistedUpdatedAt = persistedJob?.updated_at || now
       } catch (e) {
         console.warn('Supabase update skipped, updating local state:', e)
       }
@@ -420,11 +427,10 @@ export const useJobStore = create<JobState>((set, get) => ({
       const recipientId = actorId === job?.client_id ? job?.profile_id : job?.client_id
       if (recipientId && recipientId !== actorId) {
         await useNotificationStore.getState().addNotification({
-          userId: recipientId,
-          title: 'Solicitud cancelada',
-          message: `La solicitud “${job?.title || 'de trabajo'}” fue cancelada. Motivo: ${reason.trim() || 'sin detalle'}.`,
-          type: 'status',
-          link: `/mis-trabajos?tab=${actorId === job?.client_id ? 'profesional' : 'cliente'}&pedido=${requestId}`,
+          kind: 'job_request',
+          jobRequestId: requestId,
+          event: 'cancelled',
+          operationAt: persistedUpdatedAt,
         })
       }
 

@@ -104,7 +104,7 @@ interface ProfileState {
   updateRecommendation: (recommendationId: string, data: { text: string; context?: string }) => Promise<{ error: string | null }>
   moderateRecommendation: (recommendationId: string, status: 'visible' | 'oculto') => Promise<{ error: string | null }>
   deleteRecommendation: (recommendationId: string) => Promise<{ error: string | null }>
-  submitReport: (profileId: string, reason: string, description: string) => Promise<{ error: string | null }>
+  submitReport: (profileId: string, reason: string, description: string, jobRequestId?: string) => Promise<{ error: string | null }>
 }
 
 const VERIFIED_WA_KEY = 'laburante_v2_verified_wa'
@@ -842,11 +842,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       // 6. Send in-app notification to the professional
       try {
         const { useNotificationStore } = await import('@/stores/notification-store')
-        useNotificationStore.getState().addNotification({
-          userId: profileId,
-          title: '¡WhatsApp Verificado por Administración!',
-          message: `El administrador certificó tu número ${phone}. Tu perfil ahora cuenta con el sello oficial verificado.`,
-          type: 'system',
+        void useNotificationStore.getState().addNotification({
+          kind: 'admin_whatsapp_verification',
+          requestId,
         })
       } catch (e) {
         console.warn('Notification send failed:', e)
@@ -1004,15 +1002,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         })
       }
 
-      const { data: target } = await (supabase.from('profiles') as any).select('slug').eq('id', profileId).maybeSingle()
-      if (target?.slug) {
+      if (inserted?.id && userData?.user?.id) {
         const { useNotificationStore } = await import('@/stores/notification-store')
         await useNotificationStore.getState().addNotification({
-          userId: profileId,
-          title: 'Tenés una reseña para revisar',
-          message: `${data.from_name.trim()} dejó una reseña sobre tu trabajo. Revisala antes de decidir si querés publicarla.`,
-          type: 'review',
-          link: `/p/${target.slug}#resenas`,
+          kind: 'review',
+          recommendationId: inserted.id,
         })
       }
 
@@ -1051,8 +1045,19 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     } catch (err: any) { captureAppError(err, 'review_delete'); return { error: err.message || 'Error al eliminar la reseña.' } }
   },
 
-  submitReport: async (profileId, reason, description) => {
+  submitReport: async (profileId, reason, description, jobRequestId) => {
     try {
+      if (jobRequestId) {
+        const { error } = await (supabase.rpc as any)('submit_report_for_job', {
+          target_job_request_id: jobRequestId,
+          target_profile_id: profileId,
+          report_reason_value: reason,
+          report_description: description || null,
+        })
+        if (error) return { error: error.message }
+        return { error: null }
+      }
+
       const { error } = await (supabase.from('reports') as any).insert({
         profile_id: profileId,
         reason: reason as any,

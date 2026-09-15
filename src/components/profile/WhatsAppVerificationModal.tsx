@@ -163,13 +163,7 @@ export default function WhatsAppVerificationModal({
       setError(res.error)
     } else {
       setStep('success')
-      addNotification({
-        userId: profileId,
-        title: '¡WhatsApp Verificado con éxito!',
-        message: `Tu número ${phone} fue certificado con éxito. Tu perfil ahora cuenta con el sello oficial.`,
-        type: 'system',
-        link: `/p/${profileSlug || profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-      })
+      void addNotification({ kind: 'profile_whatsapp_verified', profileId })
       setTimeout(() => {
         onClose()
       }, 1800)

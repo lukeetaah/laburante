@@ -103,12 +103,15 @@ export type Database = {
           id: string
           reporter_id: string | null
           profile_id: string
+          job_request_id: string | null
           reason: 'datos_falsos' | 'spam' | 'fraude' | 'ofensivo' | 'acoso' | 'suplantacion' | 'datos_sin_autorizacion' | 'otro'
           description: string | null
           status: 'pendiente' | 'revisado' | 'resuelto'
           created_at: string
         }
-        Insert: Omit<Database['public']['Tables']['reports']['Row'], 'id' | 'created_at'>
+        Insert: Omit<Database['public']['Tables']['reports']['Row'], 'id' | 'created_at' | 'job_request_id'> & {
+          job_request_id?: string | null
+        }
         Update: Partial<Database['public']['Tables']['reports']['Insert']>
       }
       job_requests: {
@@ -142,6 +145,21 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['job_requests']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['job_requests']['Insert']>
       }
+      admin_job_request_actions: {
+        Row: {
+          id: string
+          job_request_id: string
+          admin_user_id: string
+          action: 'finalized' | 'cancelled' | 'archived' | 'unarchived'
+          previous_status: string | null
+          new_status: string | null
+          previous_archived_at: string | null
+          new_archived_at: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['admin_job_request_actions']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['admin_job_request_actions']['Insert']>
+      }
       account_deletions: {
         Row: {
           id: string
@@ -160,6 +178,8 @@ export type Database = {
         Row: {
           id: string
           user_id: string
+          created_by?: string | null
+          dedupe_key?: string | null
           title: string
           message: string
           type: 'job' | 'budget' | 'status' | 'review' | 'system'
@@ -169,6 +189,36 @@ export type Database = {
         }
         Insert: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['notifications']['Insert']>
+      }
+      notification_preferences: {
+        Row: {
+          user_id: string
+          email_notifications_enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['notification_preferences']['Row'], 'created_at' | 'updated_at'> & {
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['notification_preferences']['Insert']>
+      }
+      notification_email_deliveries: {
+        Row: {
+          notification_id: string
+          recipient_user_id: string
+          status: 'processing' | 'sent' | 'skipped' | 'failed'
+          resend_id: string | null
+          error_code: string | null
+          sent_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['notification_email_deliveries']['Row'], 'created_at' | 'updated_at'> & {
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['notification_email_deliveries']['Insert']>
       }
       admin_settings: {
         Row: {
@@ -198,7 +248,53 @@ export type Database = {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      notify_job_request: {
+        Args: {
+          target_job_request_id: string
+          event_name: string
+          recipient_role?: string | null
+          operation_marker: string
+        }
+        Returns: string
+      }
+      notify_company_candidate_inquiry: {
+        Args: {
+          target_inquiry_id: string
+          event_name: string
+          operation_marker: string
+        }
+        Returns: string
+      }
+      notify_company_opportunity_share: {
+        Args: { target_share_id: string; event_name: string }
+        Returns: string
+      }
+      notify_review: {
+        Args: { target_recommendation_id: string }
+        Returns: string
+      }
+      notify_profile_whatsapp_verified: {
+        Args: { target_profile_id: string }
+        Returns: string
+      }
+      notify_admin_profile_reminder: {
+        Args: { target_profile_id: string }
+        Returns: string | null
+      }
+      notify_admin_whatsapp_verification: {
+        Args: { target_request_id: string }
+        Returns: string
+      }
+      claim_notification_email_delivery: {
+        Args: { notification_id_value: string; recipient_user_id_value: string }
+        Returns: { claimed: boolean; status: string }[]
+      }
+      reserve_notification_email_quota: {
+        Args: { daily_limit_value: number; monthly_limit_value: number }
+        Returns: { allowed: boolean; reason: string | null }[]
+      }
+    }
     Enums: Record<string, never>
   }
 }

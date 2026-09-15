@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { InAppNotification } from '@/lib/database.types'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
+import { dispatchNotificationEmail } from '@/lib/notification-email'
 
 const LOCAL_NOTIFS_KEY = 'laburante_notifications_cache'
 
@@ -24,6 +25,21 @@ function saveLocalNotifications(notifs: InAppNotification[], userId?: string | n
   }
 }
 
+type NotificationCommand =
+  | { kind: 'job_request'; jobRequestId: string; event: 'created'; recipientRole: 'client' | 'professional'; operationAt: string }
+  | { kind: 'job_request'; jobRequestId: string; event: 'budget' | 'status' | 'cancelled'; operationAt: string }
+  | { kind: 'company_candidate_inquiry'; inquiryId: string; event: 'created' | 'refreshed' | 'responded'; operationAt: string }
+  | { kind: 'company_opportunity_share'; shareId: string; event: 'published' | 'interesada' | 'descartada' }
+  | { kind: 'review'; recommendationId: string }
+  | { kind: 'profile_whatsapp_verified'; profileId: string }
+  | { kind: 'admin_profile_reminder'; profileId: string }
+  | { kind: 'admin_whatsapp_verification'; requestId: string }
+
+type NotificationCreateResult = {
+  notificationId: string | null
+  error: string | null
+}
+
 interface NotificationState {
   notifications: InAppNotification[]
   unreadCount: number
@@ -31,13 +47,52 @@ interface NotificationState {
   fetchNotifications: () => Promise<void>
   markAsRead: (id: string) => Promise<void>
   markAllAsRead: () => Promise<void>
-  addNotification: (payload: {
-    userId?: string
-    title: string
-    message: string
-    type: 'job' | 'budget' | 'status' | 'review' | 'system'
-    link?: string
-  }) => Promise<void>
+  addNotification: (command: NotificationCommand) => Promise<NotificationCreateResult>
+}
+
+function getNotificationRpc(command: NotificationCommand) {
+  switch (command.kind) {
+    case 'job_request':
+      return {
+        name: 'notify_job_request',
+        args: {
+          target_job_request_id: command.jobRequestId,
+          event_name: command.event,
+          recipient_role: command.event === 'created' ? command.recipientRole : null,
+          operation_marker: command.operationAt,
+        },
+      }
+    case 'company_candidate_inquiry':
+      return {
+        name: 'notify_company_candidate_inquiry',
+        args: { target_inquiry_id: command.inquiryId, event_name: command.event, operation_marker: command.operationAt },
+      }
+    case 'company_opportunity_share':
+      return {
+        name: 'notify_company_opportunity_share',
+        args: { target_share_id: command.shareId, event_name: command.event },
+      }
+    case 'review':
+      return {
+        name: 'notify_review',
+        args: { target_recommendation_id: command.recommendationId },
+      }
+    case 'profile_whatsapp_verified':
+      return {
+        name: 'notify_profile_whatsapp_verified',
+        args: { target_profile_id: command.profileId },
+      }
+    case 'admin_profile_reminder':
+      return {
+        name: 'notify_admin_profile_reminder',
+        args: { target_profile_id: command.profileId },
+      }
+    case 'admin_whatsapp_verification':
+      return {
+        name: 'notify_admin_whatsapp_verification',
+        args: { target_request_id: command.requestId },
+      }
+  }
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
@@ -131,51 +186,39 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     }
   },
 
-  addNotification: async (payload) => {
+  addNotification: async (command) => {
     addAppBreadcrumb('notification_create_started')
-    const { data: userData } = await supabase.auth.getUser()
-    const currentUserId = userData?.user?.id
-    const userId = payload.userId || currentUserId || 'anonymous'
-
-    const newNotif: InAppNotification = {
-      id: 'notif-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-      user_id: userId,
-      title: payload.title,
-      message: payload.message,
-      type: payload.type,
-      link: payload.link || null,
-      read: false,
-      created_at: new Date().toISOString(),
-    }
-
-    const local = [newNotif, ...getLocalNotifications(userId)]
-    saveLocalNotifications(local, userId)
-
-    // Solo actualizamos la campanita de la sesión actual. Los avisos para
-    // terceros quedan persistidos para que los vea su propia cuenta.
-    if (userId === currentUserId) {
-      set((s) => {
-        const merged = [newNotif, ...s.notifications.filter((n) => n.id !== newNotif.id)]
-        return { notifications: merged, unreadCount: merged.filter((n) => !n.read).length }
-      })
-    }
-
     try {
-      if (userId !== 'anonymous') {
-        const { error } = await (supabase.from('notifications') as any).insert({
-          id: newNotif.id,
-          user_id: userId,
-          title: newNotif.title,
-          message: newNotif.message,
-          type: newNotif.type,
-          link: newNotif.link,
-          read: false,
-        })
-        if (error) console.warn('Could not persist notification:', error.message)
+      const rpc = getNotificationRpc(command)
+      const { data: notificationId, error } = await supabase.rpc(rpc.name, rpc.args)
+      if (error) throw error
+
+      const { data: userData } = await supabase.auth.getUser()
+      const currentUserId = userData?.user?.id || null
+      const createdId = typeof notificationId === 'string' ? notificationId : null
+
+      if (createdId && currentUserId) {
+        const { data: createdNotification } = await (supabase.from('notifications') as any)
+          .select('*')
+          .eq('id', createdId)
+          .maybeSingle()
+
+        if (createdNotification?.user_id === currentUserId) {
+          const local = [createdNotification, ...getLocalNotifications(currentUserId)]
+          saveLocalNotifications(local, currentUserId)
+          set((s) => {
+            const merged = [createdNotification, ...s.notifications.filter((n) => n.id !== createdNotification.id)]
+            return { notifications: merged, unreadCount: merged.filter((n) => !n.read).length }
+          })
+        }
       }
+
+      if (createdId) dispatchNotificationEmail(createdId)
+      return { notificationId: createdId, error: null }
     } catch (e) {
       captureAppError(e, 'notification_create')
-      console.warn('Could not insert notification into Supabase:', e)
+      console.warn('Could not create notification through the business RPC:', e)
+      return { notificationId: null, error: e instanceof Error ? e.message : String(e) }
     }
   },
 

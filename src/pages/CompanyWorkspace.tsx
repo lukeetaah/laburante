@@ -9,6 +9,7 @@ import { dedupeContactMethods } from '@/lib/contact-methods'
 import { useNotificationStore } from '@/stores/notification-store'
 import { useOperationalSettings } from '@/lib/operational-settings'
 import { focusContextualElement } from '@/lib/contextual-navigation'
+import EmailPreferencesToggle from '@/components/notifications/EmailPreferencesToggle'
 
 type Opportunity = { id: string; title: string; description: string; status: string; created_at: string }
 
@@ -163,13 +164,16 @@ export default function CompanyWorkspace() {
       ? await (supabase.from('company_opportunity_shares') as any).upsert(recipients, { onConflict: 'opportunity_id,recipient_company_id' }).select('id, recipient_company_id')
       : { data: [] }
     const shareByRecipient = new Map((createdShares || []).map((share: any) => [share.recipient_company_id, share.id]))
-    await Promise.all(recipients.map((recipient: any) => useNotificationStore.getState().addNotification({
-      userId: recipient.recipient_company_id,
-      title: 'Nueva oportunidad en tu red',
-      message: `${title.trim()} fue derivada a tu empresa porque puede ser relevante para tu zona o actividad.${budgetAmount.trim() ? ` Presupuesto informado: ${budgetAmount.trim()}.` : ''}`,
-      type: 'job',
-      link: shareByRecipient.has(recipient.recipient_company_id) ? `/empresa?oportunidad-compartida=${encodeURIComponent(String(shareByRecipient.get(recipient.recipient_company_id)))}` : '/empresa',
-    })))
+    await Promise.all(recipients.flatMap((recipient: any) => {
+      const shareId = shareByRecipient.get(recipient.recipient_company_id)
+      return shareId
+        ? [useNotificationStore.getState().addNotification({
+            kind: 'company_opportunity_share',
+            shareId: String(shareId),
+            event: 'published',
+          })]
+        : []
+    }))
     setTitle(''); setDescription(''); setOriginPlatform(''); setOriginNote(''); setBudgetAmount(''); setEstimatedTime(''); setLoading(false)
     setMessage(recipients.length ? `Oportunidad publicada y enviada a ${recipients.length} empresas similares.` : 'Oportunidad publicada. Se ofrecerá a nuevas empresas similares cuando entren a la red.')
     loadOpportunities()
@@ -182,13 +186,9 @@ export default function CompanyWorkspace() {
     setIncoming((items) => items.map((item) => item.id === id ? { ...item, status } : item))
     if (item?.source_company_id && item.source_company_id !== user.id && status !== 'vista') {
       await useNotificationStore.getState().addNotification({
-        userId: item.source_company_id,
-        title: status === 'interesada' ? 'Una empresa mostró interés' : 'Una empresa descartó tu oportunidad',
-        message: status === 'interesada'
-          ? `La empresa recibió “${item.company_opportunities?.title || 'tu oportunidad'}” y quiere evaluarla.`
-          : `La empresa no avanzó con “${item.company_opportunities?.title || 'tu oportunidad'}”. La red puede seguir encontrando empresas similares.`,
-        type: 'status',
-        link: item.opportunity_id ? `/empresa?oportunidad=${encodeURIComponent(item.opportunity_id)}` : '/empresa',
+        kind: 'company_opportunity_share',
+        shareId: item.id,
+        event: status,
       })
     }
   }
@@ -214,6 +214,7 @@ export default function CompanyWorkspace() {
 
   return <div className="container py-10 md:py-16 space-y-8">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]"><Building2 size={15} /> Espacio Empresa</p><h1 className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">Hola, {companyName}</h1><p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--color-laburante-text-secondary)]">Tu cuenta está lista para buscar profesionales.<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${isPaidCompany ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{profileLoaded ? `Plan ${isPaidCompany ? 'Pago activo' : 'Gratis'}` : 'Verificando plan'}</span></p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={loadOpportunities} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-4 py-3 text-xs font-bold" title="Actualizar actividad" aria-label="Actualizar actividad"><RefreshCw size={15} /> Actualizar</button><Link to="/buscar" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"><Search size={16} /> Empezar a buscar</Link></div></div>
+    <EmailPreferencesToggle variant="inline" />
     <section className={`rounded-2xl border p-5 sm:p-6 ${isPaidCompany ? 'border-amber-300 bg-amber-50/70' : 'border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]'}`}>
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-2xl">

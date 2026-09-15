@@ -1,139 +1,166 @@
-import { Check, X, Shield, Zap, Sparkles, MessageCircle, DollarSign, Eye } from 'lucide-react'
+import { useState } from 'react'
+import { Sparkles, MessageCircle, Shield, MapPin, Star, ChevronDown, Check, ArrowRight } from 'lucide-react'
 
 export default function ComparisonSection() {
-  const comparisonItems = [
+  const [heroExpanded, setHeroExpanded] = useState(false)
+  const [openCardIndex, setOpenCardIndex] = useState<number | null>(null)
+
+  const featureCards = [
     {
-      feature: 'Comisión sobre el trabajo realizado',
-      traditional: 'Cobran entre el 10% y el 20% del monto total de cada trabajo o retienen el dinero en billeteras cerradas.',
-      laburante: '0% de comisión. Lo que acordás con el cliente o trabajador es 100% de ustedes. La plataforma no toca tu plata.',
-      highlight: true
+      icon: MessageCircle,
+      title: 'Contacto directo y transparente',
+      summary: 'Sin créditos, monedas artificiales ni membresías obligatorias para cotizar o responder.',
+      expandedInfo: 'Cuando un cliente o empresa solicita un presupuesto y vos decidís responder, la coordinación continúa de forma directa en los canales de comunicación habituales que usás todos los días.',
     },
     {
-      feature: 'Contacto directo',
-      traditional: 'Ocultan el teléfono. Te obligan a comprar "créditos" o pagar membresías mensuales para ver el contacto o responder presupuestos.',
-      laburante: 'Pedís un presupuesto primero. Cuando hay una respuesta, el contacto autorizado se habilita para coordinar directamente.',
-      highlight: true
+      icon: Shield,
+      title: 'Privacidad y datos bajo tu control',
+      summary: 'Sin pedidos de datos bancarios, números de tarjeta ni trámites invasivos para crear tu perfil.',
+      expandedInfo: 'Solo se publica la información que autorizás expresamente para tu actividad laboral. Tus canales de contacto están resguardados y vos decidís qué mostrar y cuándo poner tu perfil en pausa.',
     },
     {
-      feature: 'Canal de mensajería y comunicación',
-      traditional: 'Chats cautivos que censuran números de celular, emails o palabras como "whatsapp" bajo amenaza de suspender la cuenta.',
-      laburante: 'Libertad absoluta. La conversación transcurre en la aplicación que usás todos los días, sin monitoreo ni retención.',
-      highlight: false
+      icon: MapPin,
+      title: 'Búsqueda por oficio y cercanía',
+      summary: 'Filtros organizados por especialidad, provincia y localidad real en toda la Argentina.',
+      expandedInfo: 'Las personas que necesitan resolver una tarea en su zona te encuentran por lo que sabés hacer, sin algoritmos opacos de subasta donde quien paga más tapa a quienes trabajan cerca.',
     },
     {
-      feature: 'Burocracia y datos personales',
-      traditional: 'Exigen fotos de DNI, datos bancarios obligatorios y formularios interminables antes de permitirte trabajar o consultar.',
-      laburante: 'Privacidad por diseño. No pedimos DNI ni cuentas bancarias. Solo se publica lo que el titular decide y autoriza voluntariamente.',
-      highlight: false
+      icon: Star,
+      title: 'Reputación con contexto real',
+      summary: 'Opiniones y recomendaciones genuinas asociadas a experiencias concretas de trabajo.',
+      expandedInfo: 'Cada reseña queda vinculada a un trabajo o servicio acordado, con la posibilidad de que el titular del perfil decida publicarla y un sistema de reporte comunitario ante cualquier irregularidad.',
     },
-    {
-      feature: 'Cómo te encuentran',
-      traditional: 'Algoritmos "Pagar para figurar". Si no pagás pauta o destacados, tu perfil queda enterrado en las últimas páginas.',
-      laburante: 'Tu perfil puede aparecer cuando alguien busca lo que sabés hacer, con filtros reales por oficio, provincia y localidad.',
-      highlight: false
-    },
-    {
-      feature: 'Confianza y reputación',
-      traditional: 'Venden sellos artificiales de "100% verificado" para cobrar más, prometiendo garantías que legalmente no pueden controlar.',
-      laburante: 'Honestidad de base. Recomendaciones con contexto real de trabajos y botón de reporte comunitario ante irregularidades.',
-      highlight: false
-    }
   ]
+
+  const toggleCard = (index: number) => {
+    setOpenCardIndex((current) => (current === index ? null : index))
+  }
 
   return (
     <section className="container">
-      <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-10 md:p-14 shadow-xs">
-        {/* Header */}
-        <div className="max-w-3xl mx-auto text-center mb-12">
+      <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-10 md:p-14 shadow-xs space-y-10">
+        {/* Main Clickable Hero Block with Collapsible Accordion */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={heroExpanded}
+          onClick={() => setHeroExpanded(!heroExpanded)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setHeroExpanded(!heroExpanded)
+            }
+          }}
+          className="group cursor-pointer rounded-2xl border border-[var(--color-laburante-border)] bg-gradient-to-b from-[var(--color-laburante-surface-alt)]/60 to-[var(--color-laburante-surface)] p-6 sm:p-8 md:p-10 text-center transition-all hover:border-amber-300 hover:shadow-md focus:outline-hidden focus:ring-2 focus:ring-[var(--color-laburante-indigo)]"
+        >
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold mb-4">
             <Sparkles size={14} className="text-amber-600" />
             Sin intermediarios ni trampas comerciales
           </div>
+
           <h2 className="font-heading text-2xl sm:text-4xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
             No sos una postulación más
           </h2>
-          <p className="text-sm sm:text-base text-[var(--color-laburante-text-secondary)] mt-3 leading-relaxed">
+
+          <p className="text-sm sm:text-base text-[var(--color-laburante-text-secondary)] mt-3 leading-relaxed max-w-2xl mx-auto">
             En muchos portales un algoritmo decide quién aparece. En LABURANTE empezás por vos: qué sabés hacer, dónde estás y cómo pueden contactarte.
           </p>
-        </div>
 
-        {/* Comparison Grid (Cards for Mobile, Table for Desktop) */}
-        <div className="hidden md:block overflow-hidden rounded-2xl border border-[var(--color-laburante-border)]">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]">
-                <th className="p-4 text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)] w-1/3">
-                  Aspecto Clave
-                </th>
-                <th className="p-4 text-xs font-bold uppercase tracking-wider text-rose-700 bg-rose-50/50 w-1/3">
-                  <div className="flex items-center gap-1.5">
-                    <X size={16} className="text-rose-600" />
-                    Portales tradicionales con comisión
-                  </div>
-                </th>
-                <th className="p-4 text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50/60 w-1/3">
-                  <div className="flex items-center gap-1.5">
-                    <Check size={16} className="text-emerald-600" />
-                    LABURANTE
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-laburante-border)] text-sm">
-              {comparisonItems.map((item, idx) => (
-                <tr key={idx} className={item.highlight ? 'bg-amber-50/20' : ''}>
-                  <td className="p-4 font-heading font-semibold text-[var(--color-laburante-text)] align-top">
-                    {item.feature}
-                  </td>
-                  <td className="p-4 text-rose-950/80 bg-rose-50/20 text-xs leading-relaxed align-top">
-                    <div className="flex items-start gap-2">
-                      <span className="text-rose-500 font-bold mt-0.5">✕</span>
-                      <span>{item.traditional}</span>
-                    </div>
-                  </td>
-                  <td className="p-4 text-emerald-950 bg-emerald-50/30 text-xs leading-relaxed align-top font-medium">
-                    <div className="flex items-start gap-2">
-                      <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                      <span>{item.laburante}</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          <div className="mt-5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-heading font-bold text-[var(--color-laburante-indigo)] group-hover:underline">
+            <span>{heroExpanded ? 'Ocultar info' : 'Ver más info'}</span>
+            <ChevronDown
+              size={16}
+              className={`transition-transform duration-200 ${heroExpanded ? 'rotate-180' : ''}`}
+            />
+          </div>
 
-        {/* Mobile View: Comparison Cards */}
-        <div className="md:hidden space-y-4">
-          {comparisonItems.map((item, idx) => (
+          {/* Expanded Collapsible Content */}
+          {heroExpanded && (
             <div
-              key={idx}
-              className={`p-4 rounded-2xl border ${
-                item.highlight
-                  ? 'border-amber-300 bg-amber-50/30'
-                  : 'border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]'
-              }`}
+              className="mt-6 pt-6 border-t border-[var(--color-laburante-border)] text-left grid sm:grid-cols-3 gap-4 text-xs animate-in fade-in slide-in-from-top-2 duration-200"
+              onClick={(e) => e.stopPropagation()}
             >
-              <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)] mb-3">
-                {item.feature}
-              </h4>
+              <div className="rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4 space-y-2">
+                <p className="font-heading font-bold text-sm text-[var(--color-laburante-text)] flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                  Descubrimiento abierto
+                </p>
+                <p className="text-[var(--color-laburante-text-secondary)] leading-relaxed">
+                  Cualquier persona o empresa puede encontrar tu perfil por especialidad, oficio y localidad sin necesidad de pagar pauta para figurar.
+                </p>
+              </div>
 
-              <div className="space-y-2 text-xs">
-                <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200/70 text-rose-950">
-                  <span className="font-semibold text-rose-700 block mb-1">✕ En otros portales:</span>
-                  <p className="leading-relaxed">{item.traditional}</p>
-                </div>
+              <div className="rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4 space-y-2">
+                <p className="font-heading font-bold text-sm text-[var(--color-laburante-text)] flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[var(--color-laburante-indigo)]"></span>
+                  Trato humano directo
+                </p>
+                <p className="text-[var(--color-laburante-text-secondary)] leading-relaxed">
+                  La plataforma facilita el primer contacto formal mediante solicitudes de presupuesto; luego la conversación fluye de manera directa entre las partes.
+                </p>
+              </div>
 
-                <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950">
-                  <span className="font-semibold text-emerald-700 block mb-1">✓ En LABURANTE:</span>
-                  <p className="leading-relaxed font-medium">{item.laburante}</p>
-                </div>
+              <div className="rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4 space-y-2">
+                <p className="font-heading font-bold text-sm text-[var(--color-laburante-text)] flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                  Tu trabajo, tus reglas
+                </p>
+                <p className="text-[var(--color-laburante-text-secondary)] leading-relaxed">
+                  Definís tu modalidad (presencial, híbrida o remota), tu disponibilidad horaria, las zonas donde brindás servicio y los medios de contacto autorizados.
+                </p>
               </div>
             </div>
-          ))}
+          )}
         </div>
 
-        {/* Bottom Banner */}
+        {/* Visual Feature Cards Grid (Clean, Responsive, Minimalist) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          {featureCards.map((card, idx) => {
+            const IconComponent = card.icon
+            const isOpen = openCardIndex === idx
+            return (
+              <div
+                key={idx}
+                className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5 sm:p-6 transition-all hover:border-[var(--color-laburante-border-focus)] shadow-2xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] flex items-center justify-center text-[var(--color-laburante-indigo)] shrink-0">
+                    <IconComponent size={20} />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleCard(idx)}
+                    className="inline-flex items-center gap-1 text-[11px] font-heading font-semibold text-[var(--color-laburante-indigo)] hover:underline cursor-pointer"
+                  >
+                    <span>{isOpen ? 'Menos' : 'Detalles'}</span>
+                    <ChevronDown
+                      size={13}
+                      className={`transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                    {card.title}
+                  </h3>
+                  <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
+                    {card.summary}
+                  </p>
+                </div>
+
+                {isOpen && (
+                  <div className="pt-3 border-t border-[var(--color-laburante-border)]/60 text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed animate-in fade-in duration-150">
+                    {card.expandedInfo}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Bottom Banner — PRESERVED EXACTLY AS REQUESTED */}
         <div className="mt-8 p-4 sm:p-6 rounded-2xl bg-gradient-to-r from-[var(--color-laburante-surface-alt)] to-[var(--color-laburante-surface)] border border-[var(--color-laburante-border)] flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3 text-left">
             <div className="h-10 w-10 rounded-xl bg-[var(--color-laburante-accent)] text-black flex items-center justify-center font-bold flex-shrink-0">

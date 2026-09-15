@@ -5,6 +5,8 @@ import { useProfileStore } from '@/stores/profile-store'
 interface ReportModalProps {
   profileId: string
   profileName: string
+  jobRequestId?: string
+  jobRequestLabel?: string
   isOpen: boolean
   onClose: () => void
 }
@@ -20,7 +22,7 @@ const REPORT_REASONS = [
   { id: 'otro', label: 'Otro motivo' },
 ]
 
-export default function ReportModal({ profileId, profileName, isOpen, onClose }: ReportModalProps) {
+export default function ReportModal({ profileId, profileName, jobRequestId, jobRequestLabel, isOpen, onClose }: ReportModalProps) {
   const [reason, setReason] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -41,7 +43,7 @@ export default function ReportModal({ profileId, profileName, isOpen, onClose }:
     setSubmitting(true)
     setError(null)
 
-    const res = await submitReport(profileId, reason, description)
+    const res = await submitReport(profileId, reason, description, jobRequestId)
     setSubmitting(false)
 
     if (res.error) {
@@ -94,6 +96,7 @@ export default function ReportModal({ profileId, profileName, isOpen, onClose }:
             </div>
             <p className="text-xs text-[var(--color-laburante-text-secondary)] mb-4">
               Perfil: <strong className="text-[var(--color-laburante-text)]">{profileName}</strong>
+              {jobRequestLabel && <><br />Pedido: <strong className="text-[var(--color-laburante-text)]">{jobRequestLabel}</strong></>}
             </p>
 
             {error && (
