@@ -8,6 +8,8 @@ import RecommendationModal from '@/components/profile/RecommendationModal'
 import JobRequestModal from '@/components/jobs/JobRequestModal'
 import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
 import EmailPreferencesToggle from '@/components/notifications/EmailPreferencesToggle'
+import ProfileCompletionCard from '@/components/profile/ProfileCompletionCard'
+import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
 import { isProviderProfile } from '@/lib/profile-publication'
@@ -36,6 +38,7 @@ export default function ProfilePage() {
   const [reportOpen, setReportOpen] = useState(false)
   const [recommendationOpen, setRecommendationOpen] = useState(false)
   const [jobRequestOpen, setJobRequestOpen] = useState(false)
+  const [whatsAppVerifyOpen, setWhatsAppVerifyOpen] = useState(false)
   const [copiedContact, setCopiedContact] = useState('')
   const [imageFailed, setImageFailed] = useState(false)
   const [editingRecommendationId, setEditingRecommendationId] = useState<string | null>(null)
@@ -219,23 +222,11 @@ export default function ProfilePage() {
         {/* Action Buttons: Request Budget + Contact + Review + Share */}
         <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-[var(--color-laburante-border)]">
           {isOwnProfile && (
-            <div className="w-full space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 text-xs">
-                <div className="space-y-0.5">
-                  <p className="font-bold text-indigo-950 font-heading">Estás viendo tu propio perfil</p>
-                  <p className="text-indigo-800 leading-relaxed">
-                    Podés actualizar tu información, servicios y fotos cuando quieras. Las solicitudes y reseñas se realizan entre cuentas distintas.
-                  </p>
-                </div>
-                <Link
-                  to="/crear-perfil"
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-900 text-white font-heading font-bold text-xs hover:bg-indigo-950 transition-colors shrink-0 shadow-xs"
-                >
-                  <Edit3 size={13} />
-                  <span>Editar mi perfil</span>
-                </Link>
-              </div>
-
+            <div className="w-full space-y-4">
+              <ProfileCompletionCard
+                profile={profile}
+                onOpenWhatsAppVerify={() => setWhatsAppVerifyOpen(true)}
+              />
               <EmailPreferencesToggle variant="inline" />
             </div>
           )}
@@ -522,6 +513,20 @@ export default function ProfilePage() {
         profileName={profile.name}
         profileSlug={profile.slug}
       />}
+
+      {isOwnProfile && (
+        <WhatsAppVerificationModal
+          isOpen={whatsAppVerifyOpen}
+          onClose={() => {
+            setWhatsAppVerifyOpen(false)
+            if (slug) fetchProfileBySlug(decodeURIComponent(slug).trim())
+          }}
+          profileId={profile.id}
+          phone={(profile.contact_methods || []).find((c: any) => c.type === 'whatsapp')?.value || ''}
+          profileName={profile.name}
+          profileSlug={profile.slug}
+        />
+      )}
     </div>
   )
 }
