@@ -238,7 +238,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let query = (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at, updated_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at, updated_at, whatsapp_verified, whatsapp_verified_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( type, value, is_public ),
@@ -340,7 +340,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at, whatsapp_verified, whatsapp_verified_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
@@ -394,7 +394,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       let { data, error } = await (supabase.from('profiles') as any)
         .select(`
           id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at,
+          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at, whatsapp_verified, whatsapp_verified_at,
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
@@ -406,7 +406,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (error) {
         const legacyResult = await (supabase.from('profiles') as any)
-          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, updated_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
+          .select(`id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, status, created_at, updated_at, whatsapp_verified, whatsapp_verified_at, skills ( name ), services ( title, description, precio_orientativo ), contact_methods ( id, type, value, is_public ), recommendations ( id, from_user_id, from_name, text, context, created_at, status ), profile_languages ( language, level, is_public )`)
           .eq('id', userId)
           .maybeSingle()
         data = legacyResult.data ? { ...legacyResult.data, account_type: legacyResult.data.account_type || userData.user.user_metadata?.account_type || userData.user.user_metadata?.accountType } : legacyResult.data

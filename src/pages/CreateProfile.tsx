@@ -902,7 +902,10 @@ export default function CreateProfile() {
       {/* WhatsApp Verification Modal */}
       <WhatsAppVerificationModal
         isOpen={whatsappModalOpen}
-        onClose={() => setWhatsappModalOpen(false)}
+        onClose={() => {
+          setWhatsappModalOpen(false)
+          void fetchMyProfile()
+        }}
         profileId={myProfile?.id || user.id}
         phone={contactMethods.find((c) => c.type === 'whatsapp')?.value || ''}
         profileName={name || myProfile?.name || 'Mi Perfil'}

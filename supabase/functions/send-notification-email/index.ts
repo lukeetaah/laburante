@@ -7,9 +7,46 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
 const SITE_URL = Deno.env.get('SITE_URL') || 'https://laburante.ar'
 const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'notificaciones@laburante.ar'
 const REPLY_TO = Deno.env.get('RESEND_REPLY_TO') || 'admin@laburante.ar'
+function parsePositiveLimit(value: string | undefined, fallback: number) {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
 const MONTHLY_LIMIT = parsePositiveLimit(Deno.env.get('EMAIL_MONTHLY_LIMIT'), 500)
 const DAILY_LIMIT = parsePositiveLimit(Deno.env.get('EMAIL_DAILY_LIMIT'), 50)
-const ALLOWED_ORIGINS = new Set([SITE_URL, 'http://localhost:5173'])
+const ALLOWED_ORIGINS = new Set([
+  SITE_URL,
+  'https://laburante.ar',
+  'https://www.laburante.ar',
+  'http://localhost:5173',
+  'http://localhost:3000',
+])
+
+function isAllowedOrigin(origin: string): boolean {
+  if (!origin) return false
+  if (ALLOWED_ORIGINS.has(origin)) return true
+  try {
+    const url = new URL(origin)
+    return (
+      url.hostname === 'laburante.ar' ||
+      url.hostname.endsWith('.laburante.ar') ||
+      url.hostname.endsWith('.vercel.app')
+    )
+  } catch {
+    return false
+  }
+}
+
+function corsHeaders(request: Request) {
+  const origin = request.headers.get('Origin') || ''
+  return {
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : SITE_URL,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-region, baggage, traceparent, tracestate, sentry-trace',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json',
+  }
+}
+
 const PREFERENCES_TABLE_MISSING_RE = /relation .*notification_preferences.*does not exist|Could not find the table .*notification_preferences|schema cache.*notification_preferences/i
 
 const allowedTypes = new Set(['job', 'budget', 'status', 'review', 'system'])
@@ -29,21 +66,6 @@ type Notification = {
   message: string
   type: string
   link: string | null
-}
-
-function parsePositiveLimit(value: string | undefined, fallback: number) {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
-}
-
-function corsHeaders(request: Request) {
-  const origin = request.headers.get('Origin') || ''
-  return {
-    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.has(origin) ? origin : SITE_URL,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json',
-  }
 }
 
 function json(request: Request, body: Record<string, unknown>, status = 200) {

@@ -29,6 +29,7 @@ interface AuthState {
   signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: string | null; needsSignIn?: boolean }>
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
+  resendConfirmationEmail: (email: string) => Promise<{ error: string | null }>
   initialize: () => Promise<void>
 }
 
@@ -124,6 +125,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       email,
       password,
       options: {
+        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/ingresar?confirmado=1` : undefined,
         data: {
           name: metadata.name,
           phone: metadata.phone || '',
@@ -153,6 +155,24 @@ export const useAuthStore = create<AuthState>((set) => ({
       await ensureUserProfile(data.session.user)
     }
     return { error: null, needsSignIn: !data.session && !!data.user }
+  },
+
+  resendConfirmationEmail: async (email: string) => {
+    addAppBreadcrumb('resend_confirmation_started')
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/ingresar?confirmado=1` : undefined,
+        },
+      })
+      if (error) return { error: error.message }
+      return { error: null }
+    } catch (err: any) {
+      captureAppError(err, 'resend_confirmation')
+      return { error: err.message || 'Error al reenviar el correo de confirmación.' }
+    }
   },
 
   signIn: async (email, password) => {

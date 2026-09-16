@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
-import { CheckCircle2, ArrowRight, Building2 } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Building2, Mail, RefreshCw } from 'lucide-react'
 import { getPostLoginPath } from '@/lib/contextual-navigation'
 
 export default function Register() {
@@ -25,10 +25,15 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [accountCreatedEmail, setAccountCreatedEmail] = useState<string | null>(null)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendMessage, setResendMessage] = useState<string | null>(null)
+  const [resendError, setResendError] = useState<string | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
   const [retryAt, setRetryAt] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   const signUp = useAuthStore((s) => s.signUp)
+  const resendConfirmationEmail = useAuthStore((s) => s.resendConfirmationEmail)
   const fetchMyProfile = useProfileStore((s) => s.fetchMyProfile)
   const navigate = useNavigate()
   const retryStorageKey = email.trim() ? `laburante_signup_retry:${email.trim().toLowerCase()}` : ''
@@ -60,6 +65,31 @@ export default function Register() {
   }
   const remainingSeconds = retryAt ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : 0
   const formattedWait = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = window.setInterval(() => {
+      setResendCooldown((prev) => (prev <= 1 ? 0 : prev - 1))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [resendCooldown])
+
+  const handleResendConfirmation = async () => {
+    if (!accountCreatedEmail || resendLoading || resendCooldown > 0) return
+    setResendLoading(true)
+    setResendMessage(null)
+    setResendError(null)
+
+    const res = await resendConfirmationEmail(accountCreatedEmail)
+    setResendLoading(false)
+
+    if (res.error) {
+      setResendError(res.error)
+    } else {
+      setResendMessage('Correo de confirmación reenviado con éxito. Por favor revisá tu bandeja de entrada y la carpeta de SPAM.')
+      setResendCooldown(60)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -156,43 +186,63 @@ export default function Register() {
     return (
       <div className="container py-12 md:py-20 max-w-md mx-auto">
         <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-6 shadow-xs text-center">
-          <div className="h-16 w-16 mx-auto rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
-            <CheckCircle2 size={32} />
+          <div className="h-16 w-16 mx-auto rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center text-[var(--color-laburante-indigo)]">
+            <Mail size={32} />
           </div>
 
           <div className="space-y-2">
             <h1 className="font-heading text-2xl font-extrabold text-[var(--color-laburante-text)]">
-              ¡Cuenta creada!
+              Revisá tu email para confirmar tu cuenta
             </h1>
             <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
-              Tu cuenta para <strong className="text-[var(--color-laburante-text)]">{accountCreatedEmail}</strong> quedó creada. Iniciá sesión para continuar en LABURANTE.
+              Te enviamos un enlace de activación a <strong className="text-[var(--color-laburante-text)]">{accountCreatedEmail}</strong>.
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-left space-y-2 text-xs text-[var(--color-laburante-text-secondary)]">
-            <p className="font-semibold text-[var(--color-laburante-text)] flex items-center gap-1.5">
-              <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
-              Siguientes pasos:
+          <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-left space-y-2 text-xs text-amber-950">
+            <p className="font-bold text-amber-900 flex items-center gap-1.5">
+              <span>Importante:</span>
             </p>
-            <ol className="list-decimal list-inside space-y-1.5 pl-1 leading-relaxed text-[11px]">
-              <li>Ingresá con tu correo y contraseña.</li>
-              <li>{isCompany ? 'Ingresá al espacio de Empresa y elegí cómo empezar.' : 'Completá los datos de tu perfil profesional (oficios, fotos y contacto).'}</li>
-              <li>{isCompany ? 'Probá la búsqueda gratuita y activá un plan cuando necesites más capacidad.' : 'Completá el formulario de perfil y publicalo cuando quieras ofrecer tu trabajo; mejorar los datos aumenta tus chances de ser elegido.'}</li>
-            </ol>
+            <ul className="space-y-1.5 list-disc list-inside text-amber-900 text-[11px] leading-relaxed">
+              <li>El correo puede tardar unos minutos en llegar.</li>
+              <li>Si no lo encontrás en tu bandeja principal, <strong>revisá también SPAM o Correo no deseado</strong>.</li>
+              <li>Hacé clic en el enlace del correo para activar tu cuenta antes de ingresar.</li>
+            </ul>
           </div>
 
-          <div className="space-y-2 pt-2">
+          {resendMessage && (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
+              {resendMessage}
+            </div>
+          )}
+
+          {resendError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">
+              {resendError}
+            </div>
+          )}
+
+          <div className="space-y-3 pt-2">
+            <button
+              type="button"
+              onClick={handleResendConfirmation}
+              disabled={resendLoading || resendCooldown > 0}
+              className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] hover:bg-[var(--color-laburante-surface)] font-heading font-semibold text-xs text-[var(--color-laburante-text)] transition-colors inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={resendLoading ? 'animate-spin' : ''} />
+              <span>
+                {resendCooldown > 0
+                  ? `Reenviar correo en ${resendCooldown}s`
+                  : '¿No te llegó el correo? Reenviar confirmación'}
+              </span>
+            </button>
+
             <Link
               to="/ingresar"
               className="btn-dark w-full py-3.5 px-4 rounded-xl font-heading font-bold text-sm inline-flex items-center justify-center gap-2"
             >
-              Ir a Iniciar Sesión <ArrowRight size={16} />
-            </Link>
-            <Link
-              to={isCompany ? '/empresa' : '/crear-perfil'}
-              className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] text-xs font-semibold text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)] inline-block"
-            >
-              {isCompany ? 'Ir al espacio Empresa' : 'Completar mi perfil'}
+              <span>Ya confirmé mi cuenta · Iniciar sesión</span>
+              <ArrowRight size={16} />
             </Link>
           </div>
         </div>
