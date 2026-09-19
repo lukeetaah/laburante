@@ -41,7 +41,24 @@ import {
   ClipboardList,
   Archive,
   DollarSign,
+  X,
 } from 'lucide-react'
+
+function isValidPhotoUrl(photo: string): boolean {
+  if (typeof photo !== 'string') return false
+  const trimmed = photo.trim()
+  if (
+    trimmed.startsWith('data:image/jpeg;base64,') ||
+    trimmed.startsWith('data:image/png;base64,') ||
+    trimmed.startsWith('data:image/webp;base64,')
+  ) {
+    return true
+  }
+  if (/^https?:\/\/[^\s]+$/i.test(trimmed)) {
+    return true
+  }
+  return false
+}
 
 const REASON_LABELS: Record<string, string> = {
   trabajo_suficiente: 'Ya consiguió suficiente trabajo',
@@ -82,9 +99,21 @@ export default function Admin() {
   const [credentialsSaving, setCredentialsSaving] = useState(false)
   const [jobRequests, setJobRequests] = useState<any[]>([])
   const [selectedJob, setSelectedJob] = useState<any | null>(null)
+  const [jobLoadingId, setJobLoadingId] = useState<string | null>(null)
   const operationalSettings = useOperationalSettings()
   const [settingsForm, setSettingsForm] = useState('')
   const [settingsSaving, setSettingsSaving] = useState(false)
+
+  useEffect(() => {
+    if (!selectedJob) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedJob(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedJob])
 
   useEffect(() => {
     setSettingsForm(operationalSettings.officialWhatsApp)
@@ -261,12 +290,52 @@ export default function Admin() {
   const openJobDetails = async (job: any) => {
     const audit = await loadJobAudit(job.id)
     setSelectedJob({ ...job, audit })
-    setActiveTab('jobs')
   }
 
   const openJobDetailsById = async (jobId: string) => {
-    const job = jobRequests.find((item) => item.id === jobId)
-    if (job) await openJobDetails(job)
+    if (!jobId) return
+    const existing = jobRequests.find((item) => item.id === jobId)
+    if (existing) {
+      await openJobDetails(existing)
+      return
+    }
+
+    setJobLoadingId(jobId)
+    try {
+      const { data: fetchedJob, error: jobFetchError } = await (supabase.from('job_requests') as any)
+        .select('*')
+        .eq('id', jobId)
+        .maybeSingle()
+
+      if (jobFetchError) {
+        setActionMessage(`No se pudo consultar el pedido: ${jobFetchError.message}`)
+        return
+      }
+
+      if (!fetchedJob) {
+        setActionMessage(`El pedido #${jobId} no existe o no se encontró en el sistema.`)
+        return
+      }
+
+      const clientProfile = fetchedJob.client_id ? profiles.find((p) => p.id === fetchedJob.client_id) || null : null
+      const proProfile = profiles.find((p) => p.id === fetchedJob.profile_id) || null
+      const linkedReports = reports.filter((r) => r.job_request_id === fetchedJob.id)
+
+      const hydratedJob = {
+        ...fetchedJob,
+        client_profile: clientProfile,
+        professional_profile: proProfile,
+        linked_reports: linkedReports,
+      }
+
+      setJobRequests((prev) => [hydratedJob, ...prev.filter((j) => j.id !== hydratedJob.id)])
+      await openJobDetails(hydratedJob)
+    } catch (err: any) {
+      captureAppError(err, 'admin_open_job_by_id')
+      setActionMessage('Ocurrió un error inesperado al cargar el pedido.')
+    } finally {
+      setJobLoadingId(null)
+    }
   }
 
   const handleAdminJobAction = async (job: any, action: 'finalized' | 'cancelled' | 'archived' | 'unarchived') => {
@@ -806,67 +875,6 @@ export default function Admin() {
               ))}
             </div>
           )}
-
-          {selectedJob && (
-            <div className="rounded-2xl border border-indigo-200 bg-[var(--color-laburante-surface)] p-5 shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-[var(--color-laburante-border)] pb-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Detalle administrativo</p>
-                  <h2 className="mt-1 font-heading text-xl font-bold">{selectedJob.title}</h2>
-                  <p className="mt-1 break-all text-[11px] text-[var(--color-laburante-text-muted)]">Pedido #{selectedJob.id} · {new Date(selectedJob.created_at).toLocaleString()}</p>
-                </div>
-                <button type="button" onClick={() => setSelectedJob(null)} className="inline-flex items-center justify-center rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">Cerrar detalle</button>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <section className="rounded-xl border border-[var(--color-laburante-border)] p-4 text-xs">
-                  <h3 className="font-heading font-bold">Pedido</h3>
-                  <p className="mt-2 whitespace-pre-wrap leading-relaxed text-[var(--color-laburante-text-secondary)]">{selectedJob.description}</p>
-                  <p className="mt-3"><strong>Estado:</strong> {selectedJob.status}</p>
-                  <p><strong>Archivado:</strong> {selectedJob.archived_at ? new Date(selectedJob.archived_at).toLocaleString() : 'No'}</p>
-                  <p><strong>Urgencia:</strong> {selectedJob.urgency}</p>
-                  <p><strong>Fecha preferida:</strong> {selectedJob.preferred_date || 'No informada'}</p>
-                </section>
-                <section className="rounded-xl border border-[var(--color-laburante-border)] p-4 text-xs">
-                  <h3 className="font-heading font-bold">Participantes</h3>
-                  <p className="mt-2"><strong>Cliente:</strong> {selectedJob.client_profile?.name || selectedJob.client_name || 'Sin perfil'}{selectedJob.client_contact ? ` · ${selectedJob.client_contact}` : ''}</p>
-                  <p><strong>Ubicación:</strong> {selectedJob.client_location || 'No informada'}</p>
-                  <p className="mt-2"><strong>Profesional:</strong> {selectedJob.professional_profile?.name || 'Sin perfil'}</p>
-                  {selectedJob.professional_profile?.slug && <Link to={`/p/${selectedJob.professional_profile.slug}`} target="_blank" className="mt-1 inline-block text-[var(--color-laburante-indigo)] underline">Ver perfil profesional</Link>}
-                </section>
-                <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-xs">
-                  <h3 className="flex items-center gap-1.5 font-heading font-bold text-emerald-900"><DollarSign size={15} /> Presupuesto vigente</h3>
-                  <p className="mt-2"><strong>Monto:</strong> {selectedJob.budget_amount || 'No informado'}</p>
-                  <p><strong>Detalles:</strong> {selectedJob.budget_details || 'No informado'}</p>
-                  <p><strong>Tiempo estimado:</strong> {selectedJob.budget_estimated_time || 'No informado'}</p>
-                  <p><strong>Fecha:</strong> {selectedJob.budget_created_at ? new Date(selectedJob.budget_created_at).toLocaleString() : 'No informado'}</p>
-                </section>
-                <section className="rounded-xl border border-[var(--color-laburante-border)] p-4 text-xs">
-                  <h3 className="font-heading font-bold">Resultados disponibles</h3>
-                  <p className="mt-2"><strong>Cliente:</strong> {selectedJob.client_outcome || 'Sin respuesta'}</p>
-                  <p><strong>Profesional:</strong> {selectedJob.professional_outcome || 'Sin respuesta'}</p>
-                  <p><strong>Nota:</strong> {selectedJob.outcome_note || 'Sin nota'}</p>
-                  <p><strong>Actualizado:</strong> {selectedJob.outcome_updated_at ? new Date(selectedJob.outcome_updated_at).toLocaleString() : 'Sin fecha'}</p>
-                </section>
-              </div>
-
-              <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50/50 p-4 text-xs">
-                <h3 className="font-heading font-bold text-amber-950">Reportes vinculados ({selectedJob.linked_reports?.length || 0})</h3>
-                {selectedJob.linked_reports?.length ? <div className="mt-3 space-y-2">{selectedJob.linked_reports.map((report: any) => <article key={report.id} className="rounded-lg border border-amber-200 bg-white p-3"><p><strong>Reporte #{report.id}</strong> · {report.reason.replace(/_/g, ' ')} · {report.status}</p><p className="mt-1">Reportó: {report.reporter?.name || report.reporter_id || 'No identificado'} · {new Date(report.created_at).toLocaleString()}</p>{report.description && <p className="mt-1 whitespace-pre-wrap">{report.description}</p>}<button type="button" onClick={() => openJobDetailsById(report.job_request_id)} className="mt-2 text-[var(--color-laburante-indigo)] underline">Volver al pedido actual</button></article>)}</div> : <p className="mt-2 text-amber-900/75">No hay reportes vinculados. Los reportes históricos sin ID de pedido siguen en la sección Reportes.</p>}
-              </section>
-
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--color-laburante-border)] pt-4">
-                {!['completado', 'cancelado'].includes(selectedJob.status) && <button type="button" onClick={() => handleAdminJobAction(selectedJob, 'finalized')} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white"><Check size={14} /> Finalizar</button>}
-                {!['completado', 'cancelado'].includes(selectedJob.status) && <button type="button" onClick={() => handleAdminJobAction(selectedJob, 'cancelled')} className="inline-flex items-center gap-1.5 rounded-xl bg-rose-700 px-3 py-2 text-xs font-bold text-white"><XCircle size={14} /> Cancelar</button>}
-                {selectedJob.archived_at ? <button type="button" onClick={() => handleAdminJobAction(selectedJob, 'unarchived')} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 px-3 py-2 text-xs font-bold text-gray-800"><Archive size={14} /> Desarchivar</button> : <button type="button" onClick={() => handleAdminJobAction(selectedJob, 'archived')} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 px-3 py-2 text-xs font-bold text-gray-800"><Archive size={14} /> Archivar</button>}
-              </div>
-
-              <section className="mt-4 rounded-xl border border-[var(--color-laburante-border)] p-4 text-xs">
-                <h3 className="font-heading font-bold">Historial administrativo</h3>
-                {selectedJob.audit?.length ? <div className="mt-2 space-y-2">{selectedJob.audit.map((event: any) => <p key={event.id}><strong>{event.action}</strong> · {event.admin?.name || event.admin_user_id} · {new Date(event.created_at).toLocaleString()} · {event.previous_status || 'sin estado'} → {event.new_status || 'sin estado'}</p>)}</div> : <p className="mt-2 text-[var(--color-laburante-text-secondary)]">No hay acciones administrativas registradas.</p>}
-              </section>
-            </div>
-          )}
         </div>
       )}
 
@@ -1026,9 +1034,10 @@ export default function Admin() {
                     <button
                       type="button"
                       onClick={() => openJobDetailsById(rep.job_request_id)}
-                      className="text-[var(--color-laburante-indigo)] underline font-semibold"
+                      disabled={jobLoadingId === rep.job_request_id}
+                      className="text-[var(--color-laburante-indigo)] underline font-semibold disabled:opacity-50 cursor-pointer"
                     >
-                      Ver pedido vinculado #{rep.job_request_id}
+                      {jobLoadingId === rep.job_request_id ? 'Cargando pedido...' : `Ver pedido vinculado #${rep.job_request_id}`}
                     </button>
                   )}
                 </div>
@@ -1386,6 +1395,284 @@ export default function Admin() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Floating Administrative Modal: Detalle de Pedido */}
+      {selectedJob && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setSelectedJob(null)}
+        >
+          <div
+            className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-150 space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header with Close X */}
+            <div className="flex flex-col gap-3 border-b border-[var(--color-laburante-border)] pb-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
+                    Detalle administrativo de pedido
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold uppercase text-slate-800">
+                    {selectedJob.status || 'No disponible'}
+                  </span>
+                  {selectedJob.archived_at && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-800">
+                      Archivado
+                    </span>
+                  )}
+                </div>
+                <h2 className="mt-2 font-heading text-xl sm:text-2xl font-bold text-[var(--color-laburante-text)]">
+                  {selectedJob.title || 'Sin título'}
+                </h2>
+                <p className="mt-1 break-all text-[11px] text-[var(--color-laburante-text-muted)]">
+                  ID: <span className="font-mono">{selectedJob.id}</span> · Creado el {selectedJob.created_at ? new Date(selectedJob.created_at).toLocaleString() : 'No registrado'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedJob(null)}
+                className="p-1.5 rounded-xl text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)] hover:text-[var(--color-laburante-text)] transition-colors self-start cursor-pointer"
+                aria-label="Cerrar modal"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Grid of Sections */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Section: Pedido */}
+              <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30 p-4 text-xs space-y-2">
+                <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">Descripción del trabajo</h3>
+                <p className="whitespace-pre-wrap leading-relaxed text-[var(--color-laburante-text-secondary)]">
+                  {selectedJob.description || 'No disponible'}
+                </p>
+                <div className="pt-2 border-t border-[var(--color-laburante-border)]/60 space-y-1 text-[11px]">
+                  <p><strong>Urgencia:</strong> {selectedJob.urgency ? selectedJob.urgency.replace(/_/g, ' ') : 'No disponible'}</p>
+                  <p><strong>Fecha preferida:</strong> {selectedJob.preferred_date || 'No informada'}</p>
+                  <p><strong>Archivado:</strong> {selectedJob.archived_at ? new Date(selectedJob.archived_at).toLocaleString() : 'No'}</p>
+                </div>
+              </section>
+
+              {/* Section: Participantes */}
+              <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30 p-4 text-xs space-y-2">
+                <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">Participantes</h3>
+                <div className="space-y-1">
+                  <p>
+                    <strong>Cliente:</strong> {selectedJob.client_profile?.name || selectedJob.client_name || 'No disponible'}
+                    {selectedJob.client_contact ? ` · ${selectedJob.client_contact}` : ''}
+                  </p>
+                  <p><strong>Ubicación indicada:</strong> {selectedJob.client_location || 'No informada'}</p>
+                </div>
+                <div className="pt-2 border-t border-[var(--color-laburante-border)]/60 space-y-1">
+                  <p><strong>Profesional:</strong> {selectedJob.professional_profile?.name || 'Sin perfil'}</p>
+                  {selectedJob.professional_profile?.slug ? (
+                    <Link
+                      to={`/p/${selectedJob.professional_profile.slug}`}
+                      target="_blank"
+                      className="mt-1 inline-flex items-center gap-1 text-[var(--color-laburante-indigo)] underline font-medium"
+                    >
+                      Ver perfil público profesional
+                    </Link>
+                  ) : (
+                    <span className="text-[var(--color-laburante-text-muted)] text-[11px]">Sin slug de perfil</span>
+                  )}
+                </div>
+              </section>
+
+              {/* Section: Presupuesto vigente */}
+              <section className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 text-xs space-y-2">
+                <h3 className="flex items-center gap-1.5 font-heading font-bold text-sm text-emerald-950">
+                  <DollarSign size={16} className="text-emerald-700" /> Presupuesto vigente
+                </h3>
+                {selectedJob.budget_amount ? (
+                  <div className="space-y-1.5 text-emerald-900">
+                    <p className="text-base font-extrabold text-emerald-950">${selectedJob.budget_amount}</p>
+                    <p><strong>Detalles / Condiciones:</strong> {selectedJob.budget_details || 'Sin detalles adicionales'}</p>
+                    <p><strong>Tiempo estimado:</strong> {selectedJob.budget_estimated_time || 'No informado'}</p>
+                    <p className="text-[11px] text-emerald-800/80">
+                      <strong>Fecha del presupuesto:</strong> {selectedJob.budget_created_at ? new Date(selectedJob.budget_created_at).toLocaleString() : 'No registrado'}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-emerald-800/80 italic">Aún no se ha emitido un presupuesto formal para este pedido.</p>
+                )}
+              </section>
+
+              {/* Section: Resultados / Cancelación */}
+              <section className={`rounded-2xl p-4 text-xs space-y-2 border ${
+                selectedJob.status === 'cancelado' || selectedJob.cancelled_by || selectedJob.cancel_reason
+                  ? 'border-rose-200 bg-rose-50/50 text-rose-950'
+                  : 'border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30'
+              }`}>
+                <h3 className="font-heading font-bold text-sm">
+                  {selectedJob.status === 'cancelado' || selectedJob.cancelled_by || selectedJob.cancel_reason
+                    ? 'Cancelación'
+                    : 'Resultados informados'}
+                </h3>
+                {selectedJob.status === 'cancelado' || selectedJob.cancelled_by || selectedJob.cancel_reason ? (
+                  <div className="space-y-1 text-rose-900">
+                    <p><strong>Quién canceló:</strong> {selectedJob.cancelled_by ? (selectedJob.cancelled_by === 'cliente' ? 'Cliente' : 'Profesional') : 'No registrado'}</p>
+                    <p><strong>Motivo de cancelación:</strong> {selectedJob.cancel_reason || 'Sin motivo especificado'}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1 text-[var(--color-laburante-text-secondary)]">
+                    <p><strong>Respuesta del cliente:</strong> {selectedJob.client_outcome || 'Sin respuesta'}</p>
+                    <p><strong>Respuesta del profesional:</strong> {selectedJob.professional_outcome || 'Sin respuesta'}</p>
+                    {selectedJob.outcome_note && <p><strong>Nota:</strong> {selectedJob.outcome_note}</p>}
+                    <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
+                      <strong>Actualizado:</strong> {selectedJob.outcome_updated_at ? new Date(selectedJob.outcome_updated_at).toLocaleString() : 'No registrado'}
+                    </p>
+                  </div>
+                )}
+              </section>
+            </div>
+
+            {/* Section: Fotos y Adjuntos */}
+            <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/20 p-4 text-xs space-y-3">
+              <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                Fotos y archivos adjuntos ({selectedJob.photos?.length || 0})
+              </h3>
+              {selectedJob.photos && selectedJob.photos.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {selectedJob.photos.map((photo: string, idx: number) => {
+                    const isValid = isValidPhotoUrl(photo)
+                    return (
+                      <div key={idx} className="group relative rounded-xl border border-[var(--color-laburante-border)] overflow-hidden bg-slate-100 aspect-square flex items-center justify-center">
+                        {isValid ? (
+                          <img
+                            src={photo}
+                            alt={`Adjunto ${idx + 1} del pedido`}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
+                            onClick={() => window.open(photo, '_blank')}
+                            title="Click para abrir imagen en pestaña nueva"
+                          />
+                        ) : (
+                          <p className="p-2 text-[10px] text-center text-slate-500 font-medium">
+                            Archivo adjunto no compatible para vista previa.
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-[var(--color-laburante-text-muted)] italic">
+                  El pedido no incluye fotos ni archivos adjuntos.
+                </p>
+              )}
+            </section>
+
+            {/* Section: Reclamos y Reportes vinculados */}
+            <section className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-xs space-y-3">
+              <h3 className="font-heading font-bold text-sm text-amber-950">
+                Reportes y reclamos vinculados ({selectedJob.linked_reports?.length || 0})
+              </h3>
+              {selectedJob.linked_reports?.length ? (
+                <div className="space-y-2">
+                  {selectedJob.linked_reports.map((report: any) => (
+                    <article key={report.id} className="rounded-xl border border-amber-200 bg-white p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className="font-bold text-amber-950">
+                          Reporte #{report.id.slice(0, 8)} · {report.reason ? report.reason.replace(/_/g, ' ') : 'Motivo no especificado'}
+                        </p>
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                          {report.status || 'pendiente'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Reportó: {report.reporter?.name || report.reporter_id || 'No identificado'} · {report.created_at ? new Date(report.created_at).toLocaleString() : 'Sin fecha'}
+                      </p>
+                      {report.description && (
+                        <p className="mt-1 whitespace-pre-wrap rounded-lg bg-amber-50/50 p-2 text-[11px] text-slate-800">
+                          "{report.description}"
+                        </p>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-amber-900/75 italic">
+                  No hay reportes ni reclamos vinculados a este pedido.
+                </p>
+              )}
+            </section>
+
+            {/* Section: Acciones Administrativas */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-laburante-border)] pt-4">
+              <div className="flex flex-wrap gap-2">
+                {!['completado', 'cancelado'].includes(selectedJob.status) && (
+                  <button
+                    type="button"
+                    onClick={() => handleAdminJobAction(selectedJob, 'finalized')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-3.5 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
+                  >
+                    <Check size={14} /> Finalizar pedido
+                  </button>
+                )}
+                {!['completado', 'cancelado'].includes(selectedJob.status) && (
+                  <button
+                    type="button"
+                    onClick={() => handleAdminJobAction(selectedJob, 'cancelled')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 px-3.5 py-2 text-xs font-bold text-white transition-colors cursor-pointer"
+                  >
+                    <XCircle size={14} /> Cancelar pedido
+                  </button>
+                )}
+                {selectedJob.archived_at ? (
+                  <button
+                    type="button"
+                    onClick={() => handleAdminJobAction(selectedJob, 'unarchived')}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 hover:bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-800 transition-colors cursor-pointer"
+                  >
+                    <Archive size={14} /> Desarchivar pedido
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleAdminJobAction(selectedJob, 'archived')}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 hover:bg-gray-100 px-3.5 py-2 text-xs font-bold text-gray-800 transition-colors cursor-pointer"
+                  >
+                    <Archive size={14} /> Archivar pedido
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedJob(null)}
+                className="rounded-xl border border-[var(--color-laburante-border)] hover:bg-[var(--color-laburante-surface-alt)] px-4 py-2 text-xs font-semibold text-[var(--color-laburante-text-secondary)] transition-colors cursor-pointer"
+              >
+                Cerrar detalle
+              </button>
+            </div>
+
+            {/* Section: Historial Administrativo y Nota de Trazabilidad */}
+            <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30 p-4 text-xs space-y-2">
+              <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                Historial de moderación administrativa
+              </h3>
+              {selectedJob.audit?.length ? (
+                <div className="space-y-1.5">
+                  {selectedJob.audit.map((event: any) => (
+                    <p key={event.id} className="text-[11px] text-[var(--color-laburante-text-secondary)]">
+                      <strong className="text-[var(--color-laburante-text)]">{event.action}</strong> por {event.admin?.name || event.admin_user_id} el {new Date(event.created_at).toLocaleString()} · {event.previous_status || 'sin estado'} → {event.new_status || 'sin estado'}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[var(--color-laburante-text-secondary)] italic">
+                  No hay acciones administrativas registradas para este pedido.
+                </p>
+              )}
+              <p className="text-[10px] text-[var(--color-laburante-text-muted)] border-t border-[var(--color-laburante-border)]/60 pt-2 leading-relaxed">
+                ℹ️ Este dato no puede reconstruirse históricamente con la estructura actual (transiciones directas de usuarios sin intervención administrativa).
+              </p>
+            </section>
+          </div>
         </div>
       )}
     </div>
