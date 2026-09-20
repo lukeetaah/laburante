@@ -28,6 +28,7 @@ export default function NotificationBell() {
     markAllAsRead,
     dismissNotification,
     clearAllNotifications,
+    clearArchivedNotifications,
   } = useNotificationStore()
 
   const [isOpen, setIsOpen] = useState(false)
@@ -136,27 +137,35 @@ export default function NotificationBell() {
             </div>
 
             <div className="flex items-center gap-2">
-              {unreadCount > 0 && (
+              {view === 'new' && unreadCount > 0 && (
                 <button
-                  onClick={markAllAsRead}
-                  className="text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline flex items-center gap-1"
-                  title="Marcar todas como leídas"
+                  type="button"
+                  onClick={async () => {
+                    const ok = window.confirm(
+                      '¿Deseás limpiar las novedades de la lista? Se marcarán como leídas y se quitarán de acá, pero quedarán disponibles para visualizar desde la pestaña "Archivadas".'
+                    )
+                    if (!ok) return
+                    await markAllAsRead()
+                  }}
+                  className="text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline flex items-center gap-1 cursor-pointer"
+                  title="Limpiar novedades y mover a Archivadas"
                 >
                   <CheckCheck size={13} />
-                  <span>Marcar leídas</span>
+                  <span>Limpiar novedades</span>
                 </button>
               )}
-              {notifications.length > 0 && (
+              {view === 'archived' && notifications.some((n) => n.read) && (
                 <button
-                  onClick={() => {
-                    if (window.confirm('¿Deseás borrar todos los avisos de la lista?')) {
-                      clearAllNotifications()
-                    }
+                  type="button"
+                  onClick={async () => {
+                    const ok = window.confirm('¿Deseás eliminar definitivamente todos los avisos archivados?')
+                    if (!ok) return
+                    await clearArchivedNotifications()
                   }}
-                  className="text-[10px] text-[var(--color-laburante-text-muted)] hover:text-rose-600 hover:underline"
-                  title="Limpiar todas"
+                  className="text-[10px] text-[var(--color-laburante-text-muted)] hover:text-rose-600 hover:underline cursor-pointer"
+                  title="Vaciar avisos archivados"
                 >
-                  Limpiar
+                  Vaciar archivadas
                 </button>
               )}
             </div>

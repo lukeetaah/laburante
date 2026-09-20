@@ -49,6 +49,7 @@ interface NotificationState {
   markAllAsRead: () => Promise<void>
   dismissNotification: (id: string) => Promise<void>
   clearAllNotifications: () => Promise<void>
+  clearArchivedNotifications: () => Promise<void>
   addNotification: (command: NotificationCommand) => Promise<NotificationCreateResult>
 }
 
@@ -192,9 +193,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     })
 
     try {
-      await (supabase.from('notifications') as any)
-        .delete()
-        .eq('id', id)
+      const { error: rpcErr } = await (supabase.rpc as any)('delete_my_notification', {
+        notification_id: id,
+      })
+      if (rpcErr) {
+        await (supabase.from('notifications') as any)
+          .delete()
+          .eq('id', id)
+      }
     } catch (e) {
       console.warn('Could not delete notification from DB:', e)
     }
@@ -216,6 +222,28 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       }
     } catch (e) {
       console.warn('Could not delete all notifications from DB:', e)
+    }
+  },
+
+  clearArchivedNotifications: async () => {
+    const remaining = get().notifications.filter((n) => !n.read)
+    const { data } = await supabase.auth.getUser()
+    saveLocalNotifications(remaining, data?.user?.id)
+    set({
+      notifications: remaining,
+      unreadCount: remaining.length,
+    })
+
+    try {
+      const { error: rpcErr } = await (supabase.rpc as any)('clear_my_archived_notifications')
+      if (rpcErr && data?.user?.id) {
+        await (supabase.from('notifications') as any)
+          .delete()
+          .eq('user_id', data.user.id)
+          .eq('read', true)
+      }
+    } catch (e) {
+      console.warn('Could not clear archived notifications from DB:', e)
     }
   },
 

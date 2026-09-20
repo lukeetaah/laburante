@@ -1046,9 +1046,47 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   deleteRecommendation: async (recommendationId) => {
     try {
-      const { error } = await (supabase.from('recommendations') as any).delete().eq('id', recommendationId)
-      if (error) return { error: error.message }
-      set((state) => ({ currentProfile: state.currentProfile ? { ...state.currentProfile, recommendations: state.currentProfile.recommendations?.filter((rec) => rec.id !== recommendationId) } : null }))
+      // 1. Try RPC delete_recommendation first (handles owner, author, and admin via SECURITY DEFINER)
+      const { error: rpcError } = await (supabase.rpc as any)('delete_recommendation', {
+        target_id: recommendationId,
+      })
+
+      if (!rpcError) {
+        set((state) => ({
+          currentProfile: state.currentProfile ? {
+            ...state.currentProfile,
+            recommendations: state.currentProfile.recommendations?.filter((rec) => rec.id !== recommendationId)
+          } : null,
+          myProfile: state.myProfile ? {
+            ...state.myProfile,
+            recommendations: state.myProfile.recommendations?.filter((rec) => rec.id !== recommendationId)
+          } : null
+        }))
+        return { error: null }
+      }
+
+      // 2. Fallback to direct DELETE with .select() to verify rows affected
+      const { data: deletedRows, error: deleteError } = await (supabase.from('recommendations') as any)
+        .delete()
+        .eq('id', recommendationId)
+        .select('id')
+
+      if (deleteError) return { error: deleteError.message }
+
+      if (!deletedRows || deletedRows.length === 0) {
+        return { error: 'No se pudo eliminar la reseña en la base de datos. Por favor corré el script supabase/migration_fix_reviews_and_notifications.sql en Supabase.' }
+      }
+
+      set((state) => ({
+        currentProfile: state.currentProfile ? {
+          ...state.currentProfile,
+          recommendations: state.currentProfile.recommendations?.filter((rec) => rec.id !== recommendationId)
+        } : null,
+        myProfile: state.myProfile ? {
+          ...state.myProfile,
+          recommendations: state.myProfile.recommendations?.filter((rec) => rec.id !== recommendationId)
+        } : null
+      }))
       return { error: null }
     } catch (err: any) { captureAppError(err, 'review_delete'); return { error: err.message || 'Error al eliminar la reseña.' } }
   },

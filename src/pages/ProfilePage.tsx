@@ -28,7 +28,7 @@ function getFriendlyResumeName(name?: string | null) {
 }
 
 export default function ProfilePage() {
-  const { user } = useAuthStore()
+  const { user, isAdmin } = useAuthStore()
   const { slug } = useParams<{ slug: string }>()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -420,7 +420,7 @@ export default function ProfilePage() {
           <div className="space-y-3 pt-2">
             {profile.recommendations.map((rec) => {
               const canEdit = !!user?.id && user.id === rec.from_user_id
-              const canModerate = isOwnProfile
+              const canModerate = isOwnProfile || isAdmin
               const isEditing = editingRecommendationId === rec.id
               return <div key={rec.id} className="p-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30 space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -438,7 +438,7 @@ export default function ProfilePage() {
                   </p>
                 )}
                 {isEditing ? <div className="space-y-2"><textarea value={editingText} onChange={(e) => setEditingText(e.target.value)} rows={3} className="w-full rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs" /><input value={editingContext} onChange={(e) => setEditingContext(e.target.value)} placeholder="Trabajo realizado (opcional)" className="w-full rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs" /><div className="flex gap-2"><button type="button" onClick={async () => { const result = await updateRecommendation(rec.id, { text: editingText, context: editingContext }); setRecommendationMessage(result.error || 'Reseña actualizada.'); if (!result.error) setEditingRecommendationId(null) }} className="rounded-lg bg-indigo-700 px-3 py-2 text-[11px] font-bold text-white">Guardar</button><button type="button" onClick={() => setEditingRecommendationId(null)} className="rounded-lg border px-3 py-2 text-[11px]">Cancelar</button></div></div> : <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed pt-1">"{rec.text}"</p>}
-                <div className="flex flex-wrap gap-2 pt-1">{canModerate && rec.status !== 'visible' && <button type="button" onClick={() => moderateRecommendation(rec.id, 'visible')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white">Publicar reseña</button>}{canModerate && rec.status === 'visible' && <button type="button" onClick={() => moderateRecommendation(rec.id, 'oculto')} className="rounded-lg border border-amber-300 px-3 py-1.5 text-[11px] font-semibold text-amber-800">Ocultar</button>}{canEdit && !isEditing && <button type="button" onClick={() => { setEditingRecommendationId(rec.id); setEditingText(rec.text); setEditingContext(rec.context || '') }} className="rounded-lg border border-indigo-200 px-3 py-1.5 text-[11px] font-semibold text-indigo-800">Editar</button>}{(canEdit || canModerate) && <button type="button" onClick={async () => { if (!window.confirm('¿Querés eliminar esta reseña definitivamente?')) return; const result = await deleteRecommendation(rec.id); setRecommendationMessage(result.error || 'Reseña eliminada.') }} className="rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">Eliminar</button>}</div>
+                <div className="flex flex-wrap gap-2 pt-1">{canModerate && rec.status !== 'visible' && <button type="button" onClick={() => moderateRecommendation(rec.id, 'visible')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white">Publicar reseña</button>}{canModerate && rec.status === 'visible' && <button type="button" onClick={() => moderateRecommendation(rec.id, 'oculto')} className="rounded-lg border border-amber-300 px-3 py-1.5 text-[11px] font-semibold text-amber-800">Ocultar</button>}{canEdit && !isEditing && <button type="button" onClick={() => { setEditingRecommendationId(rec.id); setEditingText(rec.text); setEditingContext(rec.context || '') }} className="rounded-lg border border-indigo-200 px-3 py-1.5 text-[11px] font-semibold text-indigo-800">Editar</button>}{(canEdit || canModerate) && <button type="button" onClick={async () => { if (!window.confirm('¿Querés eliminar esta reseña definitivamente?')) return; const result = await deleteRecommendation(rec.id); if (!result.error) { setRawProfile((prev) => prev ? { ...prev, recommendations: (prev.recommendations || []).filter((r) => r.id !== rec.id) } : null); setRecommendationMessage('Reseña eliminada.'); } else { setRecommendationMessage(result.error); } }} className="rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">Eliminar</button>}</div>
               </div>
             })}
           </div>

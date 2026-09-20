@@ -683,18 +683,42 @@ export default function Admin() {
   const handleAdminDeleteRec = async (id: string) => {
     if (!window.confirm('¿Confirmás que querés eliminar esta reseña definitivamente?')) return
     try {
-      const { error } = await (supabase.from('recommendations') as any)
+      // 1. Probar RPC delete_recommendation
+      const { error: rpcError } = await (supabase.rpc as any)('delete_recommendation', {
+        target_id: id,
+      })
+
+      if (!rpcError) {
+        setRecommendations((prev) => prev.filter((r) => r.id !== id))
+        setActionMessage('Reseña eliminada definitivamente.')
+        return
+      }
+
+      // 2. Probar RPC admin_delete_recommendation
+      const { error: adminRpcError } = await (supabase.rpc as any)('admin_delete_recommendation', {
+        target_id: id,
+      })
+
+      if (!adminRpcError) {
+        setRecommendations((prev) => prev.filter((r) => r.id !== id))
+        setActionMessage('Reseña eliminada definitivamente.')
+        return
+      }
+
+      // 3. Fallback con DELETE directo y verificación de filas afectadas
+      const { data: deleted, error: deleteError } = await (supabase.from('recommendations') as any)
         .delete()
         .eq('id', id)
+        .select('id')
 
-      if (error) {
-        const { error: rpcError } = await (supabase.rpc as any)('admin_delete_recommendation', {
-          target_id: id,
-        })
-        if (rpcError) {
-          setActionMessage(`No se pudo eliminar la reseña: ${rpcError.message}. Aplicá migration_admin_reviews_moderation.sql en Supabase.`)
-          return
-        }
+      if (deleteError) {
+        setActionMessage(`Error al eliminar reseña: ${deleteError.message}`)
+        return
+      }
+
+      if (!deleted || deleted.length === 0) {
+        setActionMessage('No se pudo eliminar en la base de datos. Por favor aplicá el script supabase/migration_fix_reviews_and_notifications.sql en Supabase.')
+        return
       }
 
       setRecommendations((prev) => prev.filter((r) => r.id !== id))
