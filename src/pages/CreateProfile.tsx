@@ -261,7 +261,7 @@ export default function CreateProfile() {
       const extension = file.name.split('.').pop()?.toLowerCase() || 'bin'
       const path = `${user.id}/${kind}-${Date.now()}.${extension}`
       const { error: uploadError } = await supabase.storage.from('profile-assets').upload(path, file, { upsert: true, contentType: file.type })
-      if (uploadError) throw new Error('No se pudo subir el archivo. Verificá que la migración de archivos esté aplicada en Supabase.')
+      if (uploadError) throw new Error(uploadError.message || 'No se pudo subir el archivo. Verificá que la migración de archivos esté aplicada en Supabase.')
       return supabase.storage.from('profile-assets').getPublicUrl(path).data.publicUrl
     }
 
