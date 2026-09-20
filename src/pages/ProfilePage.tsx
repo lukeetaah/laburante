@@ -66,7 +66,7 @@ export default function ProfilePage() {
       setLoading(false)
     })
     return () => { active = false }
-  }, [slug, fetchProfileBySlug])
+  }, [slug, fetchProfileBySlug, user?.id])
 
   // Prefer store's currentProfile so newly added recommendations reflect immediately
   const normalizedRouteSlug = slug ? decodeURIComponent(slug).trim() : ''
@@ -261,7 +261,7 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {isPublicProvider && (
+          {isPublicProvider && !isOwnProfile && (
           <button
             onClick={() => setRecommendationOpen(true)}
             className="py-3.5 px-4 rounded-2xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-amber-900 font-heading font-semibold text-xs transition-colors flex items-center gap-1.5"
@@ -405,13 +405,15 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <button
-            onClick={() => setRecommendationOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-amber-50 text-amber-900 text-xs font-heading font-semibold transition-colors self-start sm:self-auto"
-          >
-            <MessageSquarePlus size={14} className="text-amber-600" />
-            Escribir reseña del trabajo
-          </button>
+          {!isOwnProfile && (
+            <button
+              onClick={() => setRecommendationOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-amber-50 text-amber-900 text-xs font-heading font-semibold transition-colors self-start sm:self-auto"
+            >
+              <MessageSquarePlus size={14} className="text-amber-600" />
+              Escribir reseña del trabajo
+            </button>
+          )}
         </div>
 
         {profile.recommendations && profile.recommendations.length > 0 ? (
@@ -450,17 +452,20 @@ export default function ProfilePage() {
                 Aún no hay reseñas registradas
               </h3>
               <p className="text-xs text-[var(--color-laburante-text-secondary)] max-w-md mx-auto leading-relaxed">
-                ¿Contrataste o trabajaste con <strong>{profile.name}</strong>? Contá cómo fue la experiencia para que otros vecinos contraten con seguridad y el buen trabajo se reconozca.
+                {isOwnProfile
+                  ? 'Las referencias y recomendaciones que tus clientes dejen sobre tus trabajos aparecerán acá para que puedas revisarlas y publicarlas.'
+                  : <>¿Contrataste o trabajaste con <strong>{profile.name}</strong>? Contá cómo fue la experiencia para que otros vecinos contraten con seguridad y el buen trabajo se reconozca.</>}
               </p>
             </div>
-            <button
-              onClick={() => setRecommendationOpen(true)}
-              disabled={isOwnProfile}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-dark text-xs font-heading font-semibold shadow-xs"
-            >
-              <Star size={14} className="fill-amber-400 text-amber-400" />
-              Dejar la primera reseña del trabajo
-            </button>
+            {!isOwnProfile && (
+              <button
+                onClick={() => setRecommendationOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-dark text-xs font-heading font-semibold shadow-xs"
+              >
+                <Star size={14} className="fill-amber-400 text-amber-400" />
+                Dejar la primera reseña del trabajo
+              </button>
+            )}
           </div>
         )}
         {recommendationMessage && <p className="text-xs font-semibold text-indigo-800">{recommendationMessage}</p>}
@@ -499,7 +504,7 @@ export default function ProfilePage() {
         profileName={profile.name}
       />
 
-      {isPublicProvider && <RecommendationModal
+      {isPublicProvider && !isOwnProfile && <RecommendationModal
         isOpen={recommendationOpen}
         onClose={() => setRecommendationOpen(false)}
         profileId={profile.id}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X, Star, CheckCircle, MessageSquare } from 'lucide-react'
 import { useProfileStore } from '@/stores/profile-store'
+import { useAuthStore } from '@/stores/auth-store'
 
 interface RecommendationModalProps {
   profileId: string
@@ -22,12 +23,18 @@ export default function RecommendationModal({
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const user = useAuthStore((s) => s.user)
   const submitRecommendation = useProfileStore((s) => s.submitRecommendation)
 
-  if (!isOpen) return null
+  if (!isOpen || (user?.id && user.id === profileId)) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (user?.id && user.id === profileId) {
+      setError('No podés escribir una reseña sobre tu propio perfil.')
+      return
+    }
 
     if (!fromName.trim()) {
       setError('Por favor ingresá tu nombre o iniciales.')

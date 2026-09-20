@@ -971,22 +971,41 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       const { data: userData } = await supabase.auth.getUser()
-      const { data: inserted, error } = await (supabase.from('recommendations') as any).insert({
-        to_profile_id: profileId,
-        from_name: data.from_name.trim(),
-        text: data.text.trim(),
-        context: data.context?.trim() || null,
-        from_user_id: userData?.user?.id || null,
-        status: 'pendiente'
-      }).select().single()
+      if (userData?.user?.id && userData.user.id === profileId) {
+        return { error: 'No podés escribir una reseña sobre tu propio perfil.' }
+      }
 
-      if (error) return { error: error.message }
+      let insertedId: string | undefined
+      if (userData?.user?.id) {
+        const { data: inserted, error } = await (supabase.from('recommendations') as any).insert({
+          to_profile_id: profileId,
+          from_name: data.from_name.trim(),
+          text: data.text.trim(),
+          context: data.context?.trim() || null,
+          from_user_id: userData.user.id,
+          status: 'pendiente'
+        }).select('id').single()
+
+        if (error) return { error: error.message }
+        insertedId = inserted?.id
+      } else {
+        const { error } = await (supabase.from('recommendations') as any).insert({
+          to_profile_id: profileId,
+          from_name: data.from_name.trim(),
+          text: data.text.trim(),
+          context: data.context?.trim() || null,
+          from_user_id: null,
+          status: 'pendiente'
+        })
+
+        if (error) return { error: error.message }
+      }
 
       // Optimistically append new review to currentProfile if matching
       const current = get().currentProfile
       if (current && (current.id === profileId || current.slug === profileId)) {
         const newRec = {
-          id: inserted?.id,
+          id: insertedId || `rec_${Date.now()}`,
           from_user_id: userData?.user?.id || null,
           from_name: data.from_name.trim(),
           text: data.text.trim(),
@@ -1002,11 +1021,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         })
       }
 
-      if (inserted?.id && userData?.user?.id) {
+      if (insertedId && userData?.user?.id) {
         const { useNotificationStore } = await import('@/stores/notification-store')
         await useNotificationStore.getState().addNotification({
           kind: 'review',
-          recommendationId: inserted.id,
+          recommendationId: insertedId,
         })
       }
 
