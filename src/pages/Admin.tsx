@@ -174,24 +174,10 @@ export default function Admin() {
       const allCombined = [...(profilesData || [])]
       const hydrated = allCombined.map((p: any) => ({
         ...p,
-        completion_percent: getProfileCompletion({ ...p, skills: p.skills || [], services: p.services || [], contact_methods: p.contact_methods || [] }),
+        completion_percent: getProfileCompletion({ ...p, skills: p.skills || [], services: p.services || [], contact_methods: p.contact_methods || [], intent: p.intent }),
         whatsapp_verified: Boolean(p.whatsapp_verified),
       }))
       setProfiles(hydrated)
-
-      await Promise.all(hydrated
-        .filter((p: any) => Object.prototype.hasOwnProperty.call(p, 'profile_completion_reminder_sent_at') && p.completion_percent < 70 && !p.profile_completion_reminder_sent_at)
-        .map(async (p: any) => {
-          const reminder = await useNotificationStore.getState().addNotification({
-            kind: 'admin_profile_reminder',
-            profileId: p.id,
-          })
-          if (!reminder.error) {
-            await (supabase.from('profiles') as any)
-              .update({ profile_completion_reminder_sent_at: new Date().toISOString() })
-              .eq('id', p.id)
-          }
-        }))
 
       const { data: jobsData } = await (supabase.from('job_requests') as any)
         .select('*')

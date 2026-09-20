@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Circle, ArrowRight, ShieldCheck, Edit3 } from 'lucide-react'
 import type { ProfileWithDetails } from '@/stores/profile-store'
+import { normalizeProfileIntent } from '@/lib/profile-publication'
 
 interface ProfileCompletionCardProps {
   profile: ProfileWithDetails
@@ -13,6 +14,9 @@ export default function ProfileCompletionCard({
   onOpenWhatsAppVerify,
   className = '',
 }: ProfileCompletionCardProps) {
+  const intent = normalizeProfileIntent(profile.intent)
+  const isSeeker = intent === 'buscar'
+
   const hasBio = Boolean(profile.bio?.trim())
   const hasSkills = Boolean((profile.skills && profile.skills.length > 0) || (profile.services && profile.services.length > 0))
   const hasLocation = Boolean(profile.provincia?.trim() && profile.localidad?.trim())
@@ -22,7 +26,7 @@ export default function ProfileCompletionCard({
   const steps = [
     { label: 'Cuenta creada', done: true },
     { label: 'Agregá una descripción sobre vos', done: hasBio },
-    { label: 'Contá qué sabés hacer (oficios y servicios)', done: hasSkills },
+    ...(!isSeeker ? [{ label: 'Contá qué sabés hacer (oficios y servicios)', done: hasSkills }] : []),
     { label: 'Completá tu zona y modalidad de trabajo', done: hasLocation },
     { label: 'Sumá al menos un medio de contacto', done: hasContact },
     { label: 'Verificá tu WhatsApp para tener el sello oficial', done: isWhatsAppVerified },
@@ -65,10 +69,14 @@ export default function ProfileCompletionCard({
           Paso a paso de tu perfil
         </div>
         <h3 className="font-heading text-base sm:text-lg font-extrabold text-[var(--color-laburante-text)]">
-          Tu cuenta ya está creada. Completá tu perfil para que puedan encontrarte.
+          {isSeeker
+            ? 'Tu perfil todavía puede contar un poco más sobre vos.'
+            : 'Tu cuenta ya está creada. Completá tu perfil para que puedan encontrarte.'}
         </h3>
         <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
-          Cuantos más datos sumes, más fácil será que clientes y empresas te descubran cuando busquen lo que sabés hacer.
+          {isSeeker
+            ? 'Agregá tus datos para que los profesionales que contactes puedan conocerte mejor.'
+            : 'Cuantos más datos sumes, más fácil será que clientes y empresas te descubran cuando busquen lo que sabés hacer.'}
         </p>
       </div>
 
