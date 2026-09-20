@@ -13,6 +13,7 @@ import { saveOperationalSetting, useOperationalSettings } from '@/lib/operationa
 import { isProviderProfile, normalizeProfileIntent } from '@/lib/profile-publication'
 import { useNotificationStore } from '@/stores/notification-store'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
+import * as Sentry from '@sentry/react'
 import {
   ShieldAlert,
   Users,
@@ -765,14 +766,28 @@ export default function Admin() {
           </p>
         </div>
 
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="py-2 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refrescar datos
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              Sentry.captureException(new Error("LABURANTE SENTRY TEST"))
+              setActionMessage("Evento LABURANTE SENTRY TEST enviado a Sentry.")
+            }}
+            className="py-2 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Enviar error de prueba a Sentry"
+          >
+            <span>Probar Sentry</span>
+          </button>
+
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="py-2 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refrescar datos
+          </button>
+        </div>
       </div>
 
       {actionMessage && (

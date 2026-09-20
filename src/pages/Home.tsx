@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Search, ArrowRight, UserCheck, Shield, Sparkles, MapPin, CheckCircle2, ChevronRight, HelpCircle } from 'lucide-react'
-import * as Sentry from '@sentry/react'
 import { CATEGORIES } from '@/data/categories'
 import { PROVINCES } from '@/data/provinces'
 import HomeGuideRibbons from '@/components/home/HomeGuideRibbons'
@@ -11,12 +10,6 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedProvince, setSelectedProvince] = useState('')
   const navigate = useNavigate()
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.search.includes('sentry_test=1')) {
-      Sentry.captureException(new Error("LABURANTE SENTRY TEST"))
-    }
-  }, [])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,19 +21,6 @@ export default function Home() {
 
   return (
     <div className="space-y-16 md:space-y-24 pb-16">
-      {/* TEMPORARY SENTRY TEST BUTTON */}
-      <div className="bg-rose-50 border-b border-rose-200 py-2 text-center">
-        <button
-          type="button"
-          onClick={() => {
-            Sentry.captureException(new Error("LABURANTE SENTRY TEST"))
-            alert("LABURANTE SENTRY TEST enviado a Sentry!")
-          }}
-          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
-        >
-          ⚡ Probar Sentry: LABURANTE SENTRY TEST
-        </button>
-      </div>
       {/* 1. HERO SECTION */}
       <section className="relative overflow-hidden pt-12 md:pt-20 pb-16 border-b border-[var(--color-laburante-border)] bg-gradient-to-b from-[var(--color-laburante-surface-alt)]/60 to-[var(--color-laburante-bg)]">
         <div className="container text-center max-w-4xl mx-auto">
