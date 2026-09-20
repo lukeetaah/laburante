@@ -26,6 +26,8 @@ export default function NotificationBell() {
     fetchNotifications,
     markAsRead,
     markAllAsRead,
+    dismissNotification,
+    clearAllNotifications,
   } = useNotificationStore()
 
   const [isOpen, setIsOpen] = useState(false)
@@ -133,16 +135,31 @@ export default function NotificationBell() {
               )}
             </div>
 
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline flex items-center gap-1"
-                title="Marcar todas como leídas"
-              >
-                <CheckCheck size={13} />
-                <span>Marcar leídas</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline flex items-center gap-1"
+                  title="Marcar todas como leídas"
+                >
+                  <CheckCheck size={13} />
+                  <span>Marcar leídas</span>
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('¿Deseás borrar todos los avisos de la lista?')) {
+                      clearAllNotifications()
+                    }
+                  }}
+                  className="text-[10px] text-[var(--color-laburante-text-muted)] hover:text-rose-600 hover:underline"
+                  title="Limpiar todas"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 border-b border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-1.5">
@@ -181,9 +198,22 @@ export default function NotificationBell() {
                       <p className="font-heading font-bold text-[var(--color-laburante-text)] text-xs truncate">
                         {n.title}
                       </p>
-                      {!n.read && (
-                        <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0 mt-1"></span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {!n.read && (
+                          <span className="h-2 w-2 rounded-full bg-rose-500"></span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            dismissNotification(n.id)
+                          }}
+                          className="p-0.5 rounded-md text-[var(--color-laburante-text-muted)] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Descartar aviso"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[11px] text-[var(--color-laburante-text-secondary)] leading-relaxed line-clamp-2">
                       {n.message}

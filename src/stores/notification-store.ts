@@ -47,6 +47,8 @@ interface NotificationState {
   fetchNotifications: () => Promise<void>
   markAsRead: (id: string) => Promise<void>
   markAllAsRead: () => Promise<void>
+  dismissNotification: (id: string) => Promise<void>
+  clearAllNotifications: () => Promise<void>
   addNotification: (command: NotificationCommand) => Promise<NotificationCreateResult>
 }
 
@@ -114,16 +116,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           .order('created_at', { ascending: false })
 
         if (!error && data) {
-          const dbIds = new Set(data.map((n: any) => n.id))
-          const merged = [
-            ...data,
-            ...local.filter((n) => !dbIds.has(n.id) && n.user_id === userId),
-          ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
-          saveLocalNotifications(merged, userId)
+          saveLocalNotifications(data, userId)
           set({
-            notifications: merged,
-            unreadCount: merged.filter((n) => !n.read).length,
+            notifications: data,
+            unreadCount: data.filter((n: any) => !n.read).length,
             loading: false,
           })
           return
@@ -183,6 +179,43 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     } catch (e) {
       captureAppError(e, 'notifications_mark_all_read')
       console.warn('Failed to mark all notifications read in DB:', e)
+    }
+  },
+
+  dismissNotification: async (id: string) => {
+    const updated = get().notifications.filter((n) => n.id !== id)
+    const { data } = await supabase.auth.getUser()
+    saveLocalNotifications(updated, data?.user?.id)
+    set({
+      notifications: updated,
+      unreadCount: updated.filter((n) => !n.read).length,
+    })
+
+    try {
+      await (supabase.from('notifications') as any)
+        .delete()
+        .eq('id', id)
+    } catch (e) {
+      console.warn('Could not delete notification from DB:', e)
+    }
+  },
+
+  clearAllNotifications: async () => {
+    const { data } = await supabase.auth.getUser()
+    saveLocalNotifications([], data?.user?.id)
+    set({
+      notifications: [],
+      unreadCount: 0,
+    })
+
+    try {
+      if (data?.user?.id) {
+        await (supabase.from('notifications') as any)
+          .delete()
+          .eq('user_id', data.user.id)
+      }
+    } catch (e) {
+      console.warn('Could not delete all notifications from DB:', e)
     }
   },
 
