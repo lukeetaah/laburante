@@ -366,7 +366,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           services: item.services || [],
           contact_methods: dedupeContactMethods(item.contact_methods || []),
           languages: item.profile_languages || [],
-          recommendations: item.recommendations || [],
+          recommendations: (item.recommendations || []).filter((r: any) => r.from_user_id !== null),
           categories: [],
         }
         set({ currentProfile: fullProfile, loading: false })
@@ -427,7 +427,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         services: item.services || [],
         contact_methods: dedupeContactMethods(item.contact_methods || []),
         languages: item.profile_languages || [],
-        recommendations: item.recommendations || [],
+        recommendations: (item.recommendations || []).filter((r: any) => r.from_user_id !== null),
         categories: [],
       }
       set({ myProfile: profile })
@@ -971,35 +971,24 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       const { data: userData } = await supabase.auth.getUser()
-      if (userData?.user?.id && userData.user.id === profileId) {
+      if (!userData?.user) {
+        return { error: 'Debés iniciar sesión con tu cuenta para dejar una reseña.' }
+      }
+      if (userData.user.id === profileId) {
         return { error: 'No podés escribir una reseña sobre tu propio perfil.' }
       }
 
-      let insertedId: string | undefined
-      if (userData?.user?.id) {
-        const { data: inserted, error } = await (supabase.from('recommendations') as any).insert({
-          to_profile_id: profileId,
-          from_name: data.from_name.trim(),
-          text: data.text.trim(),
-          context: data.context?.trim() || null,
-          from_user_id: userData.user.id,
-          status: 'pendiente'
-        }).select('id').single()
+      const { data: inserted, error } = await (supabase.from('recommendations') as any).insert({
+        to_profile_id: profileId,
+        from_name: data.from_name.trim(),
+        text: data.text.trim(),
+        context: data.context?.trim() || null,
+        from_user_id: userData.user.id,
+        status: 'pendiente'
+      }).select('id').single()
 
-        if (error) return { error: error.message }
-        insertedId = inserted?.id
-      } else {
-        const { error } = await (supabase.from('recommendations') as any).insert({
-          to_profile_id: profileId,
-          from_name: data.from_name.trim(),
-          text: data.text.trim(),
-          context: data.context?.trim() || null,
-          from_user_id: null,
-          status: 'pendiente'
-        })
-
-        if (error) return { error: error.message }
-      }
+      if (error) return { error: error.message }
+      const insertedId = inserted?.id
 
       // Optimistically append new review to currentProfile if matching
       const current = get().currentProfile

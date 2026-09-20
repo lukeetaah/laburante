@@ -41,6 +41,7 @@ import {
   ClipboardList,
   Archive,
   DollarSign,
+  Star,
   X,
 } from 'lucide-react'
 
@@ -81,7 +82,7 @@ export default function Admin() {
     adminRejectWhatsAppVerification,
   } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'jobs' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'deletions' | 'settings'>('analytics')
+  const [activeTab, setActiveTab] = useState<'analytics' | 'jobs' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'reviews' | 'deletions' | 'settings'>('analytics')
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos' | 'incompletos'>('todos')
   const [adminFilters, setAdminFilters] = useState({
     query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '',
@@ -89,6 +90,9 @@ export default function Admin() {
   })
   const [reports, setReports] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
+  const [recommendations, setRecommendations] = useState<any[]>([])
+  const [recStatusFilter, setRecStatusFilter] = useState<'todas' | 'pendientes' | 'visibles' | 'ocultas' | 'anonimas'>('todas')
+  const [recSearch, setRecSearch] = useState('')
   const [deletions, setDeletions] = useState<AccountDeletionRecord[]>([])
   const [waRequests, setWaRequests] = useState<WhatsAppVerificationRequest[]>([])
   const [loading, setLoading] = useState(false)
@@ -199,6 +203,12 @@ export default function Admin() {
       // 4. Fetch Deletions
       const delList = await fetchAccountDeletions()
       setDeletions(delList)
+
+      // 5. Fetch Recommendations
+      const { data: recsData } = await (supabase.from('recommendations') as any)
+        .select('*')
+        .order('created_at', { ascending: false })
+      setRecommendations(recsData || [])
     } catch (err) {
       captureAppError(err, 'admin_data_load')
       console.warn('Error loading admin data:', err)
@@ -644,6 +654,76 @@ export default function Admin() {
     }
   }
 
+  const handleAdminModerateRec = async (id: string, newStatus: string) => {
+    try {
+      const { error } = await (supabase.from('recommendations') as any)
+        .update({ status: newStatus })
+        .eq('id', id)
+
+      if (error) {
+        const { error: rpcError } = await (supabase.rpc as any)('admin_moderate_recommendation', {
+          target_id: id,
+          target_status: newStatus,
+        })
+        if (rpcError) {
+          setActionMessage(`No se pudo actualizar la reseña: ${rpcError.message}. Aplicá migration_admin_reviews_moderation.sql en Supabase.`)
+          return
+        }
+      }
+
+      setRecommendations((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+      )
+      setActionMessage(`Reseña marcada como ${newStatus}.`)
+    } catch (err: any) {
+      setActionMessage(`Error al moderar reseña: ${err.message}`)
+    }
+  }
+
+  const handleAdminDeleteRec = async (id: string) => {
+    if (!window.confirm('¿Confirmás que querés eliminar esta reseña definitivamente?')) return
+    try {
+      const { error } = await (supabase.from('recommendations') as any)
+        .delete()
+        .eq('id', id)
+
+      if (error) {
+        const { error: rpcError } = await (supabase.rpc as any)('admin_delete_recommendation', {
+          target_id: id,
+        })
+        if (rpcError) {
+          setActionMessage(`No se pudo eliminar la reseña: ${rpcError.message}. Aplicá migration_admin_reviews_moderation.sql en Supabase.`)
+          return
+        }
+      }
+
+      setRecommendations((prev) => prev.filter((r) => r.id !== id))
+      setActionMessage('Reseña eliminada definitivamente.')
+    } catch (err: any) {
+      setActionMessage(`Error al eliminar reseña: ${err.message}`)
+    }
+  }
+
+  const filteredRecommendations = recommendations.filter((rec) => {
+    if (recStatusFilter === 'pendientes' && rec.status !== 'pendiente') return false
+    if (recStatusFilter === 'visibles' && rec.status !== 'visible') return false
+    if (recStatusFilter === 'ocultas' && rec.status !== 'oculto') return false
+    if (recStatusFilter === 'anonimas' && rec.from_user_id !== null) return false
+
+    if (recSearch.trim()) {
+      const targetProfile = profiles.find((p) => p.id === rec.to_profile_id)
+      const term = recSearch.toLowerCase()
+      const matchesTarget = targetProfile?.name?.toLowerCase().includes(term) || targetProfile?.slug?.toLowerCase().includes(term)
+      const matchesAuthor = rec.from_name?.toLowerCase().includes(term)
+      const matchesText = rec.text?.toLowerCase().includes(term) || rec.context?.toLowerCase().includes(term)
+      if (!matchesTarget && !matchesAuthor && !matchesText) return false
+    }
+
+    return true
+  })
+
+  const pendingReviewsCount = recommendations.filter((r) => r.status === 'pendiente').length
+
   return (
     <div className="container py-8 md:py-12 max-w-5xl mx-auto space-y-8">
       {/* Admin Header */}
@@ -803,6 +883,23 @@ export default function Admin() {
         >
           <Trash2 size={16} />
           Bajas y Motivos ({deletions.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('reviews')}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'reviews'
+              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
+              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
+          }`}
+        >
+          <Star size={16} />
+          Reseñas ({recommendations.length})
+          {pendingReviewsCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+              {pendingReviewsCount}
+            </span>
+          )}
         </button>
 
         <button
@@ -1381,6 +1478,199 @@ export default function Admin() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab: Reviews / Reseñas */}
+      {activeTab === 'reviews' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 text-xs text-amber-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-amber-900">
+              <Star size={15} className="text-amber-600 fill-amber-500" />
+              Gestión y moderación integral de reseñas
+            </p>
+            <p className="text-[11px] text-amber-800 leading-relaxed">
+              Supervisá todas las reseñas y recomendaciones de la plataforma. Podés publicarlas, ocultarlas o eliminarlas de forma definitiva si son spam o reseñas anónimas no válidas.
+            </p>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(['todas', 'pendientes', 'visibles', 'ocultas', 'anonimas'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setRecStatusFilter(status)}
+                  className={`py-1.5 px-3 rounded-xl text-xs font-semibold transition-colors capitalize cursor-pointer ${
+                    recStatusFilter === status
+                      ? 'btn-dark'
+                      : 'border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-secondary)]'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 max-w-xs">
+              <input
+                type="text"
+                value={recSearch}
+                onChange={(e) => setRecSearch(e.target.value)}
+                placeholder="Buscar por perfil, autor o texto..."
+                className="w-full rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-1.5 text-xs focus:ring-2 focus:ring-[var(--color-laburante-indigo)]"
+              />
+            </div>
+          </div>
+
+          {filteredRecommendations.length === 0 ? (
+            <div className="p-10 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
+              No se encontraron reseñas con los filtros seleccionados.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredRecommendations.map((rec) => {
+                const targetProfile = profiles.find((p) => p.id === rec.to_profile_id)
+                const isAnonymous = !rec.from_user_id
+                return (
+                  <div
+                    key={rec.id}
+                    className={`p-5 rounded-2xl border bg-[var(--color-laburante-surface)] space-y-3 ${
+                      rec.status === 'pendiente'
+                        ? 'border-amber-300'
+                        : rec.status === 'visible'
+                        ? 'border-emerald-200'
+                        : 'border-[var(--color-laburante-border)]'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                            rec.status === 'visible'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : rec.status === 'pendiente'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-slate-100 text-slate-800'
+                          }`}
+                        >
+                          {rec.status === 'visible' ? 'Publicada' : rec.status === 'pendiente' ? 'Pendiente' : 'Oculta'}
+                        </span>
+                        {isAnonymous ? (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                            Anónima (sin usuario)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            Usuario registrado
+                          </span>
+                        )}
+                        <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                          Autor: {rec.from_name}
+                        </h4>
+                      </div>
+                      <span className="text-xs text-[var(--color-laburante-text-muted)]">
+                        {new Date(rec.created_at).toLocaleDateString()} {new Date(rec.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-[var(--color-laburante-text-secondary)] space-y-1.5">
+                      <p>
+                        <strong>Perfil receptor:</strong>{' '}
+                        {targetProfile ? (
+                          <Link
+                            to={`/p/${targetProfile.slug}#resenas`}
+                            target="_blank"
+                            className="text-[var(--color-laburante-indigo)] underline font-semibold"
+                          >
+                            {targetProfile.name} (@{targetProfile.slug})
+                          </Link>
+                        ) : (
+                          <span>ID: {rec.to_profile_id}</span>
+                        )}
+                      </p>
+                      {rec.context && (
+                        <p className="text-[11px] text-[var(--color-laburante-indigo)] font-medium">
+                          <strong>Trabajo realizado:</strong> {rec.context}
+                        </p>
+                      )}
+                      <div className="p-3 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-xs text-[var(--color-laburante-text)] leading-relaxed italic">
+                        "{rec.text}"
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--color-laburante-border)]/40">
+                      {rec.status !== 'visible' && (
+                        <button
+                          type="button"
+                          onClick={() => handleAdminModerateRec(rec.id, 'visible')}
+                          className="py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye size={13} />
+                          Hacer visible
+                        </button>
+                      )}
+                      {rec.status === 'visible' && (
+                        <button
+                          type="button"
+                          onClick={() => handleAdminModerateRec(rec.id, 'oculto')}
+                          className="py-1.5 px-3 rounded-lg border border-amber-300 hover:bg-amber-50 text-amber-900 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          <EyeOff size={13} />
+                          Ocultar
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleAdminDeleteRec(rec.id)}
+                        className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer ml-auto"
+                      >
+                        <Trash2 size={13} />
+                        Eliminar definitivamente
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Settings */}
+      {activeTab === 'settings' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-indigo-900">
+              <KeyRound size={15} className="text-indigo-600" />
+              Configuración operativa de la plataforma
+            </p>
+            <p className="text-[11px] text-indigo-800 leading-relaxed">
+              Número oficial de WhatsApp de LABURANTE para derivación de consultas, contacto y soporte institucional.
+            </p>
+          </div>
+          <div className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] space-y-4 max-w-lg">
+            <div>
+              <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">
+                Línea oficial de WhatsApp
+              </label>
+              <input
+                type="text"
+                value={settingsForm}
+                onChange={(e) => setSettingsForm(e.target.value)}
+                placeholder="ej: 5491123456789"
+                className="w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={settingsSaving}
+              onClick={handleSaveSettings}
+              className="btn-dark px-4 py-2.5 rounded-xl text-xs font-bold disabled:opacity-50"
+            >
+              {settingsSaving ? 'Guardando...' : 'Guardar configuración'}
+            </button>
+          </div>
         </div>
       )}
 

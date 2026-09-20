@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { X, Star, CheckCircle, MessageSquare } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { X, Star, CheckCircle, MessageSquare, Lock } from 'lucide-react'
 import { useProfileStore } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -16,17 +17,73 @@ export default function RecommendationModal({
   isOpen,
   onClose,
 }: RecommendationModalProps) {
-  const [fromName, setFromName] = useState('')
+  const user = useAuthStore((s) => s.user)
+  const [fromName, setFromName] = useState(user?.user_metadata?.name || '')
   const [context, setContext] = useState('')
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const user = useAuthStore((s) => s.user)
   const submitRecommendation = useProfileStore((s) => s.submitRecommendation)
 
+  useEffect(() => {
+    if (user?.user_metadata?.name && !fromName) {
+      setFromName(user.user_metadata.name)
+    }
+  }, [user])
+
   if (!isOpen || (user?.id && user.id === profileId)) return null
+
+  const handleReset = () => {
+    setSuccess(false)
+    setFromName(user?.user_metadata?.name || '')
+    setContext('')
+    setText('')
+    setError(null)
+    onClose()
+  }
+
+  if (!user) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+        <div className="relative w-full max-w-md rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-center space-y-4">
+          <button
+            onClick={handleReset}
+            className="absolute top-5 right-5 p-1.5 rounded-lg text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)]"
+            aria-label="Cerrar"
+          >
+            <X size={18} />
+          </button>
+          <div className="h-14 w-14 mx-auto rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center text-[var(--color-laburante-indigo)]">
+            <Lock size={26} />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
+              Iniciá sesión para dejar una reseña
+            </h3>
+            <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
+              En LABURANTE cuidamos la transparencia: solo usuarios con cuenta pueden recomendar a un trabajador para evitar opiniones falsas o anónimas.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 pt-2">
+            <Link
+              to="/login"
+              className="w-full py-2.5 px-4 rounded-xl btn-dark font-heading font-bold text-xs flex items-center justify-center gap-2"
+            >
+              Iniciar sesión
+            </Link>
+            <Link
+              to="/registro"
+              className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-xs font-semibold text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface)] flex items-center justify-center"
+            >
+              Crear cuenta gratuita
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,15 +119,6 @@ export default function RecommendationModal({
     } else {
       setSuccess(true)
     }
-  }
-
-  const handleReset = () => {
-    setSuccess(false)
-    setFromName('')
-    setContext('')
-    setText('')
-    setError(null)
-    onClose()
   }
 
   return (
