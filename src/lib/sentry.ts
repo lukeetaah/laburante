@@ -39,6 +39,7 @@ const traceOrigins = Array.from(new Set([
 
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN || DEFAULT_SENTRY_DSN,
+  environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || (import.meta.env.PROD ? 'production' : 'development'),
   integrations: [Sentry.browserTracingIntegration()],
   tracesSampleRate: 0.1,
   tracePropagationTargets: traceOrigins.map((origin) => new RegExp(`^${escapeRegExp(origin)}(?:/|$)`)),
