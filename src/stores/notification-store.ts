@@ -274,7 +274,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         }
       }
 
-      if (createdId) dispatchNotificationEmail(createdId)
+      if (createdId) {
+        await dispatchNotificationEmail(createdId)
+      }
       return { notificationId: createdId, error: null }
     } catch (e) {
       captureAppError(e, 'notification_create')

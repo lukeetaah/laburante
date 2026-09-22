@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore, getResendCooldownRemaining } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
 import { getPostLoginPath } from '@/lib/contextual-navigation'
@@ -18,9 +18,22 @@ export default function Login() {
   const [resendCooldown, setResendCooldown] = useState(0)
 
   const signIn = useAuthStore((s) => s.signIn)
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const resendConfirmationEmail = useAuthStore((s) => s.resendConfirmationEmail)
   const fetchMyProfile = useProfileStore((s) => s.fetchMyProfile)
   const navigate = useNavigate()
+
+  const [oauthLoading, setOauthLoading] = useState<'google' | null>(null)
+
+  const handleGoogleLogin = async () => {
+    setError(null)
+    setOauthLoading('google')
+    const res = await signInWithGoogle()
+    if (res.error) {
+      setError(res.error)
+      setOauthLoading(null)
+    }
+  }
 
   const isConfirmedQuery = searchParams.get('confirmado') === '1'
 
@@ -33,6 +46,16 @@ export default function Login() {
     )
   )
 
+  // Sincronizar cooldown persistente ante cambios de email o error de confirmación
+  useEffect(() => {
+    const trimmed = email.trim()
+    if (!trimmed) return
+    const remaining = getResendCooldownRemaining(trimmed)
+    if (remaining > 0) {
+      setResendCooldown(remaining)
+    }
+  }, [email, isEmailNotConfirmed])
+
   useEffect(() => {
     if (resendCooldown <= 0) return
     const timer = window.setInterval(() => {
@@ -42,19 +65,23 @@ export default function Login() {
   }, [resendCooldown])
 
   const handleResendConfirmation = async () => {
-    if (!email.trim() || resendLoading || resendCooldown > 0) return
+    const trimmed = email.trim()
+    if (!trimmed || resendLoading || resendCooldown > 0) return
     setResendLoading(true)
     setResendMessage(null)
     setResendError(null)
 
-    const res = await resendConfirmationEmail(email.trim())
+    const res = await resendConfirmationEmail(trimmed)
     setResendLoading(false)
 
     if (res.error) {
       setResendError(res.error)
+      if (res.remainingSeconds) {
+        setResendCooldown(res.remainingSeconds)
+      }
     } else {
       setResendMessage('Correo de confirmación reenviado. Revisá tu bandeja de entrada y SPAM.')
-      setResendCooldown(60)
+      setResendCooldown(res.remainingSeconds || 60)
     }
   }
 
@@ -147,6 +174,36 @@ export default function Login() {
             {error}
           </div>
         ) : null}
+
+        {/* Botones de OAuth */}
+        <div className="space-y-2.5">
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={oauthLoading !== null || loading}
+            className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] font-heading font-semibold text-xs text-[var(--color-laburante-text)] transition-colors inline-flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+          >
+            {oauthLoading === 'google' ? (
+              <RefreshCw size={15} className="animate-spin" />
+            ) : (
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+            )}
+            <span>Continuar con Google</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-[var(--color-laburante-border)]" />
+          <span className="text-[11px] uppercase tracking-wider text-[var(--color-laburante-text-muted)] font-semibold">
+            o con tu email
+          </span>
+          <div className="flex-1 h-px bg-[var(--color-laburante-border)]" />
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

@@ -66,7 +66,7 @@ Sentry.init({
     if (event.exception?.values) {
       event.exception.values = event.exception.values.map((exception) => ({
         ...exception,
-        value: 'Application error',
+        value: exception.value?.includes('LABURANTE SENTRY TEST') ? exception.value : 'Application error',
       }))
     }
     return event

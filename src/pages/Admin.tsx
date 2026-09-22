@@ -81,9 +81,11 @@ export default function Admin() {
     fetchPendingWhatsAppVerifications,
     adminApproveWhatsAppVerification,
     adminRejectWhatsAppVerification,
+    fetchUnconfirmedRegistrations,
+    adminCleanupAbandonedAccounts,
   } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'jobs' | 'verifications' | 'reports' | 'profiles' | 'companies' | 'reviews' | 'deletions' | 'settings'>('analytics')
+  const [activeTab, setActiveTab] = useState<'analytics' | 'jobs' | 'verifications' | 'confirmations' | 'reports' | 'profiles' | 'companies' | 'reviews' | 'deletions' | 'settings'>('analytics')
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos' | 'incompletos'>('todos')
   const [adminFilters, setAdminFilters] = useState({
     query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '',
@@ -96,6 +98,12 @@ export default function Admin() {
   const [recSearch, setRecSearch] = useState('')
   const [deletions, setDeletions] = useState<AccountDeletionRecord[]>([])
   const [waRequests, setWaRequests] = useState<WhatsAppVerificationRequest[]>([])
+  const [unconfirmedRegistrations, setUnconfirmedRegistrations] = useState<any[]>([])
+  const [unconfirmedFilter, setUnconfirmedFilter] = useState<'todos' | 'pendiente' | 'recordatorio_1' | 'recordatorio_2' | 'limpieza_programada' | 'excluido_actividad'>('todos')
+  const [unconfirmedSearch, setUnconfirmedSearch] = useState('')
+  const [unconfirmedSort, setUnconfirmedSort] = useState<'antiguedad_desc' | 'antiguedad_asc'>('antiguedad_desc')
+  const [cleanupSimulating, setCleanupSimulating] = useState(false)
+  const [cleanupResults, setCleanupResults] = useState<any[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [editingProfile, setEditingProfile] = useState<any | null>(null)
@@ -210,6 +218,10 @@ export default function Admin() {
         .select('*')
         .order('created_at', { ascending: false })
       setRecommendations(recsData || [])
+
+      // 6. Fetch Unconfirmed Registrations
+      const unconfirmed = await fetchUnconfirmedRegistrations()
+      setUnconfirmedRegistrations(unconfirmed || [])
     } catch (err) {
       captureAppError(err, 'admin_data_load')
       console.warn('Error loading admin data:', err)
@@ -220,6 +232,22 @@ export default function Admin() {
   useEffect(() => {
     if (isAdmin) {
       loadData()
+
+      const triggerTest = () => {
+        Sentry.withScope((scope) => {
+          scope.setTag('test_event', 'true')
+          scope.setTag('environment', import.meta.env.MODE || (import.meta.env.PROD ? 'production' : 'development'))
+          scope.setExtra('page_url', window.location.href)
+          Sentry.captureException(new Error("LABURANTE SENTRY TEST"))
+        })
+        setActionMessage("Evento de prueba 'LABURANTE SENTRY TEST' enviado a Sentry.")
+      }
+
+      ;(window as any).__triggerSentryTest = triggerTest
+
+      if (typeof window !== 'undefined' && window.location.search.includes('test_sentry=1')) {
+        triggerTest()
+      }
     }
   }, [isAdmin])
 
@@ -655,6 +683,18 @@ export default function Admin() {
     }
   }
 
+  const handleSimulateCleanup = async () => {
+    setCleanupSimulating(true)
+    const res = await adminCleanupAbandonedAccounts(true)
+    setCleanupSimulating(false)
+    if (res.error) {
+      setActionMessage(`Error al evaluar registros abandonados: ${res.error}`)
+    } else {
+      setCleanupResults(res.results || [])
+      setActionMessage(`Simulación completada. Cuentas detectadas como abandonadas: ${(res.results || []).length}. (Modo dry_run: ninguna cuenta fue eliminada)`)
+    }
+  }
+
   const handleAdminModerateRec = async (id: string, newStatus: string) => {
     try {
       const { error } = await (supabase.from('recommendations') as any)
@@ -747,6 +787,23 @@ export default function Admin() {
     return true
   })
 
+  const filteredUnconfirmed = unconfirmedRegistrations
+    .filter((reg: any) => {
+      if (unconfirmedFilter !== 'todos' && reg.status !== unconfirmedFilter) return false
+      if (unconfirmedSearch.trim()) {
+        const q = unconfirmedSearch.trim().toLowerCase()
+        const matchName = (reg.name || '').toLowerCase().includes(q)
+        const matchEmail = (reg.email || '').toLowerCase().includes(q)
+        if (!matchName && !matchEmail) return false
+      }
+      return true
+    })
+    .sort((a: any, b: any) => {
+      const daysA = Number(a.days_elapsed || 0)
+      const daysB = Number(b.days_elapsed || 0)
+      return unconfirmedSort === 'antiguedad_desc' ? daysB - daysA : daysA - daysB
+    })
+
   const pendingReviewsCount = recommendations.filter((r) => r.status === 'pendiente').length
 
   return (
@@ -766,28 +823,14 @@ export default function Admin() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              Sentry.captureException(new Error("LABURANTE SENTRY TEST"))
-              setActionMessage("Evento LABURANTE SENTRY TEST enviado a Sentry.")
-            }}
-            className="py-2 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Enviar error de prueba a Sentry"
-          >
-            <span>Probar Sentry</span>
-          </button>
-
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="py-2 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refrescar datos
-          </button>
-        </div>
+        <button
+          onClick={loadData}
+          disabled={loading}
+          className="py-2 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Refrescar datos
+        </button>
       </div>
 
       {actionMessage && (
@@ -872,6 +915,23 @@ export default function Admin() {
           {pendingWaCount > 0 && (
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
               {pendingWaCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('confirmations')}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'confirmations'
+              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
+              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
+          }`}
+        >
+          <Mail size={16} />
+          Confirmaciones
+          {unconfirmedRegistrations.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900">
+              {unconfirmedRegistrations.length}
             </span>
           )}
         </button>
@@ -1019,81 +1079,282 @@ export default function Admin() {
             </div>
           ) : (
             <div className="space-y-3">
-              {waRequests.map((req) => (
-                <div
-                  key={req.id}
-                  className={`p-5 rounded-2xl border bg-[var(--color-laburante-surface)] space-y-3 ${
-                    req.status === 'pendiente' ? 'border-indigo-300' : 'border-[var(--color-laburante-border)]'
+              {waRequests.map((req) => {
+                const requestsForProfile = waRequests.filter((r) => r.profile_id === req.profile_id)
+                const hasDuplicates = requestsForProfile.length > 1
+
+                return (
+                  <div
+                    key={req.id}
+                    className={`p-5 rounded-2xl border bg-[var(--color-laburante-surface)] space-y-3 ${
+                      req.status === 'pendiente' ? 'border-indigo-300' : 'border-[var(--color-laburante-border)]'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                            req.status === 'pendiente'
+                              ? 'bg-amber-100 text-amber-800'
+                              : req.status === 'aprobado'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {req.status === 'pendiente' ? '⏳ Pendiente' : req.status === 'aprobado' ? '✅ Aprobada' : '❌ Rechazada'}
+                        </span>
+                        {hasDuplicates && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200" title="Historial de solicitudes registradas para este perfil">
+                            Total solicitudes: {requestsForProfile.length}
+                          </span>
+                        )}
+                        <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                          {req.profile_name}
+                        </h4>
+                        {req.profile_slug && (
+                          <Link to={`/p/${req.profile_slug}`} target="_blank" className="text-[11px] text-[var(--color-laburante-indigo)] hover:underline">
+                            @{req.profile_slug}
+                          </Link>
+                        )}
+                      </div>
+                      <span className="text-xs text-[var(--color-laburante-text-muted)]">
+                        {new Date(req.created_at).toLocaleDateString()} {new Date(req.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs">
+                      <div>
+                        <span className="text-[var(--color-laburante-text-muted)]">Número declarado:</span>
+                        <p className="font-bold text-[var(--color-laburante-text)]">{req.phone_declared}</p>
+                      </div>
+                      <div>
+                        <span className="text-[var(--color-laburante-text-muted)]">Código:</span>
+                        <p className="font-mono font-bold text-indigo-800">{req.code}</p>
+                      </div>
+                      {req.reviewed_at && (
+                        <div>
+                          <span className="text-[var(--color-laburante-text-muted)]">Fecha de resolución:</span>
+                          <p className="font-medium text-[var(--color-laburante-text)]">
+                            {new Date(req.reviewed_at).toLocaleDateString()} {new Date(req.reviewed_at).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      )}
+                      <div className="flex items-end">
+                        <a
+                          href={`https://wa.me/${req.phone_declared.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 transition-colors"
+                        >
+                          <MessageCircle size={13} />
+                          Abrir chat con el profesional
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                    </div>
+
+                    {req.status === 'pendiente' && (
+                      <div className="flex flex-wrap items-center gap-2 pt-2">
+                        <button
+                          onClick={() => handleApproveWA(req)}
+                          className="py-1.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Check size={14} />
+                          Aprobar y Certificar ✓
+                        </button>
+                        <button
+                          onClick={() => handleRejectWA(req)}
+                          className="py-1.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <XCircle size={14} />
+                          Rechazar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Confirmaciones y Registros Pendientes */}
+      {activeTab === 'confirmations' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-amber-900">
+                <Mail size={15} className="text-amber-700" />
+                Registros pendientes de confirmación de correo
+              </p>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Supervisión del ciclo de vida de cuentas registradas: Día 0 (Registro), Día 7 (Recordatorio 1), Día 14 (Recordatorio 2), Día 21+ (Candidato a limpieza solo si no presenta ninguna actividad ni rol protegido).
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleSimulateCleanup}
+                disabled={cleanupSimulating}
+                className="py-2 px-3.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white font-heading font-semibold text-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                title="Ejecutar simulación server-side de cuentas abandonadas sin borrar datos reales"
+              >
+                <RefreshCw size={13} className={cleanupSimulating ? 'animate-spin' : ''} />
+                <span>{cleanupSimulating ? 'Evaluando...' : 'Simular Limpieza (dry_run)'}</span>
+              </button>
+            </div>
+          </div>
+
+          {cleanupResults && (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 space-y-2">
+              <div className="flex items-center justify-between font-bold">
+                <span>Resultado de Simulación (dry_run): {cleanupResults.length} cuentas califican como abandonadas</span>
+                <button
+                  type="button"
+                  onClick={() => setCleanupResults(null)}
+                  className="text-[11px] text-slate-500 hover:underline cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
+              {cleanupResults.length === 0 ? (
+                <p className="text-[11px] text-slate-600">No hay cuentas que cumplan estrictamente los criterios de registro abandonado (21+ días sin confirmar y sin ninguna actividad).</p>
+              ) : (
+                <ul className="space-y-1 list-disc list-inside text-[11px] text-slate-700">
+                  {cleanupResults.map((r) => (
+                    <li key={r.user_id}>
+                      <strong>{r.name}</strong> ({r.email}) — Antigüedad: {r.days_elapsed} días — Estado: {r.action_taken}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Filtros de confirmaciones */}
+          <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] flex flex-col lg:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-1.5 flex-wrap w-full lg:w-auto">
+              <span className="font-semibold text-[var(--color-laburante-text-muted)] mr-1">Filtrar:</span>
+              {(['todos', 'pendiente', 'recordatorio_1', 'recordatorio_2', 'limpieza_programada', 'excluido_actividad'] as const).map((filterKey) => (
+                <button
+                  key={filterKey}
+                  type="button"
+                  onClick={() => setUnconfirmedFilter(filterKey)}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer text-[11px] ${
+                    unconfirmedFilter === filterKey
+                      ? 'bg-amber-600 text-white font-bold'
+                      : 'border border-[var(--color-laburante-border)] text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)]'
                   }`}
+                >
+                  {filterKey === 'todos' ? 'Todos' :
+                   filterKey === 'pendiente' ? 'Pendientes (0-6d)' :
+                   filterKey === 'recordatorio_1' ? 'Recordatorio 1 (7-13d)' :
+                   filterKey === 'recordatorio_2' ? 'Recordatorio 2 (14-20d)' :
+                   filterKey === 'limpieza_programada' ? 'Candidatos Limpieza (21d+)' :
+                   'Excluidos con Actividad'}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
+              <input
+                type="text"
+                value={unconfirmedSearch}
+                onChange={(e) => setUnconfirmedSearch(e.target.value)}
+                placeholder="Buscar por nombre o email..."
+                className="px-3 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs w-full sm:w-56"
+              />
+              <select
+                value={unconfirmedSort}
+                onChange={(e) => setUnconfirmedSort(e.target.value as any)}
+                className="px-2.5 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs text-[var(--color-laburante-text-secondary)]"
+              >
+                <option value="antiguedad_desc">Más antiguos primero</option>
+                <option value="antiguedad_asc">Más recientes primero</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Listado de cuentas */}
+          {filteredUnconfirmed.length === 0 ? (
+            <div className="p-10 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
+              No se encontraron cuentas sin confirmar para los filtros seleccionados.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredUnconfirmed.map((reg: any) => (
+                <div
+                  key={reg.user_id}
+                  className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] space-y-3"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
                         className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                          req.status === 'pendiente'
-                            ? 'bg-amber-100 text-amber-800'
-                            : req.status === 'aprobado'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-rose-100 text-rose-800'
+                          reg.status === 'excluido_actividad'
+                            ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                            : reg.status === 'limpieza_programada'
+                            ? 'bg-rose-100 text-rose-900 border border-rose-200'
+                            : reg.status === 'recordatorio_2'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                            : reg.status === 'recordatorio_1'
+                            ? 'bg-yellow-100 text-yellow-900 border border-yellow-200'
+                            : 'bg-slate-100 text-slate-800 border border-slate-200'
                         }`}
                       >
-                        {req.status === 'pendiente' ? '⏳ Pendiente' : req.status === 'aprobado' ? '✅ Aprobada' : '❌ Rechazada'}
+                        {reg.status === 'excluido_actividad' ? '🛡️ Excluido por actividad' :
+                         reg.status === 'limpieza_programada' ? '⚠️ Programado para limpieza' :
+                         reg.status === 'recordatorio_2' ? '📬 Recordatorio 2' :
+                         reg.status === 'recordatorio_1' ? '📧 Recordatorio 1' :
+                         '⏳ Pendiente inicial'}
                       </span>
                       <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
-                        {req.profile_name}
+                        {reg.name}
                       </h4>
-                      {req.profile_slug && (
-                        <Link to={`/p/${req.profile_slug}`} target="_blank" className="text-[11px] text-[var(--color-laburante-indigo)] hover:underline">
-                          @{req.profile_slug}
-                        </Link>
-                      )}
+                      <span className="text-xs text-[var(--color-laburante-text-muted)] font-mono">
+                        {reg.email}
+                      </span>
                     </div>
-                    <span className="text-xs text-[var(--color-laburante-text-muted)]">
-                      {new Date(req.created_at).toLocaleDateString()} {new Date(req.created_at).toLocaleTimeString()}
+                    <span className="text-xs font-semibold text-[var(--color-laburante-text-secondary)]">
+                      {reg.days_elapsed} día{reg.days_elapsed === 1 ? '' : 's'} transcurrido{reg.days_elapsed === 1 ? '' : 's'}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                     <div>
-                      <span className="text-[var(--color-laburante-text-muted)]">Número declarado:</span>
-                      <p className="font-bold text-[var(--color-laburante-text)]">{req.phone_declared}</p>
+                      <span className="text-[var(--color-laburante-text-muted)]">Fecha de registro:</span>
+                      <p className="font-medium text-[var(--color-laburante-text)]">
+                        {new Date(reg.created_at).toLocaleDateString()} {new Date(reg.created_at).toLocaleTimeString()}
+                      </p>
                     </div>
+
                     <div>
-                      <span className="text-[var(--color-laburante-text-muted)]">Código:</span>
-                      <p className="font-mono font-bold text-indigo-800">{req.code}</p>
+                      <span className="text-[var(--color-laburante-text-muted)]">Reenvíos solicitados:</span>
+                      <p className="font-medium text-[var(--color-laburante-text)]">
+                        {reg.resend_count || 0} reenvío{reg.resend_count === 1 ? '' : 's'}
+                        {reg.last_resend_at ? ` (último: ${new Date(reg.last_resend_at).toLocaleDateString()})` : ''}
+                      </p>
                     </div>
-                    <div className="flex items-end">
-                      <a
-                        href={`https://wa.me/${req.phone_declared.replace(/[^0-9]/g, '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 transition-colors"
-                      >
-                        <MessageCircle size={13} />
-                        Abrir chat con el profesional
-                        <ExternalLink size={11} />
-                      </a>
+
+                    <div>
+                      <span className="text-[var(--color-laburante-text-muted)]">Próxima acción / Fecha prevista:</span>
+                      <p className="font-medium text-[var(--color-laburante-text)]">
+                        {reg.status === 'excluido_actividad'
+                          ? 'Conservación protegida'
+                          : reg.scheduled_cleanup_at
+                          ? new Date(reg.scheduled_cleanup_at).toLocaleDateString()
+                          : 'Día 21 posterior al alta'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-laburante-text-muted)]">Actividad asociada:</span>
+                      <p className={`font-semibold ${reg.has_activity ? 'text-indigo-700' : 'text-slate-500'}`}>
+                        {reg.activity_details || (reg.has_activity ? 'Actividad detectada' : 'Sin actividad')}
+                      </p>
                     </div>
                   </div>
-
-                  {req.status === 'pendiente' && (
-                    <div className="flex flex-wrap items-center gap-2 pt-2">
-                      <button
-                        onClick={() => handleApproveWA(req)}
-                        className="py-1.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Check size={14} />
-                        Aprobar y Certificar ✓
-                      </button>
-                      <button
-                        onClick={() => handleRejectWA(req)}
-                        className="py-1.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <XCircle size={14} />
-                        Rechazar
-                      </button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

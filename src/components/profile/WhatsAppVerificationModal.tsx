@@ -45,6 +45,8 @@ export default function WhatsAppVerificationModal({
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [isAlreadyPending, setIsAlreadyPending] = useState(false)
+  const [initLoading, setInitLoading] = useState(false)
 
   // Initialize or request verification code when opened
   useEffect(() => {
@@ -52,15 +54,27 @@ export default function WhatsAppVerificationModal({
       setError(null)
       setInputPin('')
       setStep('send')
+      setIsAlreadyPending(false)
+      setInitLoading(true)
 
       const slug = profileSlug || profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
       requestWhatsAppVerification(profileId, profileName, slug, phone).then((res) => {
+        setInitLoading(false)
+        if (res.error) {
+          setError(res.error)
+        }
         if (res.code) {
           setVerificationCode(res.code)
         }
         if (res.requestId) {
           setRequestId(res.requestId)
         }
+        if (res.alreadyPending) {
+          setIsAlreadyPending(true)
+        }
+      }).catch(() => {
+        setInitLoading(false)
+        setError('Error al verificar solicitud de WhatsApp.')
       })
     }
   }, [isOpen, profileId, profileName, profileSlug, phone])
@@ -201,6 +215,18 @@ export default function WhatsAppVerificationModal({
           <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
             <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {isAlreadyPending && (
+          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+            <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-700" />
+            <div className="space-y-0.5">
+              <p className="font-bold text-amber-950">Solicitud en curso</p>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Ya contás con una solicitud de verificación activa. Mantenemos tu código asignado para que puedas completar la validación sin duplicar pedidos.
+              </p>
+            </div>
           </div>
         )}
 
@@ -356,7 +382,7 @@ export default function WhatsAppVerificationModal({
               <button
                 type="button"
                 onClick={handleOpenWhatsApp}
-                disabled={!verificationCode}
+                disabled={!verificationCode || initLoading}
                 className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-heading font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Send size={16} />

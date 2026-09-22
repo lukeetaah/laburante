@@ -430,7 +430,16 @@ export default function ProfilePage() {
                       Cliente
                     </span>
                   </div>
-                  <div className="flex items-center gap-2"><span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${rec.status === 'visible' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>{rec.status === 'visible' ? 'Publicada' : 'Pendiente de revisión'}</span>{rec.date && <span className="text-[var(--color-laburante-text-muted)]">{rec.date}</span>}</div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${rec.status === 'visible' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                      {rec.status === 'visible' ? 'Publicada' : 'Pendiente de revisión'}
+                    </span>
+                    {(rec.created_at || rec.date) && (
+                      <span className="text-[11px] text-[var(--color-laburante-text-muted)]">
+                        {new Date(rec.created_at || rec.date!).toLocaleDateString('es-AR')}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {rec.context && (
                   <p className="text-[11px] text-[var(--color-laburante-indigo)] font-medium">

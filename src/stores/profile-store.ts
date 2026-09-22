@@ -88,7 +88,7 @@ interface ProfileState {
     profileName: string,
     profileSlug: string,
     phoneDeclared: string
-  ) => Promise<{ error: string | null; code?: string; officialPhone: string; requestId?: string }>
+  ) => Promise<{ error: string | null; code?: string; officialPhone: string; requestId?: string; alreadyPending?: boolean }>
   fetchPendingWhatsAppVerifications: () => Promise<WhatsAppVerificationRequest[]>
   adminApproveWhatsAppVerification: (
     requestId: string,
@@ -98,6 +98,8 @@ interface ProfileState {
   adminRejectWhatsAppVerification: (
     requestId: string
   ) => Promise<{ error: string | null }>
+  fetchUnconfirmedRegistrations: () => Promise<any[]>
+  adminCleanupAbandonedAccounts: (dryRun?: boolean) => Promise<{ error: string | null; results?: any[] }>
   deleteAccount: (profileId: string, payload: { reason: string; explanation: string; userEmail?: string }) => Promise<{ error: string | null; success?: boolean }>
   fetchAccountDeletions: () => Promise<AccountDeletionRecord[]>
   submitRecommendation: (profileId: string, data: { from_name: string; text: string; context?: string }) => Promise<{ error: string | null }>
@@ -704,6 +706,47 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   requestWhatsAppVerification: async (profileId, profileName, profileSlug, phoneDeclared) => {
     addAppBreadcrumb('whatsapp_verification_request_started')
     try {
+      const officialPhone = (await getOperationalSettings()).officialWhatsApp
+
+      // 1. Comprobar en Supabase si ya existe una solicitud en estado 'pendiente' para este perfil
+      try {
+        const { data: pendingDb, error: checkErr } = await (supabase.from('whatsapp_verification_requests') as any)
+          .select('*')
+          .eq('profile_id', profileId)
+          .eq('status', 'pendiente')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (!checkErr && pendingDb?.id) {
+          // Si ya existe una solicitud pendiente, devolvemos la existente y NO generamos otro código ni insertamos duplicados
+          return {
+            error: null,
+            code: pendingDb.code,
+            officialPhone,
+            requestId: pendingDb.id,
+            alreadyPending: true,
+          }
+        }
+      } catch (checkErr) {
+        console.warn('Verificación previa en Supabase de solicitud WhatsApp pendiente omitida:', checkErr)
+      }
+
+      // 2. Comprobar en memoria local si existe una solicitud pendiente
+      const localExisting = getLocalWARequests().find(
+        (r) => r.profile_id === profileId && r.status === 'pendiente'
+      )
+      if (localExisting) {
+        return {
+          error: null,
+          code: localExisting.code,
+          officialPhone,
+          requestId: localExisting.id,
+          alreadyPending: true,
+        }
+      }
+
+      // 3. Crear una única solicitud nueva
       const codeDigits = Math.floor(100000 + Math.random() * 900000).toString()
       const code = `LAB-${codeDigits}`
       const requestId = generateUUID()
@@ -721,13 +764,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         created_at: now,
       }
 
-      // 1. Save local
+      // Guardar localmente
       const existing = getLocalWARequests().filter(
         (r) => !(r.profile_id === profileId && r.status === 'pendiente')
       )
       saveLocalWARequests([newReq, ...existing])
 
-      // 2. Try Supabase
+      // Insertar en Supabase
       try {
         const { data: inserted, error: insErr } = await (supabase.from('whatsapp_verification_requests') as any).insert({
           id: requestId,
@@ -741,6 +784,25 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }).select().maybeSingle()
 
         if (insErr) {
+          // Si colisiona con el índice único o constraint de solicitud pendiente, recuperar la existente
+          if (/unique|duplicate|idx_unique_pending_wa_request/i.test(insErr.message || '')) {
+            const { data: existingPending } = await (supabase.from('whatsapp_verification_requests') as any)
+              .select('*')
+              .eq('profile_id', profileId)
+              .eq('status', 'pendiente')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            if (existingPending?.id) {
+              return {
+                error: null,
+                code: existingPending.code,
+                officialPhone,
+                requestId: existingPending.id,
+                alreadyPending: true,
+              }
+            }
+          }
           console.warn('Supabase insert whatsapp_verification_requests notice:', insErr.message)
         } else if (inserted?.id) {
           newReq.id = inserted.id
@@ -752,7 +814,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       return {
         error: null,
         code,
-        officialPhone: (await getOperationalSettings()).officialWhatsApp,
+        officialPhone,
         requestId: newReq.id,
       }
     } catch (e: any) {
@@ -880,6 +942,36 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     } catch (e: any) {
       captureAppError(e, 'whatsapp_verification_admin_reject')
       return { error: e.message || 'Error al rechazar verificación.' }
+    }
+  },
+
+  fetchUnconfirmedRegistrations: async () => {
+    addAppBreadcrumb('admin_unconfirmed_registrations_load_started')
+    try {
+      const { data, error } = await (supabase.rpc as any)('admin_get_unconfirmed_registrations')
+      if (error) {
+        console.warn('RPC admin_get_unconfirmed_registrations notice:', error.message)
+        return []
+      }
+      return data || []
+    } catch (err) {
+      captureAppError(err, 'admin_unconfirmed_registrations_load')
+      console.warn('Error loading unconfirmed registrations:', err)
+      return []
+    }
+  },
+
+  adminCleanupAbandonedAccounts: async (dryRun = true) => {
+    addAppBreadcrumb('admin_cleanup_abandoned_accounts_started')
+    try {
+      const { data, error } = await (supabase.rpc as any)('admin_cleanup_abandoned_accounts', { dry_run: dryRun })
+      if (error) {
+        return { error: error.message, results: [] }
+      }
+      return { error: null, results: data || [] }
+    } catch (err: any) {
+      captureAppError(err, 'admin_cleanup_abandoned_accounts')
+      return { error: err.message || 'Error al procesar limpieza de cuentas.', results: [] }
     }
   },
 
@@ -1011,11 +1103,19 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       if (insertedId && userData?.user?.id) {
-        const { useNotificationStore } = await import('@/stores/notification-store')
-        await useNotificationStore.getState().addNotification({
-          kind: 'review',
-          recommendationId: insertedId,
-        })
+        try {
+          const { useNotificationStore } = await import('@/stores/notification-store')
+          const notifRes = await useNotificationStore.getState().addNotification({
+            kind: 'review',
+            recommendationId: insertedId,
+          })
+          if (notifRes.error) {
+            console.warn('Review notification could not be created:', notifRes.error)
+          }
+        } catch (notifErr) {
+          captureAppError(notifErr, 'review_notification_create')
+          console.warn('Failed to dispatch notification for review:', notifErr)
+        }
       }
 
       return { error: null }
