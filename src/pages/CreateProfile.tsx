@@ -259,10 +259,12 @@ export default function CreateProfile() {
       if (!allowed.includes(file.type)) throw new Error(kind === 'photo' ? 'La foto debe ser JPG, PNG o WebP.' : 'El CV debe ser PDF, DOC, DOCX, CSV o TXT.')
       if (file.size > 10 * 1024 * 1024) throw new Error('El archivo no puede superar los 10 MB.')
       const extension = file.name.split('.').pop()?.toLowerCase() || 'bin'
+      const bucket = kind === 'photo' ? 'profile-photos' : 'profile-documents'
       const path = `${user.id}/${kind}-${Date.now()}.${extension}`
-      const { error: uploadError } = await supabase.storage.from('profile-assets').upload(path, file, { upsert: true, contentType: file.type })
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, { upsert: true, contentType: file.type })
       if (uploadError) throw new Error(uploadError.message || 'No se pudo subir el archivo. Verificá que la migración de archivos esté aplicada en Supabase.')
-      return supabase.storage.from('profile-assets').getPublicUrl(path).data.publicUrl
+      if (kind === 'resume') return `profile-documents:${path}`
+      return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
     }
 
     try {

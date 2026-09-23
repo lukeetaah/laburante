@@ -14,6 +14,7 @@ import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
 import { isProviderProfile } from '@/lib/profile-publication'
 import { focusContextualElement } from '@/lib/contextual-navigation'
+import { getAuthorizedResumeUrl } from '@/lib/profile-assets'
 
 const contactLabels: Record<string, string> = { linkedin: 'LinkedIn', portfolio: 'Portfolio' }
 
@@ -45,6 +46,7 @@ export default function ProfilePage() {
   const [editingText, setEditingText] = useState('')
   const [editingContext, setEditingContext] = useState('')
   const [recommendationMessage, setRecommendationMessage] = useState('')
+  const [resumeAccessUrl, setResumeAccessUrl] = useState<string | null>(null)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
   const updateProfileVisibility = useProfileStore((s) => s.updateProfileVisibility)
@@ -76,6 +78,16 @@ export default function ProfilePage() {
     if (loading || !profile || location.hash !== '#resenas') return
     return focusContextualElement({ id: 'resenas' })
   }, [loading, profile?.slug, location.hash])
+
+  useEffect(() => {
+    let active = true
+    setResumeAccessUrl(null)
+    if (!user?.id || !profile?.id || !profile.has_resume) return () => { active = false }
+    getAuthorizedResumeUrl(profile.id).then((result) => {
+      if (active) setResumeAccessUrl(result.url)
+    })
+    return () => { active = false }
+  }, [profile?.id, profile?.has_resume, user?.id])
 
   const handleShare = () => {
     const url = `${window.location.origin}/p/${profile?.slug}`
@@ -297,9 +309,13 @@ export default function ProfilePage() {
           </div>
         )}
         <div className="pt-3 text-xs">
-          {profile.resume_url ? (
+          {profile.has_resume || profile.resume_url ? (
             user ? (
-              <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{getFriendlyResumeName(profile.resume_name) ? `: ${getFriendlyResumeName(profile.resume_name)}` : ''}</a>
+              resumeAccessUrl ? (
+                <a href={resumeAccessUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{getFriendlyResumeName(profile.resume_name) ? `: ${getFriendlyResumeName(profile.resume_name)}` : ''}</a>
+              ) : (
+                <span className="inline-flex items-center gap-2 text-[var(--color-laburante-text-muted)]"><FileText size={14} /> CV disponible para cuentas autorizadas</span>
+              )
             ) : (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <span className="inline-flex items-center gap-2 font-semibold text-emerald-700"><FileText size={14} /> CV cargado</span>

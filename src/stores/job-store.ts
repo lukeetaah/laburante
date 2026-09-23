@@ -90,23 +90,36 @@ export const useJobStore = create<JobState>((set, get) => ({
 
       if (userId) {
         const { data, error } = await (supabase.from('job_requests') as any)
-          .select(`
-            *,
-            profiles:profile_id ( name, slug, photo_url, provincia, localidad, contact_methods ( type, value, is_public ) )
-          `)
+          .select('*')
           .eq('client_id', userId)
           .order('created_at', { ascending: false })
 
         if (!error && data) {
+          const profileIds = [...new Set(data.map((item: any) => item.profile_id).filter(Boolean))]
+          const [{ data: profiles }, { data: contactMethods }] = await Promise.all([
+            profileIds.length
+              ? await (supabase.from('authenticated_job_profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', profileIds)
+              : { data: [] },
+            profileIds.length
+              ? await (supabase.from('contact_methods') as any).select('profile_id, type, value, is_public').in('profile_id', profileIds)
+              : { data: [] },
+          ])
+          const profilesById = new Map<string, any>((profiles || []).map((profile: any) => [profile.id, profile]))
+          const contactsByProfile = new Map<string, any[]>()
+          ;(contactMethods || []).forEach((contact: any) => {
+            const contacts = contactsByProfile.get(contact.profile_id) || []
+            contacts.push(contact)
+            contactsByProfile.set(contact.profile_id, contacts)
+          })
           const formatted: JobRequestWithDetails[] = data.map((item: any) => ({
             ...item,
-            pro_name: item.profiles?.name || 'Profesional',
-            pro_slug: item.profiles?.slug || '',
-            pro_photo: item.profiles?.photo_url || null,
-            pro_provincia: item.profiles?.provincia || '',
-            pro_localidad: item.profiles?.localidad || '',
-            pro_contact: item.profiles?.contact_methods?.find((contact: any) => contact.type === 'whatsapp' && contact.is_public)?.value || null,
-            pro_contacts: item.profiles?.contact_methods || [],
+            pro_name: profilesById.get(item.profile_id)?.name || 'Profesional',
+            pro_slug: profilesById.get(item.profile_id)?.slug || '',
+            pro_photo: profilesById.get(item.profile_id)?.photo_url || null,
+            pro_provincia: profilesById.get(item.profile_id)?.provincia || '',
+            pro_localidad: profilesById.get(item.profile_id)?.localidad || '',
+            pro_contact: contactsByProfile.get(item.profile_id)?.find((contact: any) => contact.type === 'whatsapp' && contact.is_public)?.value || null,
+            pro_contacts: contactsByProfile.get(item.profile_id) || [],
           }))
           set({ clientRequests: formatted, loading: false })
           return

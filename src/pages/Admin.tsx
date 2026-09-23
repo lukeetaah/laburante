@@ -11,6 +11,7 @@ import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
 import { saveOperationalSetting, useOperationalSettings } from '@/lib/operational-settings'
 import { isProviderProfile, normalizeProfileIntent } from '@/lib/profile-publication'
+import { getAuthorizedResumeUrl } from '@/lib/profile-assets'
 import { useNotificationStore } from '@/stores/notification-store'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 import * as Sentry from '@sentry/react'
@@ -107,6 +108,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [editingProfile, setEditingProfile] = useState<any | null>(null)
+  const [editingResumeUrl, setEditingResumeUrl] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<any>({})
   const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [credentialsSaving, setCredentialsSaving] = useState(false)
@@ -491,6 +493,7 @@ export default function Admin() {
 
   const openProfileEditor = async (profile: any) => {
     setEditingProfile(profile)
+    setEditingResumeUrl(null)
     setCredentialsOpen(false)
     setEditForm({
       name: profile.name || '',
@@ -507,6 +510,8 @@ export default function Admin() {
     })
     const { data: email } = await (supabase.rpc as any)('admin_get_user_email', { target_user_id: profile.id })
     setEditForm((current: any) => ({ ...current, email: email || '' }))
+    const resume = await getAuthorizedResumeUrl(profile.id)
+    setEditingResumeUrl(resume.url)
   }
 
   const handleUpdateCredentials = async () => {
@@ -1675,7 +1680,7 @@ export default function Admin() {
               <div className="space-y-1 text-xs">
                 <p className="font-bold">Material del perfil</p>
                 <p className={editingProfile.resume_url ? 'text-emerald-700' : 'text-[var(--color-laburante-text-muted)]'}>{editingProfile.resume_url ? 'CV cargado' : 'Sin CV cargado'}</p>
-                {editingProfile.resume_url && <a href={editingProfile.resume_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--color-laburante-indigo)] hover:underline"><Eye size={12} /> Ver CV</a>}
+                {editingProfile.resume_url && editingResumeUrl && <a href={editingResumeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--color-laburante-indigo)] hover:underline"><Eye size={12} /> Ver CV</a>}
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

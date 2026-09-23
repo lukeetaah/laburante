@@ -8,6 +8,7 @@ import { dedupeContactMethods } from '@/lib/contact-methods'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 import { getOperationalSettings } from '@/lib/operational-settings'
 import { isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
+import { resolveProfilePhotoUrl } from '@/lib/profile-assets'
 
 export interface ProfileWithDetails {
   id: string
@@ -19,6 +20,7 @@ export interface ProfileWithDetails {
   company_plan?: 'gratis' | 'pago'
   resume_url?: string | null
   resume_name?: string | null
+  has_resume?: boolean
   bio: string | null
   provincia: string
   localidad: string
@@ -228,6 +230,63 @@ async function replaceProfileLanguages(profileId: string, languages: any[]) {
   }
 }
 
+const PUBLIC_PROFILE_FIELDS = 'id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, account_type, hybrid_presencial_pct, hybrid_remoto_pct, intent, has_resume'
+
+async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]> {
+  const profileIds = rows.map((row) => row.id).filter(Boolean)
+  if (!profileIds.length) return []
+
+  const [{ data: authData }, [skillsResult, servicesResult, contactsResult, languagesResult, recommendationsResult]] = await Promise.all([
+    supabase.auth.getUser(),
+    Promise.all([
+      (supabase.from('public_profile_skills') as any).select('profile_id, name').in('profile_id', profileIds),
+      (supabase.from('public_profile_services') as any).select('profile_id, title, description, precio_orientativo').in('profile_id', profileIds),
+      (supabase.from('public_profile_contacts') as any).select('profile_id, type, value, is_public').in('profile_id', profileIds),
+      (supabase.from('public_profile_languages') as any).select('profile_id, language, level, is_public').in('profile_id', profileIds),
+      (supabase.from('public_profile_recommendations') as any).select('id, to_profile_id, from_name, text, context, created_at, status, is_author').in('to_profile_id', profileIds),
+    ]),
+  ])
+  const currentUserId = authData.user?.id || null
+
+  const byProfile = <T extends { profile_id?: string; to_profile_id?: string }>(items: T[] | null | undefined, key: 'profile_id' | 'to_profile_id' = 'profile_id') => {
+    const grouped = new Map<string, T[]>()
+    for (const item of items || []) {
+      const id = item[key]
+      if (!id) continue
+      grouped.set(id, [...(grouped.get(id) || []), item])
+    }
+    return grouped
+  }
+
+  const skillsByProfile = byProfile(skillsResult.data)
+  const servicesByProfile = byProfile(servicesResult.data)
+  const contactsByProfile = byProfile(contactsResult.data)
+  const languagesByProfile = byProfile(languagesResult.data)
+  const recommendationsByProfile = byProfile(recommendationsResult.data, 'to_profile_id')
+
+  return Promise.all(rows.map(async (row) => ({
+    ...row,
+    photo_url: await resolveProfilePhotoUrl(row.photo_url),
+    status: 'activo' as const,
+    company_plan: undefined,
+    resume_url: null,
+    resume_name: null,
+    has_resume: Boolean(row.has_resume),
+    whatsapp_verified: false,
+    whatsapp_verified_at: null,
+    created_at: '',
+    skills: (skillsByProfile.get(row.id) || []).map((item: any) => item.name),
+    services: servicesByProfile.get(row.id) || [],
+    contact_methods: dedupeContactMethods((contactsByProfile.get(row.id) || []) as any),
+    languages: languagesByProfile.get(row.id) || [],
+    recommendations: (recommendationsByProfile.get(row.id) || []).map((item: any) => ({
+      ...item,
+      from_user_id: item.is_author ? currentUserId : null,
+    })),
+    categories: [],
+  })))
+}
+
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
   currentProfile: null,
@@ -237,17 +296,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     addAppBreadcrumb('profile_search_started')
     set({ loading: true })
     try {
-      let query = (supabase.from('profiles') as any)
-        .select(`
-          id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at, updated_at, whatsapp_verified, whatsapp_verified_at,
-          skills ( name ),
-          services ( title, description, precio_orientativo ),
-          contact_methods ( type, value, is_public ),
-          profile_languages ( language, level, is_public ),
-          recommendations ( id, status )
-        `)
-        .eq('status', 'activo')
+      let query = (supabase.from('public_profiles') as any)
+        .select(PUBLIC_PROFILE_FIELDS)
 
       if (filters.provincia) {
         query = query.eq('provincia', filters.provincia)
@@ -266,19 +316,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return
       }
 
-      let realProfiles: ProfileWithDetails[] = []
-      if (!error && data) {
-        realProfiles = (data as any[]).map((item: any) => ({
-          ...item,
-          whatsapp_verified: Boolean(item.whatsapp_verified),
-          whatsapp_verified_at: item.whatsapp_verified_at || null,
-          skills: item.skills?.map((s: any) => s.name) || [],
-          services: item.services || [],
-          contact_methods: dedupeContactMethods(item.contact_methods || []),
-          languages: item.profile_languages || [],
-          categories: [],
-        }))
-      }
+      let realProfiles: ProfileWithDetails[] = await hydratePublicProfiles((data || []) as any[])
 
       realProfiles = realProfiles.filter(isProviderProfile)
 
@@ -338,17 +376,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     addAppBreadcrumb('profile_view_started')
     set({ loading: true })
     try {
-      // Check Supabase first
-      let { data, error } = await (supabase.from('profiles') as any)
-        .select(`
-          id, name, slug, photo_url, account_type, company_plan, resume_url, resume_name, bio, provincia, localidad, zona_trabajo,
-          disponibilidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, created_at, whatsapp_verified, whatsapp_verified_at,
-          skills ( name ),
-          services ( title, description, precio_orientativo ),
-          contact_methods ( id, type, value, is_public ),
-          recommendations ( id, from_user_id, from_name, text, context, created_at, status ),
-          profile_languages ( language, level, is_public )
-        `)
+      const { data, error } = await (supabase.from('public_profiles') as any)
+        .select(PUBLIC_PROFILE_FIELDS)
         .eq('slug', slug)
         .maybeSingle()
 
@@ -359,20 +388,27 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       if (!error && data) {
-        const item = data as any
-        const fullProfile: ProfileWithDetails = {
-          ...item,
-          whatsapp_verified: Boolean(item.whatsapp_verified),
-          whatsapp_verified_at: item.whatsapp_verified_at || null,
-          skills: item.skills?.map((s: any) => s.name) || [],
-          services: item.services || [],
-          contact_methods: dedupeContactMethods(item.contact_methods || []),
-          languages: item.profile_languages || [],
-          recommendations: (item.recommendations || []).filter((r: any) => r.from_user_id !== null),
-          categories: [],
-        }
+        const [fullProfile] = await hydratePublicProfiles([data as any])
         set({ currentProfile: fullProfile, loading: false })
         return fullProfile
+      }
+
+      // A hidden profile is still visible to its authenticated owner, as it
+      // was before the public read model was introduced.
+      if (!data) {
+        const { data: authData } = await supabase.auth.getUser()
+        if (authData.user) {
+          const { data: ownProfile } = await (supabase.from('profiles') as any)
+            .select('id, slug')
+            .eq('id', authData.user.id)
+            .eq('slug', slug)
+            .maybeSingle()
+          if (ownProfile) {
+            const own = await get().fetchMyProfile()
+            set({ currentProfile: own, loading: false })
+            return own
+          }
+        }
       }
 
       set({ currentProfile: null, loading: false })
@@ -423,6 +459,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       const item = data as any
       const profile: ProfileWithDetails = {
         ...item,
+        photo_url: await resolveProfilePhotoUrl(item.photo_url),
         whatsapp_verified: Boolean(item.whatsapp_verified),
         whatsapp_verified_at: item.whatsapp_verified_at || null,
         skills: item.skills?.map((s: any) => s.name) || [],
@@ -667,40 +704,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   verifyWhatsApp: async (profileId, phone, _code) => {
     addAppBreadcrumb('whatsapp_verification_started')
-    try {
-      const now = new Date().toISOString()
-      const { error } = await (supabase.from('profiles') as any)
-        .update({ whatsapp_verified: true, whatsapp_verified_at: now })
-        .eq('id', profileId)
-      if (error) return { error: error.message }
-
-      const localWA = getLocalVerifiedWA()
-      localWA[profileId] = { phone, at: now }
-      saveLocalVerifiedWA(localWA)
-
-      // 3. Update Zustand state
-      set((s) => {
-        const updateObj = (p: ProfileWithDetails | null) =>
-          p && p.id === profileId
-            ? { ...p, whatsapp_verified: true, whatsapp_verified_at: now }
-            : p
-
-        return {
-          currentProfile: updateObj(s.currentProfile),
-          myProfile: updateObj(s.myProfile),
-          profiles: s.profiles.map((p) =>
-            p.id === profileId
-              ? { ...p, whatsapp_verified: true, whatsapp_verified_at: now }
-              : p
-          ),
-        }
-      })
-
-      return { error: null, success: true }
-    } catch (e: any) {
-      captureAppError(e, 'whatsapp_verify')
-      return { error: e.message || 'Error al verificar el número de WhatsApp.' }
-    }
+    return { error: 'La aprobación final de WhatsApp debe realizarla Administración.' }
+    void profileId
+    void phone
+    void _code
   },
 
   requestWhatsAppVerification: async (profileId, profileName, profileSlug, phoneDeclared) => {
@@ -980,7 +987,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       const now = new Date().toISOString()
       const current = get().myProfile
       const deletionRecord: AccountDeletionRecord = {
-        id: 'del-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        id: generateUUID(),
         user_id: profileId,
         user_email: payload.userEmail || null,
         profile_name: current?.name || 'Perfil',

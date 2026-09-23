@@ -101,7 +101,7 @@ export default function OrdersDashboard() {
           const normalized = (data || []).map((item: any) => staleIds.includes(item.id) ? { ...item, archived_at: new Date().toISOString() } : item)
           const companyIds = normalized.map((item: any) => item.company_id)
           const { data: companies } = companyIds.length
-            ? await (supabase.from('profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', companyIds)
+            ? await (supabase.from('authenticated_company_profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', companyIds)
             : { data: [] }
           const companyById = new Map((companies || []).map((company: any) => [company.id, company]))
           const hydrated = normalized.map((item: any) => ({ ...item, company: companyById.get(item.company_id) }))

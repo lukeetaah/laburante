@@ -101,7 +101,7 @@ export default function CompanyWorkspace() {
       const normalized = (inquiries.data || []).map((item: any) => staleIds.includes(item.id) ? { ...item, archived_at: new Date().toISOString() } : item)
       const profileIds = normalized.map((item: any) => item.profile_id)
       const acceptedProfileIds = normalized.filter((item: any) => item.status === 'aceptada').map((item: any) => item.profile_id)
-      const { data: profiles } = profileIds.length ? await (supabase.from('profiles') as any).select('id, name, slug, localidad, provincia').in('id', profileIds) : { data: [] }
+      const { data: profiles } = profileIds.length ? await (supabase.from('authenticated_candidate_profiles') as any).select('id, name, slug, localidad, provincia').in('id', profileIds) : { data: [] }
       const { data: contactMethods } = acceptedProfileIds.length ? await (supabase.from('contact_methods') as any).select('profile_id, type, value, is_public').in('profile_id', acceptedProfileIds).eq('is_public', true) : { data: [] }
       const byId = new Map((profiles || []).map((profile: any) => [profile.id, profile]))
       const contactsByProfile = new Map<string, any[]>()
@@ -155,7 +155,7 @@ export default function CompanyWorkspace() {
       budget_amount: budgetAmount.trim() || null, estimated_time: estimatedTime.trim() || null,
     }).select('id').single()
     if (error || !created) { setLoading(false); setMessage(error?.message || 'No se pudo publicar. Aplicá la migración de oportunidades.'); return }
-    const { data: companies } = await (supabase.from('profiles') as any).select('id, provincia').eq('account_type', 'empresa').neq('id', user.id).eq('status', 'oculto')
+    const { data: companies } = await (supabase.from('authenticated_company_profiles') as any).select('id, provincia').neq('id', user.id)
     const recipients = (companies || []).map((company: any) => ({
       opportunity_id: created.id, source_company_id: user.id, recipient_company_id: company.id,
       match_reason: company.provincia === user.user_metadata?.provincia ? 'Empresa de la misma provincia' : 'Empresa dentro de la red LABURANTE',
