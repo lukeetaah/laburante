@@ -234,8 +234,8 @@ export default function Admin() {
         .order('created_at', { ascending: false })
       setRecommendations(recsData || [])
 
-      // 6. Fetch Unconfirmed Registrations
-      const unconfirmed = await fetchUnconfirmedRegistrations()
+      // 6. Fetch Unconfirmed Registrations — solo usuarios con email_confirmed_at IS NULL
+      const unconfirmed = await fetchUnconfirmedRegistrations('esperando')
       setUnconfirmedRegistrations(unconfirmed || [])
     } catch (err) {
       captureAppError(err, 'admin_data_load')
