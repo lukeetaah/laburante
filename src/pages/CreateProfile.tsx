@@ -7,7 +7,7 @@ import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
 import { normalizeSearchText } from '@/lib/search-intent'
 import { formatModality, type WorkModality } from '@/lib/profile-format'
-import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages, Mail } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages, Mail, Search, X } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 import { captureAppError } from '@/lib/sentry'
@@ -46,6 +46,8 @@ export default function CreateProfile() {
   // Dynamic lists
   const [skills, setSkills] = useState<string[]>([''])
   const [skillModes, setSkillModes] = useState<('select' | 'custom')[]>(['select'])
+  const [skillQuery, setSkillQuery] = useState('')
+  const [showCategoryBrowser, setShowCategoryBrowser] = useState(false)
   const [services, setServices] = useState<{ title: string; description: string; precio_orientativo: string }[]>([
     { title: '', description: '', precio_orientativo: '' }
   ])
@@ -166,6 +168,27 @@ export default function CreateProfile() {
   // Skills handlers
   const workOptions = CATEGORIES.flatMap((category) => category.subcategories || [])
   const isKnownWorkOption = (value: string) => workOptions.some((option) => normalizeSearchText(option) === normalizeSearchText(value))
+
+  const filteredSkillSuggestions = skillQuery.trim()
+    ? workOptions.filter((opt) => normalizeSearchText(opt).includes(normalizeSearchText(skillQuery.trim())) && !skills.includes(opt)).slice(0, 8)
+    : []
+
+  const handleSelectSkillItem = (skillName: string) => {
+    const clean = skillName.trim()
+    if (!clean) return
+    const current = skills.filter((s) => s.trim())
+    if (!current.includes(clean)) {
+      setSkills([...current, clean])
+      setSkillModes([...skillModes, isKnownWorkOption(clean) ? 'select' : 'custom'])
+    }
+    setSkillQuery('')
+  }
+
+  const handleRemoveSkillItem = (skillName: string) => {
+    const nextSkills = skills.filter((s) => s !== skillName)
+    setSkills(nextSkills.length ? nextSkills : [''])
+  }
+
   const handleAddSkill = () => {
     setSkills([...skills, ''])
     setSkillModes([...skillModes, 'select'])
@@ -297,6 +320,20 @@ export default function CreateProfile() {
 
       if (res.error) setError(res.error)
       else if (res.slug) {
+        // Registrar habilidades personalizadas en proposed_skills para revisión de admin
+        const customSkills = skills.filter((s) => s.trim() && !isKnownWorkOption(s.trim()))
+        if (customSkills.length > 0 && user?.id) {
+          for (const cs of customSkills) {
+            await (supabase.from('proposed_skills') as any)
+              .insert({
+                skill_name: cs.trim(),
+                proposed_by_profile_id: user.id,
+                status: 'pendiente',
+              })
+              .catch(() => {})
+          }
+        }
+
         const preferenceResult = await saveEmailNotificationsEnabled(user.id, emailNotificationsEnabled)
         if (preferenceResult.error) {
           setError(`El perfil se guardó, pero no pudimos guardar la preferencia de emails: ${preferenceResult.error}`)
@@ -621,53 +658,134 @@ export default function CreateProfile() {
             <h2 className="font-heading text-base font-bold text-[var(--color-laburante-text)]">
               2. Habilidades y oficios
             </h2>
-            <button
-              type="button"
-              onClick={handleAddSkill}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-laburante-indigo)] hover:underline"
-            >
-              <Plus size={14} /> Agregar habilidad
-            </button>
+            <span className="text-xs text-[var(--color-laburante-text-muted)]">
+              {skills.filter((s) => s.trim()).length} seleccionada{skills.filter((s) => s.trim()).length === 1 ? '' : 's'}
+            </span>
           </div>
 
-          <div className="space-y-2">
-            {skills.map((skill, idx) => (
-              <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <select
-                  value={skillModes[idx] === 'custom' ? '__other__' : (isKnownWorkOption(skill) ? workOptions.find((option) => normalizeSearchText(option) === normalizeSearchText(skill)) : '')}
-                  onChange={(e) => handleSkillModeChange(idx, e.target.value)}
-                  className="min-w-0 flex-1 px-3.5 py-2 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
-                >
-                  <option value="">Elegí una categoría de trabajo</option>
-                  {CATEGORIES.filter((category) => category.subcategories?.length).map((category) => (
-                    <optgroup key={category.id} label={`${category.icon} ${category.name}`}>
-                      {category.subcategories?.map((option) => <option key={`${category.id}-${option}`} value={option}>{option}</option>)}
-                    </optgroup>
-                  ))}
-                  <option value="__other__">Otros (especificar)</option>
-                </select>
-                {skillModes[idx] === 'custom' && (
+          <div className="space-y-3">
+            {/* Buscador directo de habilidades */}
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={16} className="absolute left-3.5 top-3 text-[var(--color-laburante-text-muted)]" />
                   <input
                     type="text"
-                    value={skill}
-                    onChange={(e) => handleSkillChange(idx, e.target.value)}
-                    placeholder="Especificá tu oficio o especialidad"
-                    className="min-w-0 flex-1 px-3.5 py-2 text-sm rounded-xl border border-amber-300 bg-amber-50/40"
+                    value={skillQuery}
+                    onChange={(e) => setSkillQuery(e.target.value)}
+                    placeholder="Buscá tu oficio o habilidad (ej. Acompañante terapéutico, Electricista...)"
+                    className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] focus:border-amber-400 focus:outline-none"
                   />
-                )}
-                {skills.length > 1 && (
+                </div>
+                {skillQuery.trim() && (
                   <button
                     type="button"
-                    onClick={() => handleRemoveSkill(idx)}
-                    className="p-2 text-[var(--color-laburante-text-muted)] hover:text-rose-600"
+                    onClick={() => handleSelectSkillItem(skillQuery)}
+                    className="px-4 py-2.5 text-xs font-bold rounded-xl bg-amber-600 text-white hover:bg-amber-700 transition-colors shrink-0 cursor-pointer shadow-xs"
                   >
-                    <Trash2 size={16} />
+                    Agregar
                   </button>
                 )}
               </div>
-            ))}
+
+              {/* Sugerencias de autocompletado */}
+              {filteredSkillSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1.5 bg-[var(--color-laburante-surface)] border border-[var(--color-laburante-border)] rounded-2xl shadow-xl z-20 overflow-hidden divide-y divide-[var(--color-laburante-border)]/40 max-h-60 overflow-y-auto">
+                  {filteredSkillSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => handleSelectSkillItem(suggestion)}
+                      className="w-full text-left px-4 py-2.5 text-xs text-[var(--color-laburante-text)] hover:bg-amber-50 hover:text-amber-950 font-medium flex items-center justify-between cursor-pointer transition-colors"
+                    >
+                      <span>{suggestion}</span>
+                      <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">+ Seleccionar</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sugerencia de habilidad personalizada si no existe en catálogo */}
+            {skillQuery.trim() && !isKnownWorkOption(skillQuery) && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="text-amber-900 font-medium">
+                  ¿No encontrás "{skillQuery.trim()}"? Podés sumarla como propuesta a tu perfil:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleSelectSkillItem(skillQuery)}
+                  className="px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 shrink-0 cursor-pointer"
+                >
+                  + Agregar al perfil
+                </button>
+              </div>
+            )}
+
+            {/* Listado de habilidades agregadas en chips */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {skills.filter((s) => s.trim()).map((skill) => (
+                <span
+                  key={skill}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-950 shadow-2xs"
+                >
+                  <span>{skill}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSkillItem(skill)}
+                    className="text-amber-700 hover:text-rose-600 p-0.5 rounded-md cursor-pointer transition-colors"
+                    title="Eliminar habilidad"
+                  >
+                    <X size={13} />
+                  </button>
+                </span>
+              ))}
+              {skills.filter((s) => s.trim()).length === 0 && (
+                <p className="text-xs text-[var(--color-laburante-text-muted)] italic py-1">
+                  Aún no agregaste habilidades. Escribí una arriba para empezar.
+                </p>
+              )}
+            </div>
+
+            {/* Explorador opcional de categorías */}
+            <div className="pt-2 border-t border-[var(--color-laburante-border)]/50">
+              <button
+                type="button"
+                onClick={() => setShowCategoryBrowser(!showCategoryBrowser)}
+                className="text-xs text-[var(--color-laburante-indigo)] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>{showCategoryBrowser ? 'Ocultar catálogo por categorías' : 'O explorar categorías predefinidas'}</span>
+              </button>
+              {showCategoryBrowser && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-3 border border-[var(--color-laburante-border)] rounded-2xl bg-[var(--color-laburante-surface-alt)]/30">
+                  {CATEGORIES.filter((c) => c.subcategories?.length && !c.hidden).map((cat) => (
+                    <div key={cat.id} className="p-2 space-y-1">
+                      <p className="text-[11px] font-bold text-[var(--color-laburante-text)]">{cat.icon} {cat.name}</p>
+                      <div className="flex flex-wrap gap-1">
+                        {cat.subcategories?.slice(0, 8).map((sub) => (
+                          <button
+                            key={sub}
+                            type="button"
+                            onClick={() => handleSelectSkillItem(sub)}
+                            className={`text-[10px] px-2 py-0.5 rounded-lg border transition-colors cursor-pointer ${
+                              skills.includes(sub)
+                                ? 'bg-emerald-100 border-emerald-300 text-emerald-900 font-bold'
+                                : 'bg-white border-[var(--color-laburante-border)] hover:bg-amber-50 text-[var(--color-laburante-text-secondary)]'
+                            }`}
+                          >
+                            {skills.includes(sub) ? `✓ ${sub}` : `+ ${sub}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <p className="text-[11px] leading-relaxed text-[var(--color-laburante-text-muted)]">Elegí una opción para que tu perfil aparezca mejor clasificado. El texto libre se habilita únicamente en “Otros”.</p>
+          <p className="text-[11px] leading-relaxed text-[var(--color-laburante-text-muted)]">
+            Podés buscar y agregar tantas habilidades como ofrezcas. Si tu oficio no figura, podés proponerlo directamente y quedará asociado a tu perfil.
+          </p>
         </section>
 
         <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Archive, ArrowRight, BadgeCheck, Building2, Check, ExternalLink, Globe, Inbox, LockKeyhole, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users } from 'lucide-react'
+import { Archive, ArrowRight, BadgeCheck, Building2, Check, ExternalLink, Globe, Inbox, LockKeyhole, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users, Star, Trash2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
@@ -83,6 +83,112 @@ export default function CompanyWorkspace() {
   const [archiveMessage, setArchiveMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Shortlist / Favoritos de candidatos
+  const [shortlist, setShortlist] = useState<any[]>([])
+  const [shortlistLoading, setShortlistLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchingTalent, setSearchingTalent] = useState(false)
+
+  const loadShortlist = async () => {
+    if (!user) return
+    setShortlistLoading(true)
+    try {
+      const { data, error } = await (supabase.from('company_shortlists') as any)
+        .select('id, company_id, candidate_profile_id, notes, status, created_at, updated_at')
+        .eq('company_id', user.id)
+        .order('updated_at', { ascending: false })
+
+      if (error) {
+        console.warn('Error loading company shortlist:', error.message)
+        setShortlist([])
+        setShortlistLoading(false)
+        return
+      }
+
+      const candidateIds = (data || []).map((item: any) => item.candidate_profile_id)
+      if (candidateIds.length > 0) {
+        const { data: candidates } = await (supabase.from('authenticated_candidate_profiles') as any)
+          .select('id, name, slug, localidad, provincia')
+          .in('id', candidateIds)
+
+        const candidateMap = new Map((candidates || []).map((c: any) => [c.id, c]))
+        setShortlist((data || []).map((item: any) => ({
+          ...item,
+          candidate: candidateMap.get(item.candidate_profile_id) || null,
+        })))
+      } else {
+        setShortlist([])
+      }
+    } catch (e) {
+      console.warn('Exception loading shortlist:', e)
+    } finally {
+      setShortlistLoading(false)
+    }
+  }
+
+  const handleSearchTalent = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!searchQuery.trim()) return
+    setSearchingTalent(true)
+    try {
+      const term = `%${searchQuery.trim()}%`
+      const { data, error } = await (supabase.from('authenticated_candidate_profiles') as any)
+        .select('id, name, slug, localidad, provincia')
+        .or(`name.ilike.${term},localidad.ilike.${term}`)
+        .limit(8)
+
+      if (!error) {
+        setSearchResults(data || [])
+      }
+    } catch (err) {
+      console.warn('Search talent error:', err)
+    } finally {
+      setSearchingTalent(false)
+    }
+  }
+
+  const addToShortlist = async (candidateId: string) => {
+    if (!user) return
+    const { error } = await (supabase.from('company_shortlists') as any)
+      .upsert({
+        company_id: user.id,
+        candidate_profile_id: candidateId,
+        status: 'interesante',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'company_id,candidate_profile_id' })
+
+    if (!error) {
+      loadShortlist()
+      setMessage('Candidato guardado en tu lista de seguimiento.')
+    }
+  }
+
+  const updateShortlistStatus = async (shortlistId: string, status: string) => {
+    if (!user) return
+    const { error } = await (supabase.from('company_shortlists') as any)
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', shortlistId)
+      .eq('company_id', user.id)
+
+    if (!error) {
+      setShortlist((prev) => prev.map((s) => s.id === shortlistId ? { ...s, status } : s))
+    }
+  }
+
+  const removeFromShortlist = async (shortlistId: string) => {
+    if (!user) return
+    const { error } = await (supabase.from('company_shortlists') as any)
+      .delete()
+      .eq('id', shortlistId)
+      .eq('company_id', user.id)
+
+    if (!error) {
+      setShortlist((prev) => prev.filter((s) => s.id !== shortlistId))
+      setMessage('Candidato removido de la lista de seguimiento.')
+    }
+  }
+
   const loadOpportunities = async () => {
     if (!user) return
     setCandidateInquiriesLoaded(false)
@@ -116,6 +222,7 @@ export default function CompanyWorkspace() {
       })))
     }
     setCandidateInquiriesLoaded(true)
+    loadShortlist()
   }
 
   useEffect(() => {
@@ -263,6 +370,151 @@ export default function CompanyWorkspace() {
        </div>
        {selectedCandidateInquiry && <div className="rounded-xl border border-indigo-300 bg-white p-4 text-xs text-indigo-950"><p className="font-bold">Detalle de la selección</p><p className="mt-1">{selectedCandidateInquiry.profile?.name || 'Profesional'} · {selectedCandidateInquiry.profile?.localidad || 'Ubicación no informada'}</p><p className="mt-2 whitespace-pre-line text-gray-700">{selectedCandidateInquiry.message || 'La selección no agregó un mensaje adicional.'}</p>{selectedCandidateInquiry.profile?.contact_methods?.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{selectedCandidateInquiry.profile.contact_methods.map((method: any) => <span key={`${method.type}-${method.value}`} className="rounded-lg bg-emerald-50 px-2 py-1 font-semibold text-emerald-800">{method.type}: {method.value}</span>)}</div>}</div>}
      </section>}
+
+      {/* Shortlist / Candidatos de Interés y Búsqueda directa */}
+      <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5 sm:p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-700">
+              <Star size={15} /> Shortlist y Búsqueda de Talentos
+            </p>
+            <h2 className="mt-1 font-heading text-xl font-bold text-[var(--color-laburante-text)]">
+              Candidatos guardados y seguimiento
+            </h2>
+            <p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">
+              Buscá talentos por nombre u oficio y organizá a los candidatos según la etapa del proceso.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadShortlist}
+            disabled={shortlistLoading}
+            className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-xl border border-[var(--color-laburante-border)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--color-laburante-text-secondary)] hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            <RefreshCw size={13} className={shortlistLoading ? 'animate-spin' : ''} />
+            <span>Refrescar</span>
+          </button>
+        </div>
+
+        {/* Buscador rápido de candidatos */}
+        <form onSubmit={handleSearchTalent} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por nombre o localidad (ej: plomero, enfermera, La Plata)..."
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[var(--color-laburante-border)] bg-white text-xs text-[var(--color-laburante-text)] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={searchingTalent || !searchQuery.trim()}
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-heading font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0"
+          >
+            {searchingTalent ? 'Buscando...' : 'Buscar'}
+          </button>
+        </form>
+
+        {/* Resultados de búsqueda */}
+        {searchResults.length > 0 && (
+          <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-100 space-y-3">
+            <p className="text-xs font-bold text-indigo-950">Resultados encontrados ({searchResults.length}):</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {searchResults.map((cand) => (
+                <div key={cand.id} className="p-3 rounded-lg bg-white border border-indigo-100 flex items-center justify-between gap-3 text-xs">
+                  <div className="min-w-0">
+                    <p className="font-bold text-[var(--color-laburante-text)] truncate">{cand.name}</p>
+                    <p className="text-[11px] text-[var(--color-laburante-text-secondary)] truncate">
+                      {[cand.localidad, cand.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {cand.slug && (
+                      <Link to={`/p/${cand.slug}`} target="_blank" className="p-1.5 text-gray-500 hover:text-indigo-600" title="Ver perfil">
+                        <ExternalLink size={14} />
+                      </Link>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => addToShortlist(cand.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Guardar en Shortlist"
+                    >
+                      <Star size={12} /> Guardar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Listado de Shortlist */}
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)] mb-3">
+            Favoritos en seguimiento ({shortlist.length})
+          </h3>
+          {shortlist.length === 0 ? (
+            <div className="p-6 rounded-xl border border-dashed border-[var(--color-laburante-border)] bg-white text-center text-xs text-[var(--color-laburante-text-secondary)]">
+              No guardaste candidatos aún. Usá el buscador de arriba o explorá perfiles para armar tu lista de favoritos.
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {shortlist.map((item) => (
+                <div key={item.id} className="p-4 rounded-xl border border-[var(--color-laburante-border)] bg-white space-y-3 text-xs shadow-2xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-sm text-[var(--color-laburante-text)]">
+                        {item.candidate?.name || 'Profesional'}
+                      </p>
+                      <p className="text-[11px] text-[var(--color-laburante-text-secondary)] mt-0.5">
+                        {[item.candidate?.localidad, item.candidate?.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}
+                      </p>
+                    </div>
+                    {item.candidate?.slug && (
+                      <Link
+                        to={`/p/${item.candidate.slug}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:underline"
+                      >
+                        Perfil <ExternalLink size={11} />
+                      </Link>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-[var(--color-laburante-text-muted)]">Estado:</span>
+                      <select
+                        value={item.status}
+                        onChange={(e) => updateShortlistStatus(item.id, e.target.value)}
+                        className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-[11px] font-semibold text-gray-700 cursor-pointer"
+                      >
+                        <option value="interesante">⭐ Interesante</option>
+                        <option value="contactado">📞 Contactado</option>
+                        <option value="en_evaluacion">📋 En evaluación</option>
+                        <option value="descartado">❌ Descartado</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removeFromShortlist(item.id)}
+                      className="p-1 text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+                      title="Quitar de favoritos"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
      <section className="grid gap-6 lg:grid-cols-[1.05fr_.95fr]">
       <form onSubmit={publishOpportunity} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 space-y-4">
         <div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-700"><Send size={15} /> Publicar una idea o necesidad</p><h2 className="mt-2 font-heading text-xl font-bold">Que la oportunidad siga circulando</h2><p className="mt-1 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">Describí qué necesitás, qué podés pagar y para cuándo. LABURANTE lo ofrece a personas y empresas similares por zona.</p></div>

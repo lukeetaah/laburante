@@ -100,7 +100,9 @@ interface ProfileState {
   adminRejectWhatsAppVerification: (
     requestId: string
   ) => Promise<{ error: string | null }>
-  fetchUnconfirmedRegistrations: () => Promise<any[]>
+  fetchUnconfirmedRegistrations: (filter?: 'todos' | 'verificados' | 'esperando') => Promise<any[]>
+  adminResendUserVerification: (targetUserId: string) => Promise<{ success?: boolean; error?: string; remainingSeconds?: number }>
+  adminTriggerRemindersBatch: () => Promise<{ ok?: boolean; error?: string; sent?: number; skipped?: number; total_candidates?: number }>
   adminCleanupAbandonedAccounts: (dryRun?: boolean) => Promise<{ error: string | null; results?: any[] }>
   deleteAccount: (profileId: string, payload: { reason: string; explanation: string; userEmail?: string }) => Promise<{ error: string | null; success?: boolean }>
   fetchAccountDeletions: () => Promise<AccountDeletionRecord[]>
@@ -952,9 +954,19 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     }
   },
 
-  fetchUnconfirmedRegistrations: async () => {
+  fetchUnconfirmedRegistrations: async (filter = 'todos') => {
     addAppBreadcrumb('admin_unconfirmed_registrations_load_started')
     try {
+      // Intentar primero con la nueva RPC protegida que soporta filtros y tracking separado
+      const { data: statusData, error: statusError } = await (supabase.rpc as any)(
+        'admin_get_auth_users_verification_status',
+        { p_filter: filter }
+      )
+      if (!statusError && statusData) {
+        return statusData
+      }
+
+      // Fallback a la RPC anterior si la nueva no ha sido ejecutada aún
       const { data, error } = await (supabase.rpc as any)('admin_get_unconfirmed_registrations')
       if (error) {
         console.warn('RPC admin_get_unconfirmed_registrations notice:', error.message)
@@ -965,6 +977,51 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       captureAppError(err, 'admin_unconfirmed_registrations_load')
       console.warn('Error loading unconfirmed registrations:', err)
       return []
+    }
+  },
+
+  adminResendUserVerification: async (targetUserId: string) => {
+    addAppBreadcrumb('admin_resend_user_verification_started')
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-auth-resend', {
+        body: { target_user_id: targetUserId },
+      })
+
+      if (error) {
+        return { error: error.message }
+      }
+      if (data?.error) {
+        return {
+          error: data.message || data.error,
+          remainingSeconds: data.remaining_seconds,
+        }
+      }
+      return { success: true, remainingSeconds: data?.remaining_cooldown || 60 }
+    } catch (err: any) {
+      captureAppError(err, 'admin_resend_user_verification')
+      return { error: err.message || 'Error al solicitar el reenvío de confirmación.' }
+    }
+  },
+
+  adminTriggerRemindersBatch: async () => {
+    addAppBreadcrumb('admin_trigger_reminders_batch_started')
+    try {
+      const { data, error } = await supabase.functions.invoke('process-unconfirmed-reminders')
+      if (error) {
+        return { error: error.message }
+      }
+      if (data?.error) {
+        return { error: data.details || data.error }
+      }
+      return {
+        ok: true,
+        sent: data?.sent || 0,
+        skipped: data?.skipped || 0,
+        total_candidates: data?.total_candidates || 0,
+      }
+    } catch (err: any) {
+      captureAppError(err, 'admin_trigger_reminders_batch')
+      return { error: err.message || 'Error al ejecutar el lote de recordatorios.' }
     }
   },
 

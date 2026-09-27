@@ -2,6 +2,12 @@
   "redirects": [
     { "source": "/:path*", "has": [{ "type": "host", "value": "www.laburante.ar" }], "destination": "https://laburante.ar/:path*", "permanent": true }
   ],
+  "crons": [
+    {
+      "path": "/api/crons/unconfirmed-reminders",
+      "schedule": "0 13 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/" }
   ]

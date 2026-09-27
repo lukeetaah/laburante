@@ -1,11 +1,41 @@
 import type { NavigateFunction } from 'react-router-dom'
-import { normalizeProfileIntent } from '@/lib/profile-publication'
+import { normalizeProfileIntent, hasProviderContent } from '@/lib/profile-publication'
+import { isCompanyAccount } from '@/lib/account'
 
 export type ContextualLink =
   | { kind: 'request'; id: string; href: string }
   | { kind: 'inquiry'; id: string; href: string }
   | { kind: 'reviews'; href: string }
   | { kind: 'generic'; href: string }
+
+export interface PostLoginContext {
+  user: any
+  profile: any
+  isAdmin: boolean
+  redirectTo?: string | null
+}
+
+export function resolvePostLoginRedirect(ctx: PostLoginContext): string {
+  if (ctx.isAdmin) return '/admin'
+
+  if (ctx.redirectTo && ctx.redirectTo.startsWith('/') && !ctx.redirectTo.startsWith('//')) {
+    return ctx.redirectTo
+  }
+
+  if (isCompanyAccount(ctx.user, ctx.profile)) {
+    return '/empresa'
+  }
+
+  const intent = normalizeProfileIntent(ctx.profile?.intent) || normalizeProfileIntent(ctx.user?.user_metadata?.intent)
+  if (intent === 'ofrecer' || intent === 'ambas') {
+    const isComplete = ctx.profile ? hasProviderContent(ctx.profile) : false
+    return isComplete ? '/mis-trabajos' : '/crear-perfil'
+  }
+
+  if (intent === 'buscar') return '/buscar'
+  if (!ctx.profile) return '/crear-perfil'
+  return '/buscar'
+}
 
 export function getPostLoginPath(intent: unknown) {
   const normalized = normalizeProfileIntent(intent)

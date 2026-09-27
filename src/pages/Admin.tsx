@@ -83,10 +83,12 @@ export default function Admin() {
     adminApproveWhatsAppVerification,
     adminRejectWhatsAppVerification,
     fetchUnconfirmedRegistrations,
+    adminResendUserVerification,
+    adminTriggerRemindersBatch,
     adminCleanupAbandonedAccounts,
   } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'jobs' | 'verifications' | 'confirmations' | 'reports' | 'profiles' | 'companies' | 'reviews' | 'deletions' | 'settings'>('analytics')
+  const [activeTab, setActiveTab] = useState<'analytics' | 'jobs' | 'verifications' | 'confirmations' | 'messages' | 'reports' | 'profiles' | 'companies' | 'reviews' | 'deletions' | 'settings'>('analytics')
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos' | 'incompletos'>('todos')
   const [adminFilters, setAdminFilters] = useState({
     query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '',
@@ -118,6 +120,17 @@ export default function Admin() {
   const operationalSettings = useOperationalSettings()
   const [settingsForm, setSettingsForm] = useState('')
   const [settingsSaving, setSettingsSaving] = useState(false)
+  // Resend cooldowns: userId → remaining seconds (countdown visual, NOT security enforcement)
+  const [resendCooldowns, setResendCooldowns] = useState<Record<string, number>>({})
+  const [resendLoading, setResendLoading] = useState<Record<string, boolean>>({})
+  const [remindersBatchLoading, setRemindersBatchLoading] = useState(false)
+  const [remindersBatchResult, setRemindersBatchResult] = useState<{ sent: number; skipped: number; total_candidates: number } | null>(null)
+  // Admin messages tab
+  const [adminConversations, setAdminConversations] = useState<any[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<any | null>(null)
+  const [conversationMessages, setConversationMessages] = useState<any[]>([])
+  const [adminMessageInput, setAdminMessageInput] = useState('')
+  const [adminMessageSending, setAdminMessageSending] = useState(false)
 
   useEffect(() => {
     if (!selectedJob) return
@@ -700,6 +713,120 @@ export default function Admin() {
     }
   }
 
+  const handleAdminResend = async (userId: string) => {
+    if (resendLoading[userId]) return
+    setResendLoading((prev) => ({ ...prev, [userId]: true }))
+    setActionMessage(null)
+    const result = await adminResendUserVerification(userId)
+    setResendLoading((prev) => ({ ...prev, [userId]: false }))
+
+    if (result.error) {
+      if (result.remainingSeconds && result.remainingSeconds > 0) {
+        // Cooldown activo: iniciar countdown visual
+        setResendCooldowns((prev) => ({ ...prev, [userId]: result.remainingSeconds! }))
+        const timer = setInterval(() => {
+          setResendCooldowns((prev) => {
+            const current = (prev[userId] || 1) - 1
+            if (current <= 0) {
+              clearInterval(timer)
+              const { [userId]: _, ...rest } = prev
+              return rest
+            }
+            return { ...prev, [userId]: current }
+          })
+        }, 1000)
+        setActionMessage(`Cooldown activo: esperá ${result.remainingSeconds}s antes de volver a reenviar.`)
+      } else {
+        setActionMessage(`Error al reenviar verificación: ${result.error}`)
+      }
+      return
+    }
+
+    // Éxito: aplicar cooldown visual de 60s
+    const cooldownSecs = result.remainingSeconds || 60
+    setResendCooldowns((prev) => ({ ...prev, [userId]: cooldownSecs }))
+    const timer = setInterval(() => {
+      setResendCooldowns((prev) => {
+        const current = (prev[userId] || 1) - 1
+        if (current <= 0) {
+          clearInterval(timer)
+          const { [userId]: _, ...rest } = prev
+          return rest
+        }
+        return { ...prev, [userId]: current }
+      })
+    }, 1000)
+    setActionMessage('✅ Correo de verificación reenviado correctamente.')
+  }
+
+  const handleTriggerRemindersBatch = async () => {
+    if (remindersBatchLoading) return
+    setRemindersBatchLoading(true)
+    setRemindersBatchResult(null)
+    setActionMessage(null)
+    const result = await adminTriggerRemindersBatch()
+    setRemindersBatchLoading(false)
+    if (result.error) {
+      setActionMessage(`Error al ejecutar lote de recordatorios: ${result.error}`)
+    } else {
+      setRemindersBatchResult({
+        sent: result.sent || 0,
+        skipped: result.skipped || 0,
+        total_candidates: result.total_candidates || 0,
+      })
+      setActionMessage(`✅ Lote ejecutado: ${result.sent} enviados, ${result.skipped} omitidos de ${result.total_candidates} candidatos.`)
+    }
+  }
+
+  const loadAdminConversations = async () => {
+    try {
+      const { data } = await (supabase.from('conversations') as any)
+        .select('id, user_id, created_at, updated_at, profiles(name, slug)')
+        .order('updated_at', { ascending: false })
+      setAdminConversations(data || [])
+    } catch (err) {
+      console.warn('Error loading admin conversations:', err)
+    }
+  }
+
+  const loadConversationMessages = async (conversationId: string) => {
+    try {
+      const { data } = await (supabase.from('messages') as any)
+        .select('id, conversation_id, sender_id, sender_role, content, created_at, read_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+      setConversationMessages(data || [])
+    } catch (err) {
+      console.warn('Error loading conversation messages:', err)
+    }
+  }
+
+  const handleSelectConversation = async (conv: any) => {
+    setSelectedConversation(conv)
+    await loadConversationMessages(conv.id)
+  }
+
+  const handleAdminSendMessage = async () => {
+    if (!selectedConversation || !adminMessageInput.trim() || adminMessageSending) return
+    setAdminMessageSending(true)
+    try {
+      const { error } = await (supabase.rpc as any)('send_conversation_message', {
+        p_conversation_id: selectedConversation.id,
+        p_content: adminMessageInput.trim(),
+      })
+      if (error) {
+        setActionMessage(`Error al enviar mensaje: ${error.message}`)
+      } else {
+        setAdminMessageInput('')
+        await loadConversationMessages(selectedConversation.id)
+        await loadAdminConversations()
+      }
+    } catch (err: any) {
+      setActionMessage(`Error al enviar mensaje: ${err.message}`)
+    }
+    setAdminMessageSending(false)
+  }
+
   const handleAdminModerateRec = async (id: string, newStatus: string) => {
     try {
       const { error } = await (supabase.from('recommendations') as any)
@@ -939,6 +1066,18 @@ export default function Admin() {
               {unconfirmedRegistrations.length}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('messages'); loadAdminConversations() }}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'messages'
+              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
+              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
+          }`}
+        >
+          <MessageCircle size={16} />
+          Mensajes
         </button>
 
         <button
@@ -1208,6 +1347,16 @@ export default function Admin() {
                 <RefreshCw size={13} className={cleanupSimulating ? 'animate-spin' : ''} />
                 <span>{cleanupSimulating ? 'Evaluando...' : 'Simular Limpieza (dry_run)'}</span>
               </button>
+              <button
+                type="button"
+                onClick={handleTriggerRemindersBatch}
+                disabled={remindersBatchLoading}
+                className="py-2 px-3.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-heading font-semibold text-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                title="Ejecutar pipeline real de recordatorios automáticos (mismo código que el scheduler diario)"
+              >
+                <Mail size={13} className={remindersBatchLoading ? 'animate-pulse' : ''} />
+                <span>{remindersBatchLoading ? 'Ejecutando...' : 'Ejecutar ronda de recordatorios'}</span>
+              </button>
             </div>
           </div>
 
@@ -1236,6 +1385,30 @@ export default function Admin() {
               )}
             </div>
           )}
+
+          {remindersBatchResult && (
+            <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 space-y-1">
+              <div className="flex items-center justify-between font-bold">
+                <span>Resultado del lote de recordatorios</span>
+                <button type="button" onClick={() => setRemindersBatchResult(null)} className="text-[11px] text-indigo-600 hover:underline cursor-pointer">Cerrar</button>
+              </div>
+              <div className="grid grid-cols-3 gap-3 mt-2 text-center">
+                <div className="p-2 rounded-xl bg-white border border-indigo-200">
+                  <p className="font-heading text-xl font-bold text-indigo-700">{remindersBatchResult.sent}</p>
+                  <p className="text-[11px] text-indigo-600">Enviados</p>
+                </div>
+                <div className="p-2 rounded-xl bg-white border border-indigo-200">
+                  <p className="font-heading text-xl font-bold text-slate-600">{remindersBatchResult.skipped}</p>
+                  <p className="text-[11px] text-slate-500">Omitidos</p>
+                </div>
+                <div className="p-2 rounded-xl bg-white border border-indigo-200">
+                  <p className="font-heading text-xl font-bold text-slate-700">{remindersBatchResult.total_candidates}</p>
+                  <p className="text-[11px] text-slate-500">Candidatos</p>
+                </div>
+              </div>
+            </div>
+          )}
+
 
           {/* Filtros de confirmaciones */}
           <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] flex flex-col lg:flex-row items-center justify-between gap-3 text-xs">
@@ -1360,10 +1533,156 @@ export default function Admin() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Acción: Reenviar verificación (solo para cuentas pendientes sin actividad) */}
+                  {reg.status !== 'excluido_actividad' && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleAdminResend(reg.user_id)}
+                        disabled={!!resendLoading[reg.user_id] || !!resendCooldowns[reg.user_id]}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                          resendCooldowns[reg.user_id]
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200'
+                            : resendLoading[reg.user_id]
+                            ? 'bg-indigo-50 text-indigo-400 border border-indigo-200'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        }`}
+                      >
+                        <Mail size={13} />
+                        {resendCooldowns[reg.user_id]
+                          ? `Esperar ${resendCooldowns[reg.user_id]}s`
+                          : resendLoading[reg.user_id]
+                          ? 'Enviando...'
+                          : 'Reenviar verificación'}
+                      </button>
+                      {(reg.manual_resend_count || 0) > 0 && (
+                        <span className="text-[11px] text-[var(--color-laburante-text-muted)]">
+                          {reg.manual_resend_count} reenvío{reg.manual_resend_count === 1 ? '' : 's'} manual{reg.manual_resend_count === 1 ? '' : 'es'}
+                          {reg.last_manual_resend_at ? ` · último: ${new Date(reg.last_manual_resend_at).toLocaleDateString()}` : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab: Mensajería Admin */}
+      {activeTab === 'messages' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-indigo-900">
+              <MessageCircle size={15} className="text-indigo-600" />
+              Mensajería con usuarios
+            </p>
+            <p className="text-[11px] text-indigo-800 leading-relaxed">
+              Conversaciones directas con usuarios de la plataforma. Los mensajes se envían vía RPC segura — el rol de admin se deriva server-side.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+            {/* Lista de conversaciones */}
+            <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden">
+              <div className="p-3 border-b border-[var(--color-laburante-border)] flex items-center justify-between">
+                <span className="font-heading font-bold text-xs text-[var(--color-laburante-text)]">Conversaciones</span>
+                <button type="button" onClick={loadAdminConversations} className="text-[11px] text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] flex items-center gap-1 cursor-pointer">
+                  <RefreshCw size={12} /> Actualizar
+                </button>
+              </div>
+              {adminConversations.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">
+                  No hay conversaciones activas.
+                </div>
+              ) : (
+                <div className="divide-y divide-[var(--color-laburante-border)]">
+                  {adminConversations.map((conv) => (
+                    <button
+                      key={conv.id}
+                      type="button"
+                      onClick={() => handleSelectConversation(conv)}
+                      className={`w-full text-left px-4 py-3 text-xs transition-colors cursor-pointer hover:bg-[var(--color-laburante-surface-alt)] ${selectedConversation?.id === conv.id ? 'bg-indigo-50/80' : ''}`}
+                    >
+                      <p className="font-semibold text-[var(--color-laburante-text)] truncate">
+                        {conv.profiles?.name || conv.user_id}
+                      </p>
+                      <p className="text-[11px] text-[var(--color-laburante-text-muted)] mt-0.5">
+                        {new Date(conv.updated_at).toLocaleDateString()} {new Date(conv.updated_at).toLocaleTimeString()}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Hilo de mensajes */}
+            <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] flex flex-col min-h-[400px]">
+              {!selectedConversation ? (
+                <div className="flex-1 flex items-center justify-center text-xs text-[var(--color-laburante-text-secondary)]">
+                  Seleccioná una conversación para ver el hilo.
+                </div>
+              ) : (
+                <>
+                  <div className="p-3 border-b border-[var(--color-laburante-border)] flex items-center gap-2">
+                    <MessageCircle size={14} className="text-indigo-600" />
+                    <span className="font-heading font-bold text-xs text-[var(--color-laburante-text)]">
+                      {selectedConversation.profiles?.name || selectedConversation.user_id}
+                    </span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[420px]">
+                    {conversationMessages.length === 0 ? (
+                      <p className="text-center text-xs text-[var(--color-laburante-text-secondary)]">
+                        Sin mensajes todavía.
+                      </p>
+                    ) : (
+                      conversationMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`flex ${msg.sender_role === 'admin' ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
+                            msg.sender_role === 'admin'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] border border-[var(--color-laburante-border)]'
+                          }`}>
+                            <p>{msg.content}</p>
+                            <p className={`text-[10px] mt-1 ${msg.sender_role === 'admin' ? 'text-indigo-200' : 'text-[var(--color-laburante-text-muted)]'}`}>
+                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {msg.read_at && msg.sender_role === 'admin' && ' · Leído'}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="p-3 border-t border-[var(--color-laburante-border)] flex gap-2">
+                    <input
+                      type="text"
+                      value={adminMessageInput}
+                      onChange={(e) => setAdminMessageInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAdminSendMessage()}
+                      placeholder="Escribí un mensaje..."
+                      className="flex-1 px-3 py-2 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                      disabled={adminMessageSending}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAdminSendMessage}
+                      disabled={!adminMessageInput.trim() || adminMessageSending}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer transition-colors"
+                    >
+                      {adminMessageSending ? '...' : 'Enviar'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

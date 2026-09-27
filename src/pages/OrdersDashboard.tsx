@@ -55,10 +55,18 @@ export default function OrdersDashboard() {
   } = useJobStore()
   const [searchParams] = useSearchParams()
 
-  const [activeTab, setActiveTab] = useState<'cliente' | 'profesional'>('cliente')
+  const [activeTab, setActiveTab] = useState<'cliente' | 'profesional' | 'mensajes'>('cliente')
   const [statusFilter, setStatusFilter] = useState<'activos' | 'completados' | 'cancelados' | 'archivados' | 'todos'>('activos')
   const [activityFilter, setActivityFilter] = useState<'todo' | 'pedidos' | 'empresa'>('todo')
   const [showArchivedCompany, setShowArchivedCompany] = useState(false)
+
+  // Messaging state (Conversaciones directas con LABURANTE Admin)
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<any[]>([])
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [newMessage, setNewMessage] = useState('')
+  const [sendingMessage, setSendingMessage] = useState(false)
+  const [messageError, setMessageError] = useState<string | null>(null)
 
   // Modals state
   const [budgetModalJob, setBudgetModalJob] = useState<JobRequestWithDetails | null>(null)
@@ -78,7 +86,7 @@ export default function OrdersDashboard() {
     const tab = searchParams.get('tab')
     const estado = searchParams.get('estado')
     const actividad = searchParams.get('actividad')
-    if (tab === 'cliente' || tab === 'profesional') setActiveTab(tab)
+    if (tab === 'cliente' || tab === 'profesional' || tab === 'mensajes') setActiveTab(tab)
     if (estado === 'activos' || estado === 'completados' || estado === 'cancelados' || estado === 'archivados' || estado === 'todos') setStatusFilter(estado)
     if (actividad === 'todo' || actividad === 'pedidos' || actividad === 'empresa') setActivityFilter(actividad)
     if (selectedJobId) setStatusFilter('todos')
@@ -236,6 +244,88 @@ export default function OrdersDashboard() {
     setArchiveMessage('No se pudo archivar la propuesta. Verificá que la migración de selección Empresa esté aplicada en Supabase.')
   }
 
+  const loadConversationAndMessages = async () => {
+    if (!user) return
+    setMessagesLoading(true)
+    setMessageError(null)
+    try {
+      let targetConvId = conversationId
+      if (!targetConvId) {
+        const { data: convId, error: rpcError } = await (supabase.rpc as any)('get_or_create_admin_conversation')
+        if (rpcError) {
+          setMessageError(rpcError.message)
+          setMessagesLoading(false)
+          return
+        }
+        targetConvId = convId
+        setConversationId(convId)
+      }
+
+      if (targetConvId) {
+        const { data, error } = await (supabase.from('messages') as any)
+          .select('id, conversation_id, sender_id, sender_role, content, created_at, read_at')
+          .eq('conversation_id', targetConvId)
+          .order('created_at', { ascending: true })
+
+        if (error) {
+          setMessageError(error.message)
+        } else {
+          setMessages(data || [])
+          // Mark incoming admin messages as read
+          const unreadAdminMsgIds = (data || [])
+            .filter((m: any) => m.sender_role === 'admin' && !m.read_at)
+            .map((m: any) => m.id)
+          if (unreadAdminMsgIds.length > 0) {
+            await (supabase.from('messages') as any)
+              .update({ read_at: new Date().toISOString() })
+              .in('id', unreadAdminMsgIds)
+          }
+        }
+      }
+    } catch (err: any) {
+      setMessageError(err.message || 'Error al cargar mensajes')
+    } finally {
+      setMessagesLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'mensajes' && user) {
+      loadConversationAndMessages()
+    }
+  }, [activeTab, user])
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || sendingMessage || !user) return
+    setSendingMessage(true)
+    setMessageError(null)
+    try {
+      let targetConvId = conversationId
+      if (!targetConvId) {
+        const { data: convId, error: rpcError } = await (supabase.rpc as any)('get_or_create_admin_conversation')
+        if (rpcError) throw rpcError
+        targetConvId = convId
+        setConversationId(convId)
+      }
+
+      const { error } = await (supabase.rpc as any)('send_conversation_message', {
+        p_conversation_id: targetConvId,
+        p_content: newMessage.trim(),
+      })
+
+      if (error) {
+        setMessageError(error.message)
+      } else {
+        setNewMessage('')
+        await loadConversationAndMessages()
+      }
+    } catch (err: any) {
+      setMessageError(err.message || 'Error al enviar el mensaje')
+    } finally {
+      setSendingMessage(false)
+    }
+  }
+
   return (
     <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">
       {/* Header */}
@@ -274,9 +364,140 @@ export default function OrdersDashboard() {
             <Briefcase size={14} />
             Mis Trabajos ({proJobs.length})
           </button>
+
+          <button
+            onClick={() => setActiveTab('mensajes')}
+            className={`px-4 py-2 rounded-xl text-xs font-heading font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'mensajes'
+                ? 'bg-white text-[var(--color-laburante-text)] shadow-xs'
+                : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
+            }`}
+          >
+            <MessageCircle size={14} />
+            Mensajes
+          </button>
         </div>
       </div>
 
+      {activeTab === 'mensajes' ? (
+        <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden shadow-xs flex flex-col min-h-[480px]">
+          {/* Header */}
+          <div className="p-4 sm:p-5 border-b border-[var(--color-laburante-border)] bg-indigo-50/50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-heading font-bold text-sm">
+                L
+              </div>
+              <div>
+                <h2 className="font-heading font-bold text-sm sm:text-base text-[var(--color-laburante-text)]">
+                  Equipo de LABURANTE
+                </h2>
+                <p className="text-[11px] text-[var(--color-laburante-text-secondary)]">
+                  Canal directo de consultas y soporte oficial
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={loadConversationAndMessages}
+              disabled={messagesLoading}
+              className="p-2 rounded-xl border border-[var(--color-laburante-border)] bg-white hover:bg-gray-50 text-xs font-semibold text-[var(--color-laburante-text-secondary)] flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Refrescar mensajes"
+            >
+              <Clock size={13} className={messagesLoading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Actualizar</span>
+            </button>
+          </div>
+
+          {messageError && (
+            <div className="p-3 mx-4 mt-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+              <AlertTriangle size={15} />
+              <span>{messageError}</span>
+            </div>
+          )}
+
+          {/* Message Thread */}
+          <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3 max-h-[500px]">
+            {messagesLoading && messages.length === 0 ? (
+              <div className="py-12 text-center text-xs text-[var(--color-laburante-text-secondary)]">
+                Cargando conversación...
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="py-12 text-center space-y-2">
+                <div className="h-12 w-12 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center mx-auto">
+                  <MessageCircle size={22} />
+                </div>
+                <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                  Conversación con LABURANTE
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] max-w-sm mx-auto">
+                  Dejanos tu consulta o mensaje y un administrador del equipo de LABURANTE te responderá a la brevedad.
+                </p>
+              </div>
+            ) : (
+              messages.map((msg: any) => {
+                const isUser = msg.sender_role === 'user' || msg.sender_id === user?.id
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] sm:max-w-[70%] rounded-2xl p-3.5 text-xs leading-relaxed space-y-1 ${
+                        isUser
+                          ? 'bg-indigo-600 text-white rounded-br-xs'
+                          : 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] border border-[var(--color-laburante-border)] rounded-bl-xs'
+                      }`}
+                    >
+                      <p className="whitespace-pre-line break-words">{msg.content}</p>
+                      <div
+                        className={`flex items-center justify-end gap-1 text-[10px] ${
+                          isUser ? 'text-indigo-200' : 'text-[var(--color-laburante-text-muted)]'
+                        }`}
+                      >
+                        <span>
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {isUser && msg.read_at && (
+                          <span title={`Leído el ${new Date(msg.read_at).toLocaleString()}`}>· Leído</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {/* Reply Form */}
+          <div className="p-3 sm:p-4 border-t border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSendMessage()
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Escribí un mensaje para el equipo de LABURANTE..."
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--color-laburante-border)] bg-white text-xs text-[var(--color-laburante-text)] placeholder:text-[var(--color-laburante-text-muted)] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                disabled={sendingMessage}
+                maxLength={5000}
+              />
+              <button
+                type="submit"
+                disabled={!newMessage.trim() || sendingMessage}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-heading font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                {sendingMessage ? 'Enviando...' : 'Enviar'}
+              </button>
+            </form>
+          </div>
+        </section>
+      ) : (
+      <>
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-2">
         <span className="px-2 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]">Actividad</span>
         {([['todo', 'Todo'], ['pedidos', 'Pedidos privados'], ['empresa', `Empresa (${companyInquiries.length})`]] as const).map(([key, label]) => <button key={key} type="button" onClick={() => setActivityFilter(key)} className={`rounded-xl px-3 py-2 text-xs font-bold ${activityFilter === key ? 'bg-white text-[var(--color-laburante-text)] shadow-xs' : 'text-[var(--color-laburante-text-secondary)] hover:bg-white/70'}`}>{label}</button>)}
@@ -677,6 +898,8 @@ export default function OrdersDashboard() {
         </div>
       )}
       </>}
+      </>
+      )}
       {outcomeModal && <OutcomeModal role={outcomeModal.role} blocking={outcomeModal.blocking} onClose={() => setOutcomeModal(null)} onSubmit={handleOutcome} />}
 
       {/* Lightbox Photo Preview */}

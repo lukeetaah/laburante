@@ -122,8 +122,13 @@ export default function NotificationBell() {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-          {/* Header */}
+        <>
+          <div
+            className="fixed inset-0 bg-black/20 z-40 sm:hidden"
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="fixed inset-x-3 sm:inset-x-auto top-16 sm:top-auto sm:absolute sm:right-0 sm:mt-2 w-auto sm:w-96 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col max-h-[calc(100vh-5rem)] sm:max-h-none">
+            {/* Header */}
           <div className="p-3.5 border-b border-[var(--color-laburante-border)] flex items-center justify-between bg-[var(--color-laburante-surface-alt)]/50">
             <div className="flex items-center gap-2">
               <span className="font-heading font-bold text-xs text-[var(--color-laburante-text)]">
@@ -268,7 +273,8 @@ export default function NotificationBell() {
             </Link>
           </div>
         </div>
-      )}
+      </>
+    )}
     </div>
   )
 }

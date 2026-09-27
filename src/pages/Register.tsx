@@ -4,7 +4,7 @@ import { useAuthStore, getResendCooldownRemaining } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CheckCircle2, ArrowRight, Building2, Mail, RefreshCw } from 'lucide-react'
-import { getPostLoginPath } from '@/lib/contextual-navigation'
+import { resolvePostLoginRedirect } from '@/lib/contextual-navigation'
 
 export default function Register() {
   const [searchParams] = useSearchParams()
@@ -32,11 +32,27 @@ export default function Register() {
   const [retryAt, setRetryAt] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
+  const user = useAuthStore((s) => s.user)
+  const authLoading = useAuthStore((s) => s.loading)
+  const isAdmin = useAuthStore((s) => s.isAdmin)
   const signUp = useAuthStore((s) => s.signUp)
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const resendConfirmationEmail = useAuthStore((s) => s.resendConfirmationEmail)
+  const myProfile = useProfileStore((s) => s.myProfile)
   const fetchMyProfile = useProfileStore((s) => s.fetchMyProfile)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      const destination = resolvePostLoginRedirect({
+        user,
+        profile: myProfile,
+        isAdmin,
+        redirectTo: searchParams.get('redirect'),
+      })
+      navigate(destination, { replace: true })
+    }
+  }, [user, authLoading, isAdmin, myProfile, searchParams, navigate])
   const retryStorageKey = email.trim() ? `laburante_signup_retry:${email.trim().toLowerCase()}` : ''
   const signupLockKey = 'laburante_signup_request_lock'
 
@@ -194,15 +210,15 @@ export default function Register() {
       setAccountCreatedEmail(email.trim())
     } else {
       if (retryStorageKey) localStorage.removeItem(retryStorageKey)
-      const redirectTo = searchParams.get('redirect')
-      if (redirectTo && redirectTo.startsWith('/')) {
-        navigate(redirectTo)
-      } else if (isCompany) {
-        navigate('/empresa')
-      } else {
-        const persistedProfile = await fetchMyProfile()
-        navigate(getPostLoginPath(persistedProfile?.intent))
-      }
+      const persistedProfile = await fetchMyProfile()
+      const authState = useAuthStore.getState()
+      const destination = resolvePostLoginRedirect({
+        user: authState.user,
+        profile: persistedProfile,
+        isAdmin: authState.isAdmin,
+        redirectTo: searchParams.get('redirect'),
+      })
+      navigate(destination)
     }
   }
 

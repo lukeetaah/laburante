@@ -6,6 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
 const SITE_URL = Deno.env.get('SITE_URL') || 'https://laburante.ar'
 const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'notificaciones@laburante.ar'
+const ADMIN_FROM_EMAIL = Deno.env.get('RESEND_ADMIN_FROM_EMAIL') || 'LABURANTE <admin@laburante.ar>'
 const REPLY_TO = Deno.env.get('RESEND_REPLY_TO') || 'admin@laburante.ar'
 function parsePositiveLimit(value: string | undefined, fallback: number) {
   const parsed = Number(value)
@@ -156,6 +157,20 @@ async function isValidNotificationContext(admin: ReturnType<typeof createClient>
     return Boolean(share && share.source_company_id === notification.user_id)
   }
 
+  const conversationId = url.searchParams.get('conversacion')
+  if (conversationId && (url.pathname === '/mis-trabajos' || url.pathname === '/admin')) {
+    const { data: conversation } = await admin
+      .from('conversations')
+      .select('id, user_id')
+      .eq('id', conversationId)
+      .maybeSingle()
+    if (!conversation) return false
+    const isActorAdmin = actor.app_metadata?.role === 'admin'
+    if (isActorAdmin && notification.user_id === conversation.user_id) return true
+    if (actor.id === conversation.user_id) return true
+    return false
+  }
+
   if (url.pathname.startsWith('/p/')) {
     const slug = decodeURIComponent(url.pathname.slice(3))
     const { data: profile } = await admin.from('profiles').select('id, whatsapp_verified').eq('slug', slug).maybeSingle()
@@ -262,6 +277,10 @@ Deno.serve(async (request) => {
     return json(request, { ok: true, status: 'skipped', reason })
   }
 
+  const effectiveFrom = (notification.link?.includes('conversacion=') && authData.user.app_metadata?.role === 'admin')
+    ? ADMIN_FROM_EMAIL
+    : FROM_EMAIL
+
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -270,7 +289,7 @@ Deno.serve(async (request) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: FROM_EMAIL,
+      from: effectiveFrom,
       to: [recipientEmail],
       reply_to: REPLY_TO,
       subject: `LABURANTE · ${typeLabels[notification.type] || typeLabels.system}`,

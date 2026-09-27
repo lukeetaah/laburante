@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore, getResendCooldownRemaining } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
-import { isCompanyAccount } from '@/lib/account'
-import { getPostLoginPath } from '@/lib/contextual-navigation'
+import { resolvePostLoginRedirect } from '@/lib/contextual-navigation'
 import { LogIn, ArrowRight, Mail, RefreshCw, CheckCircle2 } from 'lucide-react'
 
 export default function Login() {
@@ -17,11 +16,27 @@ export default function Login() {
   const [resendError, setResendError] = useState<string | null>(null)
   const [resendCooldown, setResendCooldown] = useState(0)
 
+  const user = useAuthStore((s) => s.user)
+  const authLoading = useAuthStore((s) => s.loading)
+  const isAdmin = useAuthStore((s) => s.isAdmin)
   const signIn = useAuthStore((s) => s.signIn)
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const resendConfirmationEmail = useAuthStore((s) => s.resendConfirmationEmail)
+  const myProfile = useProfileStore((s) => s.myProfile)
   const fetchMyProfile = useProfileStore((s) => s.fetchMyProfile)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      const destination = resolvePostLoginRedirect({
+        user,
+        profile: myProfile,
+        isAdmin,
+        redirectTo: searchParams.get('redirect'),
+      })
+      navigate(destination, { replace: true })
+    }
+  }, [user, authLoading, isAdmin, myProfile, searchParams, navigate])
 
   const [oauthLoading, setOauthLoading] = useState<'google' | null>(null)
 
@@ -99,15 +114,13 @@ export default function Login() {
       setError(res.error)
     } else {
       const profile = await fetchMyProfile()
-      const redirectTo = searchParams.get('redirect')
       const authState = useAuthStore.getState()
-      const destination = redirectTo && redirectTo.startsWith('/')
-        ? redirectTo
-        : authState.isAdmin
-          ? '/admin'
-          : isCompanyAccount(authState.user, profile)
-            ? '/empresa'
-            : getPostLoginPath(profile?.intent)
+      const destination = resolvePostLoginRedirect({
+        user: authState.user,
+        profile,
+        isAdmin: authState.isAdmin,
+        redirectTo: searchParams.get('redirect'),
+      })
       navigate(destination)
     }
   }
