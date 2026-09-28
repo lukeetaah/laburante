@@ -38,6 +38,16 @@ import { focusContextualElement } from '@/lib/contextual-navigation'
 
 const isArchivedInquiry = (item: any) => Boolean(item?.archived_at) || item?.status === 'cerrada'
 
+const REJECTION_REASONS = [
+  'No me interesa la propuesta.',
+  'Las condiciones no se ajustan a lo que busco.',
+  'La remuneración no se ajusta a mis expectativas.',
+  'La modalidad o ubicación no me sirve.',
+  'El puesto/servicio no coincide con mi perfil.',
+  'Ya acepté otra oportunidad.',
+  'Otro.',
+]
+
 export default function OrdersDashboard() {
   const { user } = useAuthStore()
   const { myProfile, fetchMyProfile } = useProfileStore()
@@ -78,6 +88,11 @@ export default function OrdersDashboard() {
   const [companyInquiries, setCompanyInquiries] = useState<any[]>([])
   const [selectedCompanyInquiry, setSelectedCompanyInquiry] = useState<any | null>(null)
   const [archiveMessage, setArchiveMessage] = useState('')
+  const [rejectingInquiry, setRejectingInquiry] = useState<any | null>(null)
+  const [rejectionReason, setRejectionReason] = useState<string>('No me interesa la propuesta.')
+  const [rejectionComment, setRejectionComment] = useState<string>('')
+  const [isRejecting, setIsRejecting] = useState<boolean>(false)
+  const [isAccepting, setIsAccepting] = useState<boolean>(false)
   const selectedJobId = searchParams.get('pedido')
   const selectedCompanyInquiryId = searchParams.get('seleccion')
   const explicitTab = searchParams.get('tab')
@@ -107,10 +122,21 @@ export default function OrdersDashboard() {
           const staleIds = (data || []).filter((item: any) => item.status === 'pendiente' && !isArchivedInquiry(item) && new Date(item.created_at) < today).map((item: any) => item.id)
           if (staleIds.length) await (supabase.from('company_candidate_inquiries') as any).update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }).in('id', staleIds).eq('profile_id', user.id)
           const normalized = (data || []).map((item: any) => staleIds.includes(item.id) ? { ...item, archived_at: new Date().toISOString() } : item)
-          const companyIds = normalized.map((item: any) => item.company_id)
-          const { data: companies } = companyIds.length
-            ? await (supabase.from('authenticated_company_profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', companyIds)
-            : { data: [] }
+          const companyIds = Array.from(new Set(normalized.map((item: any) => item.company_id).filter(Boolean)))
+          let companies: any[] = []
+          if (companyIds.length) {
+            const { data: authCompanies } = await (supabase.from('authenticated_company_profiles') as any)
+              .select('id, name, slug, photo_url, provincia, localidad')
+              .in('id', companyIds)
+            if (authCompanies && authCompanies.length > 0) {
+              companies = authCompanies
+            } else {
+              const { data: pubCompanies } = await (supabase.from('public_profiles') as any)
+                .select('id, name, slug, photo_url, provincia, localidad')
+                .in('id', companyIds)
+              companies = pubCompanies || []
+            }
+          }
           const companyById = new Map((companies || []).map((company: any) => [company.id, company]))
           const hydrated = normalized.map((item: any) => ({ ...item, company: companyById.get(item.company_id) }))
           setCompanyInquiries(hydrated)
@@ -209,19 +235,68 @@ export default function OrdersDashboard() {
     }
   }
 
-  const respondToCompanyInquiry = async (inquiry: any, status: 'aceptada' | 'rechazada') => {
-    if (!user) return
-    const operationAt = new Date().toISOString()
-    const { error } = await (supabase.from('company_candidate_inquiries') as any).update({ status, updated_at: operationAt }).eq('id', inquiry.id).eq('profile_id', user.id)
-    if (error) return
-    setCompanyInquiries((items) => items.map((item) => item.id === inquiry.id ? { ...item, status } : item))
-    setSelectedCompanyInquiry(null)
-    await useNotificationStore.getState().addNotification({
-      kind: 'company_candidate_inquiry',
-      inquiryId: inquiry.id,
-      event: 'responded',
-      operationAt,
-    })
+  const handleAcceptInquiry = async (inquiry: any) => {
+    if (!user || isAccepting) return
+    setIsAccepting(true)
+    try {
+      const operationAt = new Date().toISOString()
+      const { error } = await (supabase.from('company_candidate_inquiries') as any)
+        .update({ status: 'aceptada', updated_at: operationAt })
+        .eq('id', inquiry.id)
+        .eq('profile_id', user.id)
+      if (error) throw error
+      setCompanyInquiries((items) => items.map((item) => item.id === inquiry.id ? { ...item, status: 'aceptada' } : item))
+      setSelectedCompanyInquiry(null)
+      await useNotificationStore.getState().addNotification({
+        kind: 'company_candidate_inquiry',
+        inquiryId: inquiry.id,
+        event: 'responded',
+        operationAt,
+      })
+    } catch (err: any) {
+      console.warn('Error al aceptar propuesta:', err)
+    } finally {
+      setIsAccepting(false)
+    }
+  }
+
+  const handleConfirmRejection = async () => {
+    if (!user || !rejectingInquiry || isRejecting) return
+    setIsRejecting(true)
+    try {
+      const operationAt = new Date().toISOString()
+      const reason = rejectionReason || 'No me interesa la propuesta.'
+      const comment = rejectionComment.trim() || null
+      const { error } = await (supabase.from('company_candidate_inquiries') as any)
+        .update({
+          status: 'rechazada',
+          rejection_reason: reason,
+          rejection_comment: comment,
+          updated_at: operationAt,
+        })
+        .eq('id', rejectingInquiry.id)
+        .eq('profile_id', user.id)
+      if (error) throw error
+      setCompanyInquiries((items) =>
+        items.map((item) =>
+          item.id === rejectingInquiry.id
+            ? { ...item, status: 'rechazada', rejection_reason: reason, rejection_comment: comment }
+            : item
+        )
+      )
+      setRejectingInquiry(null)
+      setSelectedCompanyInquiry(null)
+      await useNotificationStore.getState().addNotification({
+        kind: 'company_candidate_inquiry',
+        inquiryId: rejectingInquiry.id,
+        event: 'responded',
+        operationAt,
+      })
+    } catch (err: any) {
+      console.warn('Error al rechazar propuesta:', err)
+    } finally {
+      setIsRejecting(false)
+    }
   }
 
   const archiveCompanyInquiry = async (inquiryId: string) => {
@@ -504,9 +579,90 @@ export default function OrdersDashboard() {
       </div>
       {archiveMessage && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">{archiveMessage}</div>}
 
-      {activityFilter !== 'pedidos' && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Selección Empresa</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">Las propuestas pendientes de días anteriores se archivan automáticamente. Nada se borra: podés consultar el historial cuando quieras.</p></div><button type="button" onClick={() => setShowArchivedCompany((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] font-bold text-indigo-800"><Archive size={14} /> {showArchivedCompany ? 'Ocultar archivadas' : 'Ver archivadas'}</button></div>{companyInquiries.filter((item) => showArchivedCompany || !isArchivedInquiry(item)).length === 0 ? <p className="rounded-xl border border-dashed border-indigo-200 bg-white/70 p-5 text-center text-xs text-indigo-900/75">No hay propuestas {showArchivedCompany ? 'archivadas' : 'activas'} de Empresa.</p> : companyInquiries.filter((item) => showArchivedCompany || !isArchivedInquiry(item)).map((inquiry) => <article key={inquiry.id} data-inquiry-id={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.company?.name || 'Empresa'} · {new Date(inquiry.created_at).toLocaleDateString('es-AR')}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiry.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : inquiry.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{inquiry.status}{isArchivedInquiry(inquiry) ? ' · archivada' : ''}</span></div>{inquiry.message && <p className="mt-2 line-clamp-2 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCompanyInquiry(inquiry)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Ver propuesta y datos <ChevronRight size={14} /></button>{!isArchivedInquiry(inquiry) && <button type="button" onClick={() => archiveCompanyInquiry(inquiry.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700" title="Archivar propuesta"><Archive size={14} /> Archivar</button>}</div></article>)}</section>}
+      {activityFilter !== 'pedidos' && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-bold text-indigo-950">Selección Empresa</h2><p className="mt-1 text-xs leading-relaxed text-indigo-900/75">Las propuestas pendientes de días anteriores se archivan automáticamente. Nada se borra: podés consultar el historial cuando quieras.</p></div><button type="button" onClick={() => setShowArchivedCompany((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] font-bold text-indigo-800"><Archive size={14} /> {showArchivedCompany ? 'Ocultar archivadas' : 'Ver archivadas'}</button></div>{companyInquiries.filter((item) => showArchivedCompany || !isArchivedInquiry(item)).length === 0 ? <p className="rounded-xl border border-dashed border-indigo-200 bg-white/70 p-5 text-center text-xs text-indigo-900/75">No hay propuestas {showArchivedCompany ? 'archivadas' : 'activas'} de Empresa.</p> : companyInquiries.filter((item) => showArchivedCompany || !isArchivedInquiry(item)).map((inquiry) => <article key={inquiry.id} data-inquiry-id={inquiry.id} className="rounded-xl border border-indigo-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{inquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</p><p className="mt-1 text-xs text-indigo-950 font-semibold">Te contactó: <span className="font-bold">{inquiry.company?.name || 'Empresa'}</span><span className="font-normal text-[var(--color-laburante-text-secondary)]"> · {new Date(inquiry.created_at).toLocaleDateString('es-AR')}</span></p><p className="mt-0.5 text-[11px] text-[var(--color-laburante-text-muted)]">Ubicación: {[inquiry.company?.localidad, inquiry.company?.provincia].filter(Boolean).join(', ') || 'no disponible'}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiry.status === 'pendiente' ? 'bg-amber-100 text-amber-800' : inquiry.status === 'aceptada' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>{inquiry.status}{isArchivedInquiry(inquiry) ? ' · archivada' : ''}</span></div>{inquiry.message && <p className="mt-2 line-clamp-2 text-xs text-[var(--color-laburante-text-secondary)]">{inquiry.message}</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCompanyInquiry(inquiry)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">Ver propuesta y datos <ChevronRight size={14} /></button>{!isArchivedInquiry(inquiry) && <button type="button" onClick={() => archiveCompanyInquiry(inquiry.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700" title="Archivar propuesta"><Archive size={14} /> Archivar</button>}</div></article>)}</section>}
 
-      {selectedCompanyInquiry && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Detalle de selección Empresa</p><h2 className="mt-1 font-heading text-xl font-bold">{selectedCompanyInquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</h2></div><button type="button" onClick={() => setSelectedCompanyInquiry(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Cerrar"><XCircle size={18} /></button></div><div className="mt-5 space-y-3 text-sm"><div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4"><p className="font-bold text-indigo-950">{selectedCompanyInquiry.company?.name || 'Empresa'}</p><p className="mt-1 text-xs text-indigo-900/75">{[selectedCompanyInquiry.company?.localidad, selectedCompanyInquiry.company?.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}</p>{selectedCompanyInquiry.company?.slug && <Link to={`/p/${selectedCompanyInquiry.company.slug}`} onClick={() => setSelectedCompanyInquiry(null)} className="mt-2 inline-flex text-xs font-semibold text-indigo-700">Ver perfil de la Empresa <ExternalLink size={13} className="ml-1" /></Link>}</div><div><p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Mensaje de la Empresa</p><p className="mt-1 whitespace-pre-line text-sm text-gray-800">{selectedCompanyInquiry.message || 'La Empresa no agregó un mensaje adicional.'}</p></div><p className="text-xs text-gray-500">Recibida el {new Date(selectedCompanyInquiry.created_at).toLocaleString('es-AR')}</p></div>{selectedCompanyInquiry.status === 'pendiente' ? <div className="mt-6 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => respondToCompanyInquiry(selectedCompanyInquiry, 'rechazada')} className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-semibold">No avanzar</button><button type="button" onClick={() => respondToCompanyInquiry(selectedCompanyInquiry, 'aceptada')} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white">Aceptar y conversar</button></div> : <div className="mt-6 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">Ya respondiste esta propuesta como <strong>{selectedCompanyInquiry.status}</strong>. La Empresa recibió tu decisión.</div>}</div></div>}
+      {selectedCompanyInquiry && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Detalle de selección Empresa</p><h2 className="mt-1 font-heading text-xl font-bold">{selectedCompanyInquiry.process_type === 'entrevista' ? 'Propuesta de entrevista' : 'Propuesta de contratación'}</h2></div><button type="button" onClick={() => setSelectedCompanyInquiry(null)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Cerrar"><XCircle size={18} /></button></div><div className="mt-5 space-y-3 text-sm"><div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4"><p className="text-[11px] font-bold uppercase tracking-wider text-indigo-700">Te contactó</p><p className="text-base font-bold text-indigo-950 mt-0.5">{selectedCompanyInquiry.company?.name || 'Empresa'}</p><p className="mt-1 text-xs text-indigo-900/80"><strong>Ubicación:</strong> {[selectedCompanyInquiry.company?.localidad, selectedCompanyInquiry.company?.provincia].filter(Boolean).join(', ') || 'no disponible'}</p>{selectedCompanyInquiry.company?.slug ? <Link to={`/p/${selectedCompanyInquiry.company.slug}`} onClick={() => setSelectedCompanyInquiry(null)} className="mt-2.5 inline-flex items-center text-xs font-semibold text-indigo-700 hover:text-indigo-900">Ver perfil público de la Empresa <ExternalLink size={13} className="ml-1" /></Link> : <span className="mt-2 text-xs text-gray-500">Perfil público no disponible</span>}</div><div><p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Mensaje de la Empresa</p><p className="mt-1 whitespace-pre-line text-sm text-gray-800">{selectedCompanyInquiry.message || 'La Empresa no agregó un mensaje adicional.'}</p></div><p className="text-xs text-gray-500">Recibida el {new Date(selectedCompanyInquiry.created_at).toLocaleString('es-AR')}</p></div>{selectedCompanyInquiry.status === 'pendiente' ? <div className="mt-6 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => { setRejectingInquiry(selectedCompanyInquiry); setRejectionReason('No me interesa la propuesta.'); setRejectionComment('') }} disabled={isAccepting} className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-semibold hover:bg-gray-50">Rechazar propuesta</button><button type="button" onClick={() => handleAcceptInquiry(selectedCompanyInquiry)} disabled={isAccepting} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white transition-opacity disabled:opacity-50">{isAccepting ? 'Aceptando...' : 'Aceptar y conversar'}</button></div> : <div className="mt-6 rounded-xl bg-gray-50 p-3 text-xs text-gray-600 space-y-1"><p>Ya respondiste esta propuesta como <strong>{selectedCompanyInquiry.status}</strong>.</p>{selectedCompanyInquiry.status === 'rechazada' && selectedCompanyInquiry.rejection_reason && <p className="text-gray-500">Motivo informado: {selectedCompanyInquiry.rejection_reason}</p>}</div>}</div></div>}
+
+      {rejectingInquiry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-rose-600">Rechazar propuesta</p>
+                <h3 className="font-heading text-lg font-bold text-gray-900 mt-1">Registrar motivo de devolución</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRejectingInquiry(null)}
+                disabled={isRejecting}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                aria-label="Cerrar"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Seleccioná el motivo por el cual no avanzarás con la propuesta de <strong>{rejectingInquiry.company?.name || 'la empresa'}</strong>. Esto ayuda a la empresa a calibrar sus búsquedas.
+            </p>
+
+            <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+              {REJECTION_REASONS.map((reason) => (
+                <label
+                  key={reason}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-colors ${
+                    rejectionReason === reason
+                      ? 'border-indigo-600 bg-indigo-50/70 font-semibold text-indigo-950'
+                      : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="rejection_reason"
+                    value={reason}
+                    checked={rejectionReason === reason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>{reason}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-gray-700">Comentario adicional (opcional)</label>
+              <textarea
+                value={rejectionComment}
+                onChange={(e) => setRejectionComment(e.target.value.slice(0, 500))}
+                placeholder="Podés agregar detalles adicionales..."
+                rows={3}
+                disabled={isRejecting}
+                className="w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-400"
+              />
+              <p className="text-[10px] text-gray-400 text-right">{rejectionComment.length}/500</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setRejectingInquiry(null)}
+                disabled={isRejecting}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold hover:bg-gray-50"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRejection}
+                disabled={isRejecting}
+                className="rounded-xl bg-rose-600 hover:bg-rose-700 px-4 py-2 text-xs font-bold text-white transition-opacity disabled:opacity-50"
+              >
+                {isRejecting ? 'Enviando...' : 'Confirmar rechazo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activityFilter !== 'empresa' && <>
       {/* Filter Bar */}
