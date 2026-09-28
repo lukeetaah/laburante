@@ -186,7 +186,7 @@ export default function Register() {
         phone: phone.trim(),
         provincia,
         localidad: localidad.trim(),
-        intent,
+        intent: isCompany ? 'buscar' : (intent || 'ofrecer'),
         accountType: isCompany ? 'empresa' : 'persona',
         companyPlan: isCompany ? companyPlan : undefined,
         companySector: isCompany ? companySector.trim() : undefined,

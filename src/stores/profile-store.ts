@@ -111,6 +111,7 @@ interface ProfileState {
   moderateRecommendation: (recommendationId: string, status: 'visible' | 'oculto') => Promise<{ error: string | null }>
   deleteRecommendation: (recommendationId: string) => Promise<{ error: string | null }>
   submitReport: (profileId: string, reason: string, description: string, jobRequestId?: string) => Promise<{ error: string | null }>
+  updateMyIntent: (intent: ProfileIntent) => Promise<{ error: string | null }>
 }
 
 const VERIFIED_WA_KEY = 'laburante_v2_verified_wa'
@@ -1278,6 +1279,45 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     } catch (err: any) {
       captureAppError(err, 'profile_report')
       return { error: err.message || 'Error al enviar reporte.' }
+    }
+  },
+
+  updateMyIntent: async (intent: ProfileIntent) => {
+    addAppBreadcrumb('update_profile_intent_started')
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError || !userData.user) {
+        return { error: 'No hay sesión de usuario activa.' }
+      }
+      const userId = userData.user.id
+
+      // 1. Actualizar ÚNICAMENTE profiles.intent en base de datos
+      const { error: profileError } = await (supabase.from('profiles') as any)
+        .update({ intent })
+        .eq('id', userId)
+
+      if (profileError) {
+        captureAppError(profileError, 'update_my_intent_profile_error')
+        return { error: profileError.message || 'Error al guardar la intención en tu perfil.' }
+      }
+
+      // 2. Sincronizar metadata en auth.users
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { intent },
+      })
+      if (authError) {
+        console.warn('Advertencia al sincronizar intent en auth metadata:', authError)
+      }
+
+      // 3. Sincronizar estado local en el store
+      set((state) => ({
+        myProfile: state.myProfile ? { ...state.myProfile, intent } : null,
+      }))
+
+      return { error: null }
+    } catch (err: any) {
+      captureAppError(err, 'update_my_intent_unexpected')
+      return { error: err.message || 'Error inesperado al actualizar la intención.' }
     }
   }
 }))

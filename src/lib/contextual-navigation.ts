@@ -33,8 +33,7 @@ export function resolvePostLoginRedirect(ctx: PostLoginContext): string {
   }
 
   if (intent === 'buscar') return '/buscar'
-  if (!ctx.profile) return '/crear-perfil'
-  return '/buscar'
+  return '/crear-perfil'
 }
 
 export function getPostLoginPath(intent: unknown) {
