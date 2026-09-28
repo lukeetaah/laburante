@@ -6,18 +6,34 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
 const CRON_SECRET = Deno.env.get('CRON_SECRET') || ''
 const SITE_URL = Deno.env.get('SITE_URL') || 'https://laburante.ar'
 
+const ALLOWED_ORIGINS = new Set([
+  SITE_URL,
+  'https://laburante.ar',
+  'https://www.laburante.ar',
+  'http://localhost:5173',
+  'http://localhost:3000',
+])
+
+function isAllowedOrigin(origin: string): boolean {
+  if (!origin) return false
+  if (ALLOWED_ORIGINS.has(origin)) return true
+  try {
+    const url = new URL(origin)
+    return (
+      url.hostname === 'laburante.ar' ||
+      url.hostname.endsWith('.laburante.ar') ||
+      url.hostname.endsWith('.vercel.app')
+    )
+  } catch {
+    return false
+  }
+}
+
 function corsHeaders(origin: string | null) {
-  const allowed = [
-    SITE_URL,
-    'https://laburante.ar',
-    'https://www.laburante.ar',
-    'http://localhost:5173',
-    'http://localhost:3000',
-  ]
-  const allowOrigin = origin && allowed.some((o) => origin.startsWith(o)) ? origin : SITE_URL
+  const allowOrigin = origin && isAllowedOrigin(origin) ? origin : SITE_URL
   return {
     'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-region, baggage, traceparent, tracestate, sentry-trace, x-cron-secret',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json',
   }
@@ -39,9 +55,10 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'method_not_allowed' }, 405, origin)
   }
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
-    return jsonResponse({ error: 'server_configuration_error' }, 503, origin)
-  }
+  try {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+      return jsonResponse({ error: 'server_configuration_error' }, 503, origin)
+    }
 
   // Validar autorización: o bien CRON_SECRET en cabecera, o bien JWT de Admin
   const authHeader = req.headers.get('Authorization') || ''
@@ -182,4 +199,10 @@ Deno.serve(async (req) => {
     errors_count: errors.length,
     errors: errors.slice(0, 5),
   }, 200, origin)
+  } catch (err: any) {
+    return jsonResponse({
+      error: 'internal_server_error',
+      message: err.message || 'Error inesperado en Edge Function.',
+    }, 500, origin)
+  }
 })

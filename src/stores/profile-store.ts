@@ -998,7 +998,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       })
 
       if (error) {
-        return { error: error.message }
+        let msg = error.message
+        if ((error as any).context && typeof (error as any).context.json === 'function') {
+          try {
+            const body = await (error as any).context.json()
+            if (body?.message || body?.error) msg = body.message || body.error
+          } catch {}
+        }
+        return { error: msg }
       }
       if (data?.error) {
         return {
@@ -1016,9 +1023,20 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   adminTriggerRemindersBatch: async () => {
     addAppBreadcrumb('admin_trigger_reminders_batch_started')
     try {
-      const { data, error } = await supabase.functions.invoke('process-unconfirmed-reminders')
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const { data, error } = await supabase.functions.invoke('process-unconfirmed-reminders', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
       if (error) {
-        return { error: error.message }
+        let msg = error.message
+        if ((error as any).context && typeof (error as any).context.json === 'function') {
+          try {
+            const body = await (error as any).context.json()
+            if (body?.message || body?.error) msg = body.message || body.error
+          } catch {}
+        }
+        return { error: msg }
       }
       if (data?.error) {
         return { error: data.details || data.error }
