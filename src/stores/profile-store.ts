@@ -984,7 +984,16 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   adminResendUserVerification: async (targetUserId: string) => {
     addAppBreadcrumb('admin_resend_user_verification_started')
     try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) {
+        return { error: 'No hay una sesión activa de administrador.' }
+      }
+
       const { data, error } = await supabase.functions.invoke('admin-auth-resend', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: { target_user_id: targetUserId },
       })
 
