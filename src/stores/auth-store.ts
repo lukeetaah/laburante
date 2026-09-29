@@ -139,6 +139,11 @@ async function ensureUserProfile(user: User | null) {
   }
 }
 
+// Suscripción activa a onAuthStateChange. Se guarda aquí para poder cancelarla
+// si initialize() se llama más de una vez (React StrictMode, hot reload, etc.)
+// evitando que se acumulen listeners duplicados que disparan múltiples callbacks.
+let _authSubscription: { unsubscribe: () => void } | null = null
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   session: null,
@@ -308,6 +313,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   initialize: async () => {
+    // Cancelar suscripción anterior si initialize() se llama más de una vez
+    // (React StrictMode monta/desmonta/monta, lo que acumula listeners duplicados)
+    if (_authSubscription) {
+      _authSubscription.unsubscribe()
+      _authSubscription = null
+    }
+
     const { data: { session } } = await supabase.auth.getSession()
     const user = session?.user ?? null
     set({
@@ -318,7 +330,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     })
     await ensureUserProfile(user)
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null
       set({
         session,
@@ -328,5 +340,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       })
       await ensureUserProfile(u)
     })
+    _authSubscription = subscription
   },
 }))

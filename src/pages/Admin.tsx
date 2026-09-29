@@ -272,6 +272,57 @@ export default function Admin() {
     }
   }, [isAdmin])
 
+  const loadAdminConversations = async () => {
+    try {
+      const { data, error } = await (supabase.from('conversations') as any)
+        .select('id, user_id, subject, status, created_at, updated_at')
+        .order('updated_at', { ascending: false })
+      if (error) {
+        console.warn('Error loading admin conversations:', error)
+        return []
+      }
+      setAdminConversations(data || [])
+      return data || []
+    } catch (err) {
+      console.warn('Error loading admin conversations:', err)
+      return []
+    }
+  }
+
+  const loadConversationMessages = async (conversationId: string) => {
+    try {
+      const { data } = await (supabase.from('messages') as any)
+        .select('id, conversation_id, sender_id, sender_role, content, created_at, read_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+      setConversationMessages(data || [])
+    } catch (err) {
+      console.warn('Error loading conversation messages:', err)
+    }
+  }
+
+  const handleSelectConversation = async (conv: any) => {
+    setSelectedConversation(conv)
+    await loadConversationMessages(conv.id)
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'messages' || !isAdmin) return
+    let mounted = true
+    const targetConv = searchParams.get('conversacion')
+    loadAdminConversations().then((convs) => {
+      if (!mounted) return
+      if (targetConv && convs && convs.length > 0) {
+        const found = convs.find((c: any) => c.id === targetConv)
+        if (found && mounted) {
+          setSelectedConversation(found)
+          loadConversationMessages(found.id)
+        }
+      }
+    })
+    return () => { mounted = false }
+  }, [activeTab, isAdmin])
+
   if (authLoading) {
     return <div className="container py-20 text-center text-sm">Verificando credenciales...</div>
   }
@@ -789,54 +840,6 @@ export default function Admin() {
       setActionMessage(`✅ Lote ejecutado: ${result.sent} enviados, ${result.skipped} omitidos de ${result.total_candidates} candidatos.`)
     }
   }
-
-  const loadAdminConversations = async () => {
-    try {
-      const { data, error } = await (supabase.from('conversations') as any)
-        .select('id, user_id, subject, status, created_at, updated_at')
-        .order('updated_at', { ascending: false })
-      if (error) {
-        console.warn('Error loading admin conversations:', error)
-        return []
-      }
-      setAdminConversations(data || [])
-      return data || []
-    } catch (err) {
-      console.warn('Error loading admin conversations:', err)
-      return []
-    }
-  }
-
-  const loadConversationMessages = async (conversationId: string) => {
-    try {
-      const { data } = await (supabase.from('messages') as any)
-        .select('id, conversation_id, sender_id, sender_role, content, created_at, read_at')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-      setConversationMessages(data || [])
-    } catch (err) {
-      console.warn('Error loading conversation messages:', err)
-    }
-  }
-
-  const handleSelectConversation = async (conv: any) => {
-    setSelectedConversation(conv)
-    await loadConversationMessages(conv.id)
-  }
-
-  useEffect(() => {
-    if (activeTab === 'messages' && isAdmin) {
-      const targetConv = searchParams.get('conversacion')
-      loadAdminConversations().then((convs) => {
-        if (targetConv && convs && convs.length > 0) {
-          const found = convs.find((c: any) => c.id === targetConv)
-          if (found) {
-            handleSelectConversation(found)
-          }
-        }
-      })
-    }
-  }, [activeTab, isAdmin, searchParams])
 
   const handleAdminSendMessage = async () => {
     if (!selectedConversation || !adminMessageInput.trim() || adminMessageSending) return
