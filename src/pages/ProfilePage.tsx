@@ -47,6 +47,7 @@ export default function ProfilePage() {
   const [editingContext, setEditingContext] = useState('')
   const [recommendationMessage, setRecommendationMessage] = useState('')
   const [resumeAccessUrl, setResumeAccessUrl] = useState<string | null>(null)
+  const [resumeLoading, setResumeLoading] = useState(false)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
   const updateProfileVisibility = useProfileStore((s) => s.updateProfileVisibility)
@@ -82,12 +83,21 @@ export default function ProfilePage() {
   useEffect(() => {
     let active = true
     setResumeAccessUrl(null)
-    if (!user?.id || !profile?.id || !profile.has_resume) return () => { active = false }
+    if (!user?.id || !profile?.id || (!profile.has_resume && !profile.resume_url)) {
+      setResumeLoading(false)
+      return () => { active = false }
+    }
+    setResumeLoading(true)
     getAuthorizedResumeUrl(profile.id).then((result) => {
-      if (active) setResumeAccessUrl(result.url)
+      if (active) {
+        setResumeAccessUrl(result.url)
+        setResumeLoading(false)
+      }
+    }).catch(() => {
+      if (active) setResumeLoading(false)
     })
     return () => { active = false }
-  }, [profile?.id, profile?.has_resume, user?.id])
+  }, [profile?.id, profile?.has_resume, profile?.resume_url, user?.id])
 
   const handleShare = () => {
     const url = `${window.location.origin}/p/${profile?.slug}`
@@ -312,19 +322,40 @@ export default function ProfilePage() {
           {profile.has_resume || profile.resume_url ? (
             user ? (
               resumeAccessUrl ? (
-                <a href={resumeAccessUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold text-[var(--color-laburante-indigo)]"><FileText size={14} /> Ver CV{getFriendlyResumeName(profile.resume_name) ? `: ${getFriendlyResumeName(profile.resume_name)}` : ''}</a>
+                <a
+                  href={resumeAccessUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 font-semibold text-[var(--color-laburante-indigo)] hover:underline"
+                >
+                  <FileText size={14} /> Ver CV{getFriendlyResumeName(profile.resume_name) ? `: ${getFriendlyResumeName(profile.resume_name)}` : ''}
+                </a>
+              ) : resumeLoading ? (
+                <span className="inline-flex items-center gap-2 text-[var(--color-laburante-text-secondary)]">
+                  <FileText size={14} className="animate-pulse" /> Obteniendo acceso al CV...
+                </span>
               ) : (
-                <span className="inline-flex items-center gap-2 text-[var(--color-laburante-text-muted)]"><FileText size={14} /> CV disponible para cuentas autorizadas</span>
+                <span className="inline-flex items-center gap-2 text-[var(--color-laburante-text-muted)]">
+                  <FileText size={14} /> CV no disponible temporalmente
+                </span>
               )
             ) : (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                <span className="inline-flex items-center gap-2 font-semibold text-emerald-700"><FileText size={14} /> CV cargado</span>
-                <span className="text-[var(--color-laburante-text-secondary)]">Registrate o accedé para verlo.</span>
-                <Link to="/registrar" className="font-semibold text-[var(--color-laburante-indigo)] hover:underline">Crear mi cuenta</Link>
+                <span className="inline-flex items-center gap-2 font-semibold text-emerald-700">
+                  <FileText size={14} /> CV cargado
+                </span>
+                <span className="text-[var(--color-laburante-text-secondary)]">
+                  Iniciá sesión o registrate para verlo.
+                </span>
+                <Link to="/ingresar" className="font-semibold text-[var(--color-laburante-indigo)] hover:underline">
+                  Ingresar
+                </Link>
               </div>
             )
           ) : (
-            <span className="inline-flex items-center gap-2 text-[var(--color-laburante-text-muted)]"><FileText size={14} /> No tiene CV cargado</span>
+            <span className="inline-flex items-center gap-2 text-[var(--color-laburante-text-muted)]">
+              <FileText size={14} /> No tiene CV cargado
+            </span>
           )}
         </div>
       </div>

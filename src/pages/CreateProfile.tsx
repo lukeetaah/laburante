@@ -276,40 +276,106 @@ export default function CreateProfile() {
 
     const uploadAsset = async (file: File | null, kind: 'photo' | 'resume') => {
       if (!file || !user) return kind === 'photo' ? existingPhotoUrl : existingResumeUrl
-      const allowed = kind === 'photo'
-        ? ['image/jpeg', 'image/png', 'image/webp']
-        : ['application/pdf', 'text/plain', 'text/csv', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-      if (!allowed.includes(file.type)) throw new Error(kind === 'photo' ? 'La foto debe ser JPG, PNG o WebP.' : 'El CV debe ser PDF, DOC, DOCX, CSV o TXT.')
-      if (file.size > 10 * 1024 * 1024) throw new Error('El archivo no puede superar los 10 MB.')
-      const extension = file.name.split('.').pop()?.toLowerCase() || 'bin'
+      const extension = (file.name.split('.').pop() || '').toLowerCase()
+      const mime = (file.type || '').toLowerCase()
+
+      if (kind === 'photo') {
+        const validPhotoMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/pjpeg']
+        const validPhotoExts = ['jpg', 'jpeg', 'png', 'webp']
+        const isPhotoValid = validPhotoMimes.includes(mime) || validPhotoExts.includes(extension)
+        if (!isPhotoValid) {
+          throw new Error('La foto debe ser formato JPG, PNG o WebP.')
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error('La foto no puede superar los 5 MB.')
+        }
+      } else {
+        const validDocMimes = [
+          'application/pdf',
+          'text/plain',
+          'text/csv',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/x-pdf',
+          'application/octet-stream',
+        ]
+        const validDocExts = ['pdf', 'doc', 'docx', 'csv', 'txt']
+        const isDocValid = validDocMimes.includes(mime) || validDocExts.includes(extension)
+        if (!isDocValid) {
+          throw new Error('El CV debe ser PDF, DOC, DOCX, CSV o TXT.')
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          throw new Error('El archivo de CV no puede superar los 10 MB.')
+        }
+      }
+
+      const safeExt = extension || (kind === 'photo' ? 'jpg' : 'pdf')
       const bucket = kind === 'photo' ? 'profile-photos' : 'profile-documents'
-      const path = `${user.id}/${kind}-${Date.now()}.${extension}`
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, { upsert: true, contentType: file.type })
-      if (uploadError) throw new Error(uploadError.message || 'No se pudo subir el archivo. Verificá que la migración de archivos esté aplicada en Supabase.')
+      const path = `${user.id}/${kind}-${Date.now()}.${safeExt}`
+      const contentType = mime || (kind === 'photo' ? 'image/jpeg' : 'application/pdf')
+
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
+        upsert: true,
+        contentType,
+      })
+      if (uploadError) {
+        throw new Error(uploadError.message || 'No se pudo subir el archivo a Supabase Storage.')
+      }
       if (kind === 'resume') return `profile-documents:${path}`
-      return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
+      const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(path)
+      return publicUrlResult?.data?.publicUrl || null
     }
 
     try {
       const photoUrl = await uploadAsset(photoFile, 'photo')
       const resumeUrl = await uploadAsset(resumeFile, 'resume')
       const shouldPersistHybridPercentages = modalidad === 'ambas' && (!isEditing || hybridPercentagesEdited || initialModalidad !== 'ambas')
+
+      const sanitizedSkills = (skills || [])
+        .map((s) => (typeof s === 'string' ? s.trim() : ''))
+        .filter(Boolean)
+
+      const sanitizedServices = (services || [])
+        .map((s) => ({
+          title: (s?.title || '').trim(),
+          description: (s?.description || '').trim(),
+          precio_orientativo: (s?.precio_orientativo || '').trim(),
+        }))
+        .filter((s) => s.title.length > 0)
+
+      const sanitizedContactMethods = (contactMethods || [])
+        .map((c) => ({
+          ...c,
+          type: c?.type || 'whatsapp',
+          value: (c?.value || '').trim(),
+        }))
+        .filter((c) => c.value.length > 0)
+
+      const sanitizedLanguages = (languages || [])
+        .map((entry) => ({
+          ...entry,
+          language: (entry?.language || '').trim(),
+          level: entry?.level || 'intermedio',
+          is_public: entry?.is_public !== false,
+        }))
+        .filter((entry) => entry.language.length > 0)
+
       const payload = {
-        name: name.trim(),
-        bio: bio.trim(),
-        provincia,
-        localidad: localidad.trim(),
-        zona_trabajo: zonaTrabajo.trim(),
+        name: (name || '').trim(),
+        bio: (bio || '').trim(),
+        provincia: provincia || 'CABA',
+        localidad: (localidad || '').trim(),
+        zona_trabajo: (zonaTrabajo || '').trim(),
         modalidad,
         hybrid_presencial_pct: shouldPersistHybridPercentages ? hybridPresencialPct : null,
         hybrid_remoto_pct: shouldPersistHybridPercentages ? hybridRemotoPct : null,
         disponibilidad,
         status,
         intent,
-        skills: skills.filter((s) => s.trim()),
-        services: services.filter((s) => s.title.trim()),
-        contact_methods: contactMethods.filter((c) => c.value.trim()),
-        languages: languages.filter((entry) => entry.language.trim()),
+        skills: sanitizedSkills,
+        services: sanitizedServices,
+        contact_methods: sanitizedContactMethods,
+        languages: sanitizedLanguages,
         photo_url: photoUrl || null,
         resume_url: resumeUrl || null,
         resume_name: resumeFile?.name || existingResumeName || null,
@@ -318,15 +384,16 @@ export default function CreateProfile() {
       const res = await createProfile(payload)
       setSubmitting(false)
 
-      if (res.error) setError(res.error)
-      else if (res.slug) {
+      if (res.error) {
+        setError(res.error)
+      } else if (res.slug) {
         // Registrar habilidades personalizadas en proposed_skills para revisión de admin
-        const customSkills = skills.filter((s) => s.trim() && !isKnownWorkOption(s.trim()))
+        const customSkills = sanitizedSkills.filter((s) => !isKnownWorkOption(s))
         if (customSkills.length > 0 && user?.id) {
           for (const cs of customSkills) {
             await (supabase.from('proposed_skills') as any)
               .insert({
-                skill_name: cs.trim(),
+                skill_name: cs,
                 proposed_by_profile_id: user.id,
                 status: 'pendiente',
               })
@@ -334,10 +401,12 @@ export default function CreateProfile() {
           }
         }
 
-        const preferenceResult = await saveEmailNotificationsEnabled(user.id, emailNotificationsEnabled)
-        if (preferenceResult.error) {
-          setError(`El perfil se guardó, pero no pudimos guardar la preferencia de emails: ${preferenceResult.error}`)
-          return
+        if (user?.id) {
+          const preferenceResult = await saveEmailNotificationsEnabled(user.id, emailNotificationsEnabled)
+          if (preferenceResult.error) {
+            setError(`El perfil se guardó, pero no pudimos guardar la preferencia de emails: ${preferenceResult.error}`)
+            return
+          }
         }
         navigate(`/p/${res.slug}`)
       }
@@ -566,7 +635,7 @@ export default function CreateProfile() {
             </div>
           </div>
 
-          {!((myProfile?.account_type || user.user_metadata?.account_type) === 'empresa') && (
+          {!((myProfile?.account_type || user?.user_metadata?.account_type) === 'empresa') && (
             <div className="pt-3 mt-2 border-t border-[var(--color-laburante-border)]">
               <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-2">
                 Intención de este perfil
@@ -1026,7 +1095,7 @@ export default function CreateProfile() {
           setWhatsappModalOpen(false)
           void fetchMyProfile()
         }}
-        profileId={myProfile?.id || user.id}
+        profileId={myProfile?.id || user?.id || ''}
         phone={contactMethods.find((c) => c.type === 'whatsapp')?.value || ''}
         profileName={name || myProfile?.name || 'Mi Perfil'}
         profileSlug={myProfile?.slug || (name ? name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '')}

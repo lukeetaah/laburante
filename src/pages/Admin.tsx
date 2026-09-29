@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore, type AccountDeletionRecord } from '@/stores/profile-store'
 import type { WhatsAppVerificationRequest } from '@/lib/database.types'
@@ -88,7 +88,13 @@ export default function Admin() {
     adminCleanupAbandonedAccounts,
   } = useProfileStore()
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'jobs' | 'verifications' | 'confirmations' | 'messages' | 'reports' | 'profiles' | 'companies' | 'reviews' | 'deletions' | 'settings'>('analytics')
+  const [searchParams] = useSearchParams()
+  const initialUrlTab = searchParams.get('tab')
+  const validTabs = ['analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'reports', 'profiles', 'companies', 'reviews', 'deletions', 'settings'] as const
+  type AdminTab = typeof validTabs[number]
+  const [activeTab, setActiveTab] = useState<AdminTab>(
+    validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : 'analytics'
+  )
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos' | 'incompletos'>('todos')
   const [adminFilters, setAdminFilters] = useState({
     query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '',
@@ -283,17 +289,23 @@ export default function Admin() {
         <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
           Esta sección es exclusiva para administradores de LABURANTE.
         </p>
-        <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface)] border border-[var(--color-laburante-border)] text-left text-xs text-[var(--color-laburante-text-secondary)] space-y-2">
-          <p className="font-semibold text-[var(--color-laburante-text)]">
-            ℹ️ ¿Cómo habilitar tu cuenta como Administrador?
+        {import.meta.env.DEV ? (
+          <div className="p-4 rounded-2xl bg-[var(--color-laburante-surface)] border border-[var(--color-laburante-border)] text-left text-xs text-[var(--color-laburante-text-secondary)] space-y-2">
+            <p className="font-semibold text-[var(--color-laburante-text)]">
+              ℹ️ ¿Cómo habilitar tu cuenta como Administrador? (Entorno de desarrollo)
+            </p>
+            <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed">
+              <li>Registrate o iniciá sesión con tu email.</li>
+              <li>En la consola de Supabase, andá a <strong>Authentication → Users</strong>.</li>
+              <li>Buscá tu usuario y en <strong>App Metadata</strong> agregá <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-700">"role": "admin"</code>.</li>
+              <li>Volvé a iniciar sesión y tendrás acceso completo a este panel.</li>
+            </ol>
+          </div>
+        ) : (
+          <p className="text-xs text-[var(--color-laburante-text-muted)]">
+            Si considerás que deberías tener acceso administrativo a esta plataforma, comunicate con el equipo técnico de LABURANTE.
           </p>
-          <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed">
-            <li>Registrate o iniciá sesión con tu email.</li>
-            <li>En la consola de Supabase, andá a <strong>Authentication → Users</strong>.</li>
-            <li>Buscá tu usuario y en <strong>App Metadata</strong> agregá <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-700">"role": "admin"</code>.</li>
-            <li>Volvé a iniciar sesión y tendrás acceso completo a este panel.</li>
-          </ol>
-        </div>
+        )}
         {!user && (
           <div className="pt-2">
             <Link to="/ingresar" className="btn-dark inline-block py-2.5 px-6 rounded-xl font-heading text-xs font-semibold">
@@ -780,12 +792,18 @@ export default function Admin() {
 
   const loadAdminConversations = async () => {
     try {
-      const { data } = await (supabase.from('conversations') as any)
-        .select('id, user_id, created_at, updated_at, profiles(name, slug)')
+      const { data, error } = await (supabase.from('conversations') as any)
+        .select('id, user_id, subject, status, created_at, updated_at')
         .order('updated_at', { ascending: false })
+      if (error) {
+        console.warn('Error loading admin conversations:', error)
+        return []
+      }
       setAdminConversations(data || [])
+      return data || []
     } catch (err) {
       console.warn('Error loading admin conversations:', err)
+      return []
     }
   }
 
@@ -805,6 +823,20 @@ export default function Admin() {
     setSelectedConversation(conv)
     await loadConversationMessages(conv.id)
   }
+
+  useEffect(() => {
+    if (activeTab === 'messages' && isAdmin) {
+      const targetConv = searchParams.get('conversacion')
+      loadAdminConversations().then((convs) => {
+        if (targetConv && convs && convs.length > 0) {
+          const found = convs.find((c: any) => c.id === targetConv)
+          if (found) {
+            handleSelectConversation(found)
+          }
+        }
+      })
+    }
+  }, [activeTab, isAdmin, searchParams])
 
   const handleAdminSendMessage = async () => {
     if (!selectedConversation || !adminMessageInput.trim() || adminMessageSending) return
@@ -1599,21 +1631,24 @@ export default function Admin() {
                 </div>
               ) : (
                 <div className="divide-y divide-[var(--color-laburante-border)]">
-                  {adminConversations.map((conv) => (
-                    <button
-                      key={conv.id}
-                      type="button"
-                      onClick={() => handleSelectConversation(conv)}
-                      className={`w-full text-left px-4 py-3 text-xs transition-colors cursor-pointer hover:bg-[var(--color-laburante-surface-alt)] ${selectedConversation?.id === conv.id ? 'bg-indigo-50/80' : ''}`}
-                    >
-                      <p className="font-semibold text-[var(--color-laburante-text)] truncate">
-                        {conv.profiles?.name || conv.user_id}
-                      </p>
-                      <p className="text-[11px] text-[var(--color-laburante-text-muted)] mt-0.5">
-                        {new Date(conv.updated_at).toLocaleDateString()} {new Date(conv.updated_at).toLocaleTimeString()}
-                      </p>
-                    </button>
-                  ))}
+                  {adminConversations.map((conv) => {
+                    const convProfile = profiles.find((p) => p.id === conv.user_id)
+                    return (
+                      <button
+                        key={conv.id}
+                        type="button"
+                        onClick={() => handleSelectConversation(conv)}
+                        className={`w-full text-left px-4 py-3 text-xs transition-colors cursor-pointer hover:bg-[var(--color-laburante-surface-alt)] ${selectedConversation?.id === conv.id ? 'bg-indigo-50/80' : ''}`}
+                      >
+                        <p className="font-semibold text-[var(--color-laburante-text)] truncate">
+                          {convProfile?.name || conv.user_id}
+                        </p>
+                        <p className="text-[11px] text-[var(--color-laburante-text-muted)] mt-0.5">
+                          {new Date(conv.updated_at).toLocaleDateString()} {new Date(conv.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -1626,11 +1661,23 @@ export default function Admin() {
                 </div>
               ) : (
                 <>
-                  <div className="p-3 border-b border-[var(--color-laburante-border)] flex items-center gap-2">
-                    <MessageCircle size={14} className="text-indigo-600" />
-                    <span className="font-heading font-bold text-xs text-[var(--color-laburante-text)]">
-                      {selectedConversation.profiles?.name || selectedConversation.user_id}
-                    </span>
+                  <div className="p-3 border-b border-[var(--color-laburante-border)] flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <MessageCircle size={14} className="text-indigo-600" />
+                      <span className="font-heading font-bold text-xs text-[var(--color-laburante-text)]">
+                        {profiles.find((p) => p.id === selectedConversation.user_id)?.name || selectedConversation.user_id}
+                      </span>
+                    </div>
+                    {profiles.find((p) => p.id === selectedConversation.user_id)?.slug && (
+                      <a
+                        href={`/p/${profiles.find((p) => p.id === selectedConversation.user_id)?.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-semibold text-indigo-600 hover:underline"
+                      >
+                        Ver perfil
+                      </a>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[420px]">
