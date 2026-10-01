@@ -665,6 +665,7 @@ BEGIN
       RAISE EXCEPTION 'self_job_request_not_allowed';
     END IF;
     NEW.status := 'solicitado';
+    NEW.archived_at := NULL;
     NEW.budget_amount := NULL;
     NEW.budget_details := NULL;
     NEW.budget_estimated_time := NULL;
