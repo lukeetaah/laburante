@@ -690,6 +690,15 @@ BEGIN
     RAISE EXCEPTION 'job_request_participants_immutable';
   END IF;
 
+  -- Quotes belong to the professional, even when the status does not change.
+  IF actor_id <> OLD.profile_id
+     AND (NEW.budget_amount IS DISTINCT FROM OLD.budget_amount
+       OR NEW.budget_details IS DISTINCT FROM OLD.budget_details
+       OR NEW.budget_estimated_time IS DISTINCT FROM OLD.budget_estimated_time
+       OR NEW.budget_created_at IS DISTINCT FROM OLD.budget_created_at) THEN
+    RAISE EXCEPTION 'job_request_budget_requires_professional';
+  END IF;
+
   IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
     RETURN NEW;
   END IF;
