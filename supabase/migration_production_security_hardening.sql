@@ -104,6 +104,8 @@ BEGIN
     'public.job_requests.client_id',
     'public.job_requests.profile_id',
     'public.job_requests.status',
+    'public.job_requests.client_outcome',
+    'public.job_requests.professional_outcome',
     'public.job_requests.budget_amount',
     'public.job_requests.budget_details',
     'public.job_requests.budget_estimated_time',
@@ -664,6 +666,9 @@ BEGIN
     IF NEW.client_id = NEW.profile_id THEN
       RAISE EXCEPTION 'self_job_request_not_allowed';
     END IF;
+    IF NEW.professional_outcome IS NOT NULL THEN
+      RAISE EXCEPTION 'job_request_professional_outcome_requires_professional';
+    END IF;
     NEW.status := 'solicitado';
     NEW.budget_amount := NULL;
     NEW.budget_details := NULL;
@@ -688,6 +693,17 @@ BEGIN
   IF NEW.client_id IS DISTINCT FROM OLD.client_id
      OR NEW.profile_id IS DISTINCT FROM OLD.profile_id THEN
     RAISE EXCEPTION 'job_request_participants_immutable';
+  END IF;
+
+  -- Outcome ownership applies even when status is unchanged or transitioning.
+  IF NEW.client_outcome IS DISTINCT FROM OLD.client_outcome
+     AND actor_id IS DISTINCT FROM OLD.client_id THEN
+    RAISE EXCEPTION 'job_request_client_outcome_requires_client';
+  END IF;
+
+  IF NEW.professional_outcome IS DISTINCT FROM OLD.professional_outcome
+     AND actor_id IS DISTINCT FROM OLD.profile_id THEN
+    RAISE EXCEPTION 'job_request_professional_outcome_requires_professional';
   END IF;
 
   IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
