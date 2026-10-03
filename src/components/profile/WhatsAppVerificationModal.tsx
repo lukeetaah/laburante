@@ -84,7 +84,7 @@ export default function WhatsAppVerificationModal({
     if (!isOpen || step !== 'waiting') return
 
     const interval = setInterval(async () => {
-      const { fetchPendingWhatsAppVerifications, myProfile } = useProfileStore.getState()
+      const { fetchPendingWhatsAppVerifications, fetchMyProfile, myProfile } = useProfileStore.getState()
       if (myProfile?.whatsapp_verified) {
         setStep('success')
         return
@@ -93,6 +93,7 @@ export default function WhatsAppVerificationModal({
       const all = await fetchPendingWhatsAppVerifications()
       const req = all.find((r) => r.id === requestId || r.profile_id === profileId)
       if (req?.status === 'aprobado') {
+        await fetchMyProfile()
         setStep('success')
       }
     }, 4000)
@@ -120,7 +121,7 @@ export default function WhatsAppVerificationModal({
   const handleCheckStatus = async () => {
     setChecking(true)
     setError(null)
-    const { fetchPendingWhatsAppVerifications, myProfile } = useProfileStore.getState()
+    const { fetchPendingWhatsAppVerifications, fetchMyProfile, myProfile } = useProfileStore.getState()
 
     if (myProfile?.whatsapp_verified) {
       setChecking(false)
@@ -133,6 +134,7 @@ export default function WhatsAppVerificationModal({
 
     setChecking(false)
     if (req?.status === 'aprobado') {
+      await fetchMyProfile()
       setStep('success')
     } else {
       setError('Aún no se registró la aprobación. Si ya enviaste el mensaje, podés ingresar tu código abajo para activarlo.')

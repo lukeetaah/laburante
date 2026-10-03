@@ -233,7 +233,7 @@ async function replaceProfileLanguages(profileId: string, languages: any[]) {
   }
 }
 
-const PUBLIC_PROFILE_FIELDS = 'id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, account_type, hybrid_presencial_pct, hybrid_remoto_pct, intent, has_resume'
+const PUBLIC_PROFILE_FIELDS = 'id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, account_type, hybrid_presencial_pct, hybrid_remoto_pct, intent, has_resume, whatsapp_verified'
 
 async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]> {
   const profileIds = rows.map((row) => row.id).filter(Boolean)
@@ -275,7 +275,7 @@ async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]>
     resume_url: null,
     resume_name: null,
     has_resume: Boolean(row.has_resume),
-    whatsapp_verified: false,
+    whatsapp_verified: Boolean(row.whatsapp_verified),
     whatsapp_verified_at: null,
     created_at: '',
     skills: (skillsByProfile.get(row.id) || []).map((item: any) => item.name),
