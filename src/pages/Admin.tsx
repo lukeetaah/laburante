@@ -206,8 +206,31 @@ export default function Admin() {
       // Verification requests are audit records, never a source of profiles.
       // Recreating a profile from a stale local request made deleted accounts reappear.
       const allCombined = [...(profilesData || [])]
+      const profileIds = allCombined.map((p: any) => p.id).filter(Boolean)
+      const emailsByProfileId = new Map<string, string>()
+
+      if (profileIds.length > 0) {
+        try {
+          const { data: emailsData, error: emailsError } = await (supabase.rpc as any)('admin_get_user_emails', {
+            target_user_ids: profileIds,
+          })
+          if (emailsError) {
+            console.warn('RPC admin_get_user_emails notice:', emailsError.message)
+          } else if (emailsData && Array.isArray(emailsData)) {
+            emailsData.forEach((row: any) => {
+              if (row.profile_id && row.email) {
+                emailsByProfileId.set(row.profile_id, row.email)
+              }
+            })
+          }
+        } catch (emailErr) {
+          console.warn('Error fetching user emails batch:', emailErr)
+        }
+      }
+
       const hydrated = allCombined.map((p: any) => ({
         ...p,
+        auth_email: emailsByProfileId.get(p.id) || null,
         completion_percent: getProfileCompletion({ ...p, skills: p.skills || [], services: p.services || [], contact_methods: p.contact_methods || [], intent: p.intent }),
         whatsapp_verified: Boolean(p.whatsapp_verified),
       }))
@@ -606,6 +629,10 @@ export default function Admin() {
       setActionMessage(`No se pudo actualizar el acceso: ${error.message}. Aplicá migration_admin_account_access.sql en Supabase.`)
       return
     }
+    const updatedEmail = editForm.email.trim()
+    if (updatedEmail) {
+      setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? { ...p, auth_email: updatedEmail } : p))
+    }
     setEditForm((current: any) => ({ ...current, password: '' }))
     setCredentialsOpen(false)
     setActionMessage('Datos de acceso actualizados correctamente.')
@@ -697,7 +724,7 @@ export default function Admin() {
     if (profileFilter === 'suspendidos' && p.status !== 'suspendido') return false
     if (profileFilter === 'incompletos' && p.completion_percent >= 100) return false
     const filters = adminFilters
-    const searchable = normalizeSearchText([p.name, p.slug, p.bio, p.provincia, p.localidad, ...(p.skills || []).map((skill: any) => skill.name), ...(p.services || []).map((service: any) => service.title)].filter(Boolean).join(' '))
+    const searchable = normalizeSearchText([p.name, p.slug, p.bio, p.provincia, p.localidad, p.auth_email, ...(p.skills || []).map((skill: any) => skill.name), ...(p.services || []).map((service: any) => service.title)].filter(Boolean).join(' '))
     if (filters.query && !searchable.includes(normalizeSearchText(filters.query))) return false
     if (filters.provincia && p.provincia !== filters.provincia) return false
     if (filters.localidad && p.localidad !== filters.localidad) return false
@@ -1935,6 +1962,13 @@ export default function Admin() {
                     <p className="text-xs text-[var(--color-laburante-text-secondary)]">
                       {p.localidad}, {p.provincia} · Registrado el {new Date(p.created_at).toLocaleDateString()}
                     </p>
+                    {p.auth_email && (
+                      <p className="text-[11px] font-medium text-indigo-900 flex items-center gap-1.5" title="Email de acceso a la cuenta">
+                        <Mail size={12} className="text-indigo-600 shrink-0" />
+                        <span className="text-[10px] uppercase font-semibold text-indigo-600 tracking-wider">Acceso:</span>
+                        <span className="font-mono">{p.auth_email}</span>
+                      </p>
+                    )}
                     <p className="text-[11px] font-medium text-[var(--color-laburante-text-muted)]">
                       Modalidad: {formatModality(p.modalidad, p.hybrid_presencial_pct, p.hybrid_remoto_pct)}
                     </p>
@@ -2043,7 +2077,7 @@ export default function Admin() {
             <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">Todavía no hay cuentas Empresa sincronizadas. Verificá la migración de Supabase y refrescá los datos.</div>
           ) : profiles.filter((p) => p.account_type === 'empresa').map((company) => (
             <div key={company.id} className="flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-[var(--color-laburante-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div><div className="flex flex-wrap items-center gap-2"><Building2 size={17} className="text-indigo-600" /><h3 className="font-heading font-bold text-sm">{company.name}</h3><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">EMPRESA</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${company.company_plan === 'pago' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{company.company_plan === 'pago' ? 'ACTIVACIÓN COORDINADA' : 'CUENTA GRATUITA'}</span></div><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{company.localidad}, {company.provincia} · Alta {new Date(company.created_at).toLocaleDateString()}</p></div>
+              <div><div className="flex flex-wrap items-center gap-2"><Building2 size={17} className="text-indigo-600" /><h3 className="font-heading font-bold text-sm">{company.name}</h3><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">EMPRESA</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${company.company_plan === 'pago' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{company.company_plan === 'pago' ? 'ACTIVACIÓN COORDINADA' : 'CUENTA GRATUITA'}</span></div><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{company.localidad}, {company.provincia} · Alta {new Date(company.created_at).toLocaleDateString()}</p>{company.auth_email && (<p className="mt-0.5 text-[11px] font-medium text-indigo-900 flex items-center gap-1.5" title="Email de acceso a la cuenta"><Mail size={12} className="text-indigo-600 shrink-0" /><span className="text-[10px] uppercase font-semibold text-indigo-600 tracking-wider">Acceso:</span><span className="font-mono">{company.auth_email}</span></p>)}</div>
               <div className="flex flex-wrap gap-2">
                 <label className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">Plan<select value={company.company_plan || 'gratis'} onChange={(event) => handleSetCompanyPlan(company, event.target.value as 'gratis' | 'pago')} className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs font-bold text-amber-900"><option value="gratis">Gratis</option><option value="pago">Pago</option></select></label>
                 <button onClick={() => openProfileEditor(company)} className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800"><Pencil size={13} /> Editar</button>
