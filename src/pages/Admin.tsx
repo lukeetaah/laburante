@@ -748,6 +748,16 @@ export default function Admin() {
   }
 
   const handleApproveWA = async (req: WhatsAppVerificationRequest) => {
+    // Validate that the declared number matches the current WhatsApp in the profile
+    const currentProfile = profiles.find((p) => p.id === req.profile_id)
+    const currentWA = (currentProfile?.contact_methods || []).find((c: any) => c.type === 'whatsapp')
+    const currentDigits = (currentWA?.value || '').replace(/[^0-9]/g, '')
+    const declaredDigits = (req.phone_declared || '').replace(/[^0-9]/g, '')
+    if (currentDigits && declaredDigits && currentDigits !== declaredDigits) {
+      setActionMessage(`⚠️ No se puede aprobar: la solicitud corresponde al número ${req.phone_declared}, pero el perfil tiene registrado ${currentWA?.value}. El usuario debe generar una nueva solicitud con el número actual.`)
+      return
+    }
+
     const res = await adminApproveWhatsAppVerification(req.id, req.profile_id, req.phone_declared)
     if (!res.error) {
       setWaRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: 'aprobado' as const, reviewed_at: new Date().toISOString() } : r))
@@ -1934,9 +1944,7 @@ export default function Admin() {
                         <p className="text-[11px] font-medium text-emerald-700">
                           WhatsApp: {waContact.value}
                         </p>
-                      ) : (
-                        <p className="text-[11px] text-[var(--color-laburante-text-muted)] italic">Sin número WA registrado</p>
-                      )
+                      ) : null
                     })()}
                     <p className={`text-[11px] font-bold ${p.completion_percent < 70 ? 'text-rose-700' : p.completion_percent < 100 ? 'text-amber-700' : 'text-emerald-700'}`}>
                       Perfil completado: {p.completion_percent}%

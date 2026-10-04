@@ -55,8 +55,16 @@ export default function WhatsAppVerificationModal({
       setInputPin('')
       setStep('send')
       setIsAlreadyPending(false)
-      setInitLoading(true)
 
+      if (!phone.trim()) {
+        // No phone registered — clear any stale state and stop here
+        setVerificationCode('')
+        setRequestId('')
+        setInitLoading(false)
+        return
+      }
+
+      setInitLoading(true)
       const slug = profileSlug || profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
       requestWhatsAppVerification(profileId, profileName, slug, phone).then((res) => {
         setInitLoading(false)
