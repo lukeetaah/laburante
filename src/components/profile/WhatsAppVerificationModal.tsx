@@ -104,6 +104,7 @@ export default function WhatsAppVerificationModal({
   if (!isOpen) return null
 
   const cleanPhone = phone.replace(/[^0-9]/g, '')
+  const hasPhone = cleanPhone.length > 0
   const verificationText = `Hola LABURANTE! Envío este mensaje desde mi WhatsApp para certificar la titularidad de mi número (+${cleanPhone}) en mi perfil "${profileName}". Código de verificación: ${verificationCode}`
 
   const handleOpenWhatsApp = () => {
@@ -381,10 +382,16 @@ export default function WhatsAppVerificationModal({
 
             {/* Botón principal */}
             <div className="space-y-2">
+              {!hasPhone && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600" />
+                  <span>Necesitás agregar tu número de WhatsApp en los medios de contacto de tu perfil antes de poder verificarlo.</span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleOpenWhatsApp}
-                disabled={!verificationCode || initLoading}
+                disabled={!verificationCode || initLoading || !hasPhone}
                 className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-heading font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Send size={16} />

@@ -1928,6 +1928,16 @@ export default function Admin() {
                     <p className="text-[11px] font-medium text-[var(--color-laburante-text-muted)]">
                       Modalidad: {formatModality(p.modalidad, p.hybrid_presencial_pct, p.hybrid_remoto_pct)}
                     </p>
+                    {(() => {
+                      const waContact = (p.contact_methods || []).find((c: any) => c.type === 'whatsapp')
+                      return waContact?.value ? (
+                        <p className="text-[11px] font-medium text-emerald-700">
+                          WhatsApp: {waContact.value}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-[var(--color-laburante-text-muted)] italic">Sin número WA registrado</p>
+                      )
+                    })()}
                     <p className={`text-[11px] font-bold ${p.completion_percent < 70 ? 'text-rose-700' : p.completion_percent < 100 ? 'text-amber-700' : 'text-emerald-700'}`}>
                       Perfil completado: {p.completion_percent}%
                     </p>
@@ -2041,7 +2051,13 @@ export default function Admin() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Editar perfil">
           <div className="w-full max-w-lg rounded-2xl bg-[var(--color-laburante-surface)] p-6 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
-              <div><p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Edición administrativa</p><h2 className="mt-1 font-heading text-xl font-bold">{editingProfile.name}</h2></div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Edición administrativa</p>
+                <h2 className="mt-1 font-heading text-xl font-bold">{editingProfile.name}</h2>
+                {editForm.email && (
+                  <p className="mt-0.5 text-xs text-[var(--color-laburante-text-secondary)] font-mono">{editForm.email}</p>
+                )}
+              </div>
               <button type="button" onClick={() => setEditingProfile(null)} className="rounded-lg p-1 text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)]" aria-label="Cerrar"><XCircle size={19} /></button>
             </div>
             <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 p-3">
