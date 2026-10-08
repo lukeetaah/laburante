@@ -15,6 +15,27 @@ export default async function handler(req: any, res: any) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
   try {
+    // 1. Mantenimiento automático diario: Expirar reseñas pendientes de más de 30 días
+    let expiredReviewsCount = 0
+    if (serviceKey) {
+      try {
+        const expireRes = await fetch(`${supabaseUrl}/rest/v1/rpc/expire_pending_recommendations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+          },
+        })
+        if (expireRes.ok) {
+          expiredReviewsCount = await expireRes.json().catch(() => 0)
+        }
+      } catch (expireErr) {
+        console.warn('Advertencia no crítica al expirar reseñas en cron diario:', expireErr)
+      }
+    }
+
+    // 2. Procesar recordatorios de confirmación y perfiles
     const response = await fetch(`${supabaseUrl}/functions/v1/process-unconfirmed-reminders`, {
       method: 'POST',
       headers: {
@@ -25,7 +46,10 @@ export default async function handler(req: any, res: any) {
     })
 
     const data = await response.json().catch(() => ({}))
-    return res.status(response.status).json(data)
+    return res.status(response.status).json({
+      ...data,
+      expired_reviews: expiredReviewsCount,
+    })
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Cron execution failed' })
   }

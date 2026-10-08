@@ -10,6 +10,7 @@ import { formatModality, type WorkModality } from '@/lib/profile-format'
 import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages, Mail, Search, X } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
+import AvatarCropModal from '@/components/profile/AvatarCropModal'
 import { captureAppError } from '@/lib/sentry'
 import { hasProviderContent, isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 import { loadEmailNotificationsEnabled, saveEmailNotificationsEnabled } from '@/lib/notification-preferences'
@@ -34,6 +35,9 @@ export default function CreateProfile() {
   const [intent, setIntent] = useState<ProfileIntent | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState('')
+  const [cropModalFile, setCropModalFile] = useState<File | null>(null)
+  const [cropModalOpen, setCropModalOpen] = useState(false)
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [existingPhotoUrl, setExistingPhotoUrl] = useState('')
   const [existingResumeUrl, setExistingResumeUrl] = useState('')
@@ -407,6 +411,22 @@ export default function CreateProfile() {
             setError(`El perfil se guardó, pero no pudimos guardar la preferencia de emails: ${preferenceResult.error}`)
             return
           }
+
+          // Limpieza segura del Storage: si se subió una nueva foto y existía una foto previa en profile-photos
+          if (photoFile && existingPhotoUrl && existingPhotoUrl !== photoUrl) {
+            try {
+              const marker = '/storage/v1/object/public/profile-photos/'
+              const idx = existingPhotoUrl.indexOf(marker)
+              if (idx >= 0) {
+                const oldPath = existingPhotoUrl.slice(idx + marker.length).split('?')[0]
+                if (oldPath && oldPath.startsWith(`${user.id}/`)) {
+                  await supabase.storage.from('profile-photos').remove([oldPath])
+                }
+              }
+            } catch (cleanupErr) {
+              console.warn('Advertencia no crítica al limpiar foto anterior en Storage:', cleanupErr)
+            }
+          }
         }
         navigate(`/p/${res.slug}`)
       }
@@ -714,11 +734,72 @@ export default function CreateProfile() {
 
         <section className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 space-y-4">
           <div className="flex items-center gap-2 border-b border-[var(--color-laburante-border)] pb-2"><Upload size={17} className="text-[var(--color-laburante-indigo)]" /><h2 className="font-heading text-base font-bold">Foto y CV</h2></div>
-          <p className="text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">Mejorá tu presentación con una foto y un CV opcional. Sólo se muestran públicamente los archivos que subas a tu perfil.</p>
+          <p className="text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">Mejorá tu presentación con una foto y un CV opcional. Podés recortar y centrar tu foto para que se vea perfecta en tu perfil.</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="cursor-pointer rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-4 text-xs hover:bg-[var(--color-laburante-surface-alt)]"><span className="font-semibold">Foto de perfil</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} className="mt-2 block w-full text-[11px]" />{photoFile?.name || existingPhotoUrl ? <span className="mt-2 block text-emerald-700">{photoFile?.name || 'Foto cargada'}</span> : null}</label>
+            <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-4 text-xs hover:bg-[var(--color-laburante-surface-alt)]">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">Foto de perfil</span>
+                {photoFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoFile(null)
+                      setPhotoPreviewUrl('')
+                    }}
+                    className="text-[10px] text-rose-600 hover:underline"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-3 flex items-center gap-3">
+                {(photoPreviewUrl || existingPhotoUrl) ? (
+                  <img
+                    src={photoPreviewUrl || existingPhotoUrl}
+                    alt="Vista previa"
+                    className="h-14 w-14 rounded-full object-cover border-2 border-indigo-600 shrink-0"
+                  />
+                ) : (
+                  <div className="h-14 w-14 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
+                    <User size={20} />
+                  </div>
+                )}
+
+                <div className="min-w-0 flex-1">
+                  <label className="btn-dark cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold">
+                    <span>{photoFile || existingPhotoUrl ? 'Cambiar foto' : 'Elegir foto'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setCropModalFile(file)
+                          setCropModalOpen(true)
+                        }
+                        e.target.value = ''
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  {photoFile && <span className="block mt-1 text-[10px] text-emerald-700 font-medium">Foto lista para guardar</span>}
+                </div>
+              </div>
+            </div>
+
             <label className="cursor-pointer rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-4 text-xs hover:bg-[var(--color-laburante-surface-alt)]"><span className="font-semibold">CV o presentación</span><input type="file" accept=".pdf,.doc,.docx,.csv,.txt,application/pdf,text/plain,text/csv" onChange={(e) => setResumeFile(e.target.files?.[0] || null)} className="mt-2 block w-full text-[11px]" />{resumeFile?.name || existingResumeUrl ? <span className="mt-2 flex items-center gap-1 text-emerald-700"><FileText size={13} />{resumeFile?.name || existingResumeName || 'CV cargado'}</span> : null}</label>
           </div>
+
+          <AvatarCropModal
+            file={cropModalFile}
+            isOpen={cropModalOpen}
+            onClose={() => setCropModalOpen(false)}
+            onSave={(croppedFile, previewUrl) => {
+              setPhotoFile(croppedFile)
+              setPhotoPreviewUrl(previewUrl)
+            }}
+          />
         </section>
 
         {/* Section 2: Skills */}

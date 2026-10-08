@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Archive, ArrowRight, BadgeCheck, Building2, Check, ExternalLink, Globe, Inbox, LockKeyhole, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users, Star, Trash2 } from 'lucide-react'
+import { Archive, ArrowRight, BadgeCheck, Building2, Check, ExternalLink, Folder, FolderPlus, Globe, Inbox, LockKeyhole, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users, Star, Trash2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
@@ -85,6 +85,10 @@ export default function CompanyWorkspace() {
 
   // Shortlist / Favoritos de candidatos
   const [shortlist, setShortlist] = useState<any[]>([])
+  const [companyProjects, setCompanyProjects] = useState<any[]>([])
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('todos')
+  const [showNewProjectInput, setShowNewProjectInput] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
   const [shortlistLoading, setShortlistLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
@@ -94,10 +98,20 @@ export default function CompanyWorkspace() {
     if (!user) return
     setShortlistLoading(true)
     try {
-      const { data, error } = await (supabase.from('company_shortlists') as any)
-        .select('id, company_id, candidate_profile_id, notes, status, created_at, updated_at')
-        .eq('company_id', user.id)
-        .order('updated_at', { ascending: false })
+      const [{ data, error }, { data: projectsData }] = await Promise.all([
+        (supabase.from('company_shortlists') as any)
+          .select('id, company_id, candidate_profile_id, project_id, notes, status, created_at, updated_at')
+          .eq('company_id', user.id)
+          .order('updated_at', { ascending: false }),
+        (supabase.from('company_projects') as any)
+          .select('id, name')
+          .eq('company_id', user.id)
+          .order('created_at', { ascending: false }),
+      ])
+
+      if (projectsData) {
+        setCompanyProjects(projectsData)
+      }
 
       if (error) {
         console.warn('Error loading company shortlist:', error.message)
@@ -106,6 +120,7 @@ export default function CompanyWorkspace() {
         return
       }
 
+      const projectsMap = new Map((projectsData || []).map((p: any) => [p.id, p.name]))
       const candidateIds = (data || []).map((item: any) => item.candidate_profile_id)
       if (candidateIds.length > 0) {
         const { data: candidates } = await (supabase.from('authenticated_candidate_profiles') as any)
@@ -115,6 +130,7 @@ export default function CompanyWorkspace() {
         const candidateMap = new Map((candidates || []).map((c: any) => [c.id, c]))
         setShortlist((data || []).map((item: any) => ({
           ...item,
+          projectName: item.project_id ? projectsMap.get(item.project_id) : null,
           candidate: candidateMap.get(item.candidate_profile_id) || null,
         })))
       } else {
@@ -186,6 +202,36 @@ export default function CompanyWorkspace() {
     if (!error) {
       setShortlist((prev) => prev.filter((s) => s.id !== shortlistId))
       setMessage('Candidato removido de la lista de seguimiento.')
+    }
+  }
+
+  const createProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newProjectName.trim() || !user) return
+    const { data, error } = await (supabase.from('company_projects') as any)
+      .insert({ company_id: user.id, name: newProjectName.trim() })
+      .select('id, name')
+      .single()
+    if (!error && data) {
+      setCompanyProjects((prev) => [data, ...prev])
+      setNewProjectName('')
+      setShowNewProjectInput(false)
+      setMessage(`Proyecto "${data.name}" creado con éxito.`)
+    } else if (error) {
+      setMessage(`No se pudo crear el proyecto: ${error.message}`)
+    }
+  }
+
+  const updateShortlistProject = async (shortlistId: string, projectId: string | null) => {
+    if (!user) return
+    const { error } = await (supabase.from('company_shortlists') as any)
+      .update({ project_id: projectId || null, updated_at: new Date().toISOString() })
+      .eq('id', shortlistId)
+      .eq('company_id', user.id)
+
+    if (!error) {
+      const projName = projectId ? companyProjects.find((p) => p.id === projectId)?.name || null : null
+      setShortlist((prev) => prev.map((s) => s.id === shortlistId ? { ...s, project_id: projectId || null, projectName: projName } : s))
     }
   }
 
@@ -318,6 +364,12 @@ export default function CompanyWorkspace() {
     }
     setArchiveMessage('No se pudo archivar este proceso. Verificá que la migración de selección Empresa esté aplicada en Supabase.')
   }
+
+  const filteredShortlist = selectedProjectFilter === 'todos'
+    ? shortlist
+    : selectedProjectFilter === 'sin_proyecto'
+      ? shortlist.filter((item) => !item.project_id)
+      : shortlist.filter((item) => item.project_id === selectedProjectFilter)
 
   return <div className="container py-10 md:py-16 space-y-8">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]"><Building2 size={15} /> Espacio Empresa</p><h1 className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">Hola, {companyName}</h1><p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--color-laburante-text-secondary)]">Tu cuenta está lista para buscar profesionales.<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${isPaidCompany ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{profileLoaded ? `Plan ${isPaidCompany ? 'Pago activo' : 'Gratis'}` : 'Verificando plan'}</span></p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={loadOpportunities} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-4 py-3 text-xs font-bold" title="Actualizar actividad" aria-label="Actualizar actividad"><RefreshCw size={15} /> Actualizar</button><Link to="/buscar" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"><Search size={16} /> Empezar a buscar</Link></div></div>
@@ -453,17 +505,72 @@ export default function CompanyWorkspace() {
         )}
 
         {/* Listado de Shortlist */}
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)] mb-3">
-            Favoritos en seguimiento ({shortlist.length})
-          </h3>
-          {shortlist.length === 0 ? (
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]">
+              Favoritos en seguimiento ({filteredShortlist.length}{selectedProjectFilter !== 'todos' ? ` de ${shortlist.length}` : ''})
+            </h3>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {companyProjects.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-[var(--color-laburante-text-muted)]">Filtrar por proyecto:</span>
+                  <select
+                    value={selectedProjectFilter}
+                    onChange={(e) => setSelectedProjectFilter(e.target.value)}
+                    className="px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 cursor-pointer"
+                  >
+                    <option value="todos">Todos los proyectos ({shortlist.length})</option>
+                    <option value="sin_proyecto">Sin proyecto ({shortlist.filter((s) => !s.project_id).length})</option>
+                    {companyProjects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({shortlist.filter((s) => s.project_id === p.id).length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowNewProjectInput((v) => !v)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-[11px] font-bold text-indigo-800 transition-colors cursor-pointer"
+              >
+                <FolderPlus size={13} />
+                <span>{showNewProjectInput ? 'Cancelar' : 'Nuevo proyecto'}</span>
+              </button>
+            </div>
+          </div>
+
+          {showNewProjectInput && (
+            <form onSubmit={createProject} className="flex gap-2 items-center p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+              <input
+                type="text"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="Nombre del proyecto o búsqueda (ej: Proyecto Bahía Blanca, Guardia Nocturna)..."
+                className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs text-[var(--color-laburante-text)] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={!newProjectName.trim()}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs disabled:opacity-50 cursor-pointer shrink-0 transition-colors"
+              >
+                Crear
+              </button>
+            </form>
+          )}
+
+          {filteredShortlist.length === 0 ? (
             <div className="p-6 rounded-xl border border-dashed border-[var(--color-laburante-border)] bg-white text-center text-xs text-[var(--color-laburante-text-secondary)]">
-              No guardaste candidatos aún. Usá el buscador de arriba o explorá perfiles para armar tu lista de favoritos.
+              {shortlist.length === 0
+                ? 'No guardaste candidatos aún. Usá el buscador de arriba o explorá perfiles para armar tu lista de favoritos.'
+                : 'No hay candidatos asignados a este filtro de proyecto.'}
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {shortlist.map((item) => (
+              {filteredShortlist.map((item) => (
                 <div key={item.id} className="p-4 rounded-xl border border-[var(--color-laburante-border)] bg-white space-y-3 text-xs shadow-2xs">
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -485,29 +592,49 @@ export default function CompanyWorkspace() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 flex-wrap">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-[var(--color-laburante-text-muted)]">Estado:</span>
+                      <span className="text-[11px] text-[var(--color-laburante-text-muted)] flex items-center gap-1">
+                        <Folder size={11} /> Proyecto:
+                      </span>
                       <select
-                        value={item.status}
-                        onChange={(e) => updateShortlistStatus(item.id, e.target.value)}
-                        className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-[11px] font-semibold text-gray-700 cursor-pointer"
+                        value={item.project_id || ''}
+                        onChange={(e) => updateShortlistProject(item.id, e.target.value || null)}
+                        className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-[11px] font-semibold text-gray-700 cursor-pointer max-w-[130px] truncate"
                       >
-                        <option value="interesante">⭐ Interesante</option>
-                        <option value="contactado">📞 Contactado</option>
-                        <option value="en_evaluacion">📋 En evaluación</option>
-                        <option value="descartado">❌ Descartado</option>
+                        <option value="">(Sin asignar)</option>
+                        {companyProjects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => removeFromShortlist(item.id)}
-                      className="p-1 text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
-                      title="Quitar de favoritos"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-[var(--color-laburante-text-muted)]">Estado:</span>
+                        <select
+                          value={item.status}
+                          onChange={(e) => updateShortlistStatus(item.id, e.target.value)}
+                          className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-[11px] font-semibold text-gray-700 cursor-pointer"
+                        >
+                          <option value="interesante">⭐ Interesante</option>
+                          <option value="contactado">📞 Contactado</option>
+                          <option value="en_evaluacion">📋 En evaluación</option>
+                          <option value="descartado">❌ Descartado</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeFromShortlist(item.id)}
+                        className="p-1 text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+                        title="Quitar de favoritos"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

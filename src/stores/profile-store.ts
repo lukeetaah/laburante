@@ -1162,9 +1162,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return { error: 'No podés escribir una reseña sobre tu propio perfil.' }
       }
 
+      // Obtener el nombre real del perfil del autor autenticado
+      const authorProfile = get().myProfile
+      const authorName = authorProfile?.name || userData.user.user_metadata?.name || userData.user.user_metadata?.full_name || data.from_name?.trim() || 'Usuario de LABURANTE'
+
       const { data: inserted, error } = await (supabase.from('recommendations') as any).insert({
         to_profile_id: profileId,
-        from_name: data.from_name.trim(),
+        from_name: authorName,
         text: data.text.trim(),
         context: data.context?.trim() || null,
         from_user_id: userData.user.id,

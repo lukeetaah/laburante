@@ -18,7 +18,8 @@ export default function RecommendationModal({
   onClose,
 }: RecommendationModalProps) {
   const user = useAuthStore((s) => s.user)
-  const [fromName, setFromName] = useState(user?.user_metadata?.name || '')
+  const myProfile = useProfileStore((s) => s.myProfile)
+  const realAuthorName = myProfile?.name || user?.user_metadata?.name || user?.user_metadata?.full_name || 'Usuario de LABURANTE'
   const [context, setContext] = useState('')
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -27,17 +28,10 @@ export default function RecommendationModal({
 
   const submitRecommendation = useProfileStore((s) => s.submitRecommendation)
 
-  useEffect(() => {
-    if (user?.user_metadata?.name && !fromName) {
-      setFromName(user.user_metadata.name)
-    }
-  }, [user])
-
   if (!isOpen || (user?.id && user.id === profileId)) return null
 
   const handleReset = () => {
     setSuccess(false)
-    setFromName(user?.user_metadata?.name || '')
     setContext('')
     setText('')
     setError(null)
@@ -93,11 +87,6 @@ export default function RecommendationModal({
       return
     }
 
-    if (!fromName.trim()) {
-      setError('Por favor ingresá tu nombre o iniciales.')
-      return
-    }
-
     if (text.trim().length < 10) {
       setError('Por favor escribí una reseña de al menos 10 caracteres contando cómo fue el trabajo.')
       return
@@ -107,7 +96,7 @@ export default function RecommendationModal({
     setError(null)
 
     const res = await submitRecommendation(profileId, {
-      from_name: fromName.trim(),
+      from_name: realAuthorName,
       context: context.trim() || undefined,
       text: text.trim(),
     })
@@ -171,18 +160,13 @@ export default function RecommendationModal({
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">
-                  Tu nombre o apodo <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={fromName}
-                  onChange={(e) => setFromName(e.target.value)}
-                  placeholder="ej: Valeria R. o Carlos Gómez"
-                  required
-                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent focus:ring-2 focus:ring-[var(--color-laburante-indigo)]"
-                />
+              <div className="p-3 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)]">
+                <span className="block text-[11px] font-semibold text-[var(--color-laburante-text-secondary)]">
+                  Firmás esta reseña como:
+                </span>
+                <p className="text-xs font-bold text-[var(--color-laburante-text)] mt-0.5">
+                  {realAuthorName} <span className="text-[10px] font-normal text-emerald-700 font-sans ml-1">✓ Cuenta verificada</span>
+                </p>
               </div>
 
               <div>

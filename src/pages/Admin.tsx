@@ -102,8 +102,10 @@ export default function Admin() {
   })
   const [reports, setReports] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
+  const [profilesPage, setProfilesPage] = useState(1)
+  const PROFILES_PER_PAGE = 30
   const [recommendations, setRecommendations] = useState<any[]>([])
-  const [recStatusFilter, setRecStatusFilter] = useState<'todas' | 'pendientes' | 'visibles' | 'ocultas' | 'anonimas'>('todas')
+  const [recStatusFilter, setRecStatusFilter] = useState<'todas' | 'pendientes' | 'visibles' | 'ocultas' | 'caducadas' | 'anonimas'>('todas')
   const [recSearch, setRecSearch] = useState('')
   const [deletions, setDeletions] = useState<AccountDeletionRecord[]>([])
   const [waRequests, setWaRequests] = useState<WhatsAppVerificationRequest[]>([])
@@ -977,6 +979,7 @@ export default function Admin() {
     if (recStatusFilter === 'pendientes' && rec.status !== 'pendiente') return false
     if (recStatusFilter === 'visibles' && rec.status !== 'visible') return false
     if (recStatusFilter === 'ocultas' && rec.status !== 'oculto') return false
+    if (recStatusFilter === 'caducadas' && rec.status !== 'caducada') return false
     if (recStatusFilter === 'anonimas' && rec.from_user_id !== null) return false
 
     if (recSearch.trim()) {
@@ -1895,7 +1898,32 @@ export default function Admin() {
           <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/40 p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-bold text-[var(--color-laburante-text)]">Filtros de auditoría</p>
-              <button type="button" onClick={resetAdminFilters} className="text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline">Limpiar filtros</button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setActionMessage('Evaluando perfiles incompletos...')
+                      const { data, error } = await (supabase.rpc as any)('admin_process_incomplete_profile_reminders', {
+                        p_limit: 30,
+                      })
+                      if (error) {
+                        setActionMessage(`Error al procesar perfiles incompletos: ${error.message}`)
+                      } else {
+                        const count = Array.isArray(data) ? data.length : 0
+                        setActionMessage(`Proceso finalizado: ${count} recordatorios de perfil incompleto enviados.`)
+                      }
+                    } catch (e: any) {
+                      setActionMessage(`Error: ${e.message}`)
+                    }
+                  }}
+                  className="py-1 px-2.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-heading font-semibold text-[11px] transition-colors cursor-pointer shadow-2xs"
+                  title="Enviar avisos in-app a perfiles incompletos (<70% útil, cooldown 30 días)"
+                >
+                  Procesar recordatorios incompletos
+                </button>
+                <button type="button" onClick={resetAdminFilters} className="text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline">Limpiar filtros</button>
+              </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <input value={adminFilters.query} onChange={(event) => setAdminFilter('query', event.target.value)} placeholder="Nombre, oficio, contacto..." className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs sm:col-span-2" />
@@ -1920,7 +1948,9 @@ export default function Admin() {
                 No hay perfiles que coincidan con el filtro seleccionado.
               </div>
             ) : (
-              filteredProfiles.map((p) => (
+              filteredProfiles
+                .slice((profilesPage - 1) * PROFILES_PER_PAGE, profilesPage * PROFILES_PER_PAGE)
+                .map((p) => (
                 <div
                   key={p.id}
                   className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] flex flex-col md:flex-row md:items-center justify-between gap-4"
@@ -2048,6 +2078,32 @@ export default function Admin() {
               ))
             )}
           </div>
+
+          {filteredProfiles.length > PROFILES_PER_PAGE && (
+            <div className="flex items-center justify-between border-t border-[var(--color-laburante-border)] pt-4 text-xs text-[var(--color-laburante-text-secondary)]">
+              <span>
+                Página {profilesPage} de {Math.ceil(filteredProfiles.length / PROFILES_PER_PAGE)} (Total: {filteredProfiles.length})
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={profilesPage <= 1}
+                  onClick={() => setProfilesPage((prev) => Math.max(1, prev - 1))}
+                  className="px-3 py-1.5 rounded-lg border border-[var(--color-laburante-border)] bg-white disabled:opacity-40 cursor-pointer font-semibold"
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  disabled={profilesPage >= Math.ceil(filteredProfiles.length / PROFILES_PER_PAGE)}
+                  onClick={() => setProfilesPage((prev) => prev + 1)}
+                  className="px-3 py-1.5 rounded-lg border border-[var(--color-laburante-border)] bg-white disabled:opacity-40 cursor-pointer font-semibold"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2224,12 +2280,41 @@ export default function Admin() {
             <p className="text-[11px] text-amber-800 leading-relaxed">
               Supervisá todas las reseñas y recomendaciones de la plataforma. Podés publicarlas, ocultarlas o eliminarlas de forma definitiva si son spam o reseñas anónimas no válidas.
             </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const { data, error } = await (supabase.rpc as any)('admin_expire_pending_recommendations')
+                    if (error) {
+                      setActionMessage(`Error al procesar caducidad: ${error.message}`)
+                    } else {
+                      setActionMessage(`Proceso de caducidad ejecutado: ${data || 0} reseñas actualizadas.`)
+                      // Actualizar reseñas locales
+                      setRecommendations((prev) =>
+                        prev.map((r) => {
+                          if (r.status === 'pendiente' && r.expires_at && new Date(r.expires_at) <= new Date()) {
+                            return { ...r, status: 'caducada' }
+                          }
+                          return r
+                        })
+                      )
+                    }
+                  } catch (e: any) {
+                    setActionMessage(`Error: ${e.message}`)
+                  }
+                }}
+                className="py-1.5 px-3 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-heading font-semibold text-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <span>Procesar caducidad de pendientes (+30 días)</span>
+              </button>
+            </div>
           </div>
 
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
             <div className="flex flex-wrap items-center gap-1.5">
-              {(['todas', 'pendientes', 'visibles', 'ocultas', 'anonimas'] as const).map((status) => (
+              {(['todas', 'pendientes', 'visibles', 'ocultas', 'caducadas', 'anonimas'] as const).map((status) => (
                 <button
                   key={status}
                   onClick={() => setRecStatusFilter(status)}
@@ -2283,10 +2368,12 @@ export default function Admin() {
                               ? 'bg-emerald-100 text-emerald-800'
                               : rec.status === 'pendiente'
                               ? 'bg-amber-100 text-amber-800'
+                              : rec.status === 'caducada'
+                              ? 'bg-rose-100 text-rose-800'
                               : 'bg-slate-100 text-slate-800'
                           }`}
                         >
-                          {rec.status === 'visible' ? 'Publicada' : rec.status === 'pendiente' ? 'Pendiente' : 'Oculta'}
+                          {rec.status === 'visible' ? 'Publicada' : rec.status === 'pendiente' ? 'Pendiente' : rec.status === 'caducada' ? 'Caducada' : 'Oculta'}
                         </span>
                         {isAnonymous ? (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">

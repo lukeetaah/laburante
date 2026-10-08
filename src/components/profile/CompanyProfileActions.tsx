@@ -24,13 +24,31 @@ export default function CompanyProfileActions({ profileId, profileName }: Props)
   const isCompany = isCompanyAccount(user, myProfile)
 
   useEffect(() => {
-    if (!isCompany || !user) return
-    try {
-      const raw = localStorage.getItem(`laburante-company-favorites:${user.id}`)
-      setSaved(raw ? JSON.parse(raw).includes(profileId) : false)
-      const projectRaw = localStorage.getItem(`laburante-company-projects:${user.id}`)
-      setProjects(projectRaw ? JSON.parse(projectRaw) : [])
-    } catch { setSaved(false) }
+    if (!isCompany || !user || !profileId) return
+    // Consultar el estado canónico real desde company_shortlists
+    ;(supabase.from('company_shortlists') as any)
+      .select('id, status, project_id')
+      .eq('company_id', user.id)
+      .eq('candidate_profile_id', profileId)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data) {
+          setSaved(true)
+        } else {
+          setSaved(false)
+        }
+      })
+
+    // Cargar proyectos de la empresa desde la base de datos
+    ;(supabase.from('company_projects') as any)
+      .select('id, name')
+      .eq('company_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }: any) => {
+        if (data && Array.isArray(data)) {
+          setProjects(data.map((p: any) => p.name))
+        }
+      })
   }, [isCompany, profileId, user])
 
   useEffect(() => {
@@ -53,29 +71,54 @@ export default function CompanyProfileActions({ profileId, profileName }: Props)
   if (!isCompany || !user) return null
 
   const toggleFavorite = async () => {
+    if (!user || !profileId) return
     const next = !saved
     setSaved(next)
     try {
-      const key = `laburante-company-favorites:${user.id}`
-      const raw = localStorage.getItem(key)
-      const list: string[] = raw ? JSON.parse(raw) : []
-      const nextList = next ? Array.from(new Set([...list, profileId])) : list.filter((id) => id !== profileId)
-      localStorage.setItem(key, JSON.stringify(nextList))
-      if (next) await (supabase.from('company_saved_profiles') as any).upsert({ company_id: user.id, profile_id: profileId }, { onConflict: 'company_id,profile_id,project_id' })
-    } catch { /* Local fallback keeps the interaction usable before migration. */ }
+      if (next) {
+        await (supabase.from('company_shortlists') as any).upsert({
+          company_id: user.id,
+          candidate_profile_id: profileId,
+          status: 'interesante',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'company_id,candidate_profile_id' })
+      } else {
+        await (supabase.from('company_shortlists') as any)
+          .delete()
+          .eq('company_id', user.id)
+          .eq('candidate_profile_id', profileId)
+      }
+    } catch (e) {
+      console.warn('Error syncing company shortlist:', e)
+      setSaved(!next) // revertir si hay error de red
+    }
   }
 
   const addProject = async () => {
     const name = newProject.trim()
-    if (!name) return
-    const next = Array.from(new Set([...projects, name]))
-    setProjects(next)
-    setNewProject('')
-    localStorage.setItem(`laburante-company-projects:${user.id}`, JSON.stringify(next))
+    if (!name || !user) return
     try {
-      const { data } = await (supabase.from('company_projects') as any).insert({ company_id: user.id, name }).select('id').single()
-      if (data) await (supabase.from('company_saved_profiles') as any).upsert({ company_id: user.id, profile_id: profileId, project_id: data.id }, { onConflict: 'company_id,profile_id,project_id' })
-    } catch { /* The local list remains available if the migration is pending. */ }
+      const { data } = await (supabase.from('company_projects') as any)
+        .insert({ company_id: user.id, name })
+        .select('id, name')
+        .single()
+
+      if (data) {
+        setProjects((prev) => Array.from(new Set([...prev, data.name])))
+        setNewProject('')
+        // Asignar al shortlist canónico con project_id
+        await (supabase.from('company_shortlists') as any).upsert({
+          company_id: user.id,
+          candidate_profile_id: profileId,
+          project_id: data.id,
+          status: 'interesante',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'company_id,candidate_profile_id' })
+        setSaved(true)
+      }
+    } catch (e) {
+      console.warn('Error creating company project:', e)
+    }
   }
 
   const proposeNextStep = async () => {
