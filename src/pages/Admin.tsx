@@ -45,6 +45,9 @@ import {
   DollarSign,
   Star,
   X,
+  Briefcase,
+  Calendar,
+  Video,
 } from 'lucide-react'
 
 function isValidPhotoUrl(photo: string): boolean {
@@ -90,7 +93,7 @@ export default function Admin() {
 
   const [searchParams] = useSearchParams()
   const initialUrlTab = searchParams.get('tab')
-  const validTabs = ['analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'reports', 'profiles', 'companies', 'reviews', 'deletions', 'settings'] as const
+  const validTabs = ['analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'settings'] as const
   type AdminTab = typeof validTabs[number]
   const [activeTab, setActiveTab] = useState<AdminTab>(
     validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : 'analytics'
@@ -139,6 +142,23 @@ export default function Admin() {
   const [conversationMessages, setConversationMessages] = useState<any[]>([])
   const [adminMessageInput, setAdminMessageInput] = useState('')
   const [adminMessageSending, setAdminMessageSending] = useState(false)
+  // Company Operations (solicitudes y entrevistas)
+  const [companyOps, setCompanyOps] = useState<{
+    inquiries: any[]
+    interviews: any[]
+  }>({ inquiries: [], interviews: [] })
+  const [companyOpsLoading, setCompanyOpsLoading] = useState(false)
+  const [companyOpsFilterType, setCompanyOpsFilterType] = useState<'todos' | 'solicitudes' | 'entrevistas'>('todos')
+  const [companyOpsFilterStatus, setCompanyOpsFilterStatus] = useState<string>('todos')
+  const [companyOpsSearch, setCompanyOpsSearch] = useState<string>('')
+  const [editingInterview, setEditingInterview] = useState<any | null>(null)
+  const [interviewEditForm, setInterviewEditForm] = useState<{
+    scheduled_at: string
+    location_or_link: string
+    notes: string
+    modality: string
+    status: string
+  }>({ scheduled_at: '', location_or_link: '', notes: '', modality: 'virtual', status: 'propuesta' })
 
   useEffect(() => {
     if (!selectedJob) return
@@ -268,6 +288,9 @@ export default function Admin() {
       // 6. Fetch Unconfirmed Registrations — solo usuarios con email_confirmed_at IS NULL
       const unconfirmed = await fetchUnconfirmedRegistrations('esperando')
       setUnconfirmedRegistrations(unconfirmed || [])
+
+      // 7. Fetch Company Operations (solicitudes y entrevistas)
+      await loadCompanyOperations()
     } catch (err) {
       captureAppError(err, 'admin_data_load')
       console.warn('Error loading admin data:', err)
@@ -927,6 +950,116 @@ export default function Admin() {
     }
   }
 
+  const loadCompanyOperations = async () => {
+    setCompanyOpsLoading(true)
+    try {
+      const [inquiriesRes, interviewsRes] = await Promise.all([
+        (supabase.from('company_candidate_inquiries') as any)
+          .select('*')
+          .order('created_at', { ascending: false }),
+        (supabase.from('interviews') as any)
+          .select('*')
+          .order('created_at', { ascending: false }),
+      ])
+      setCompanyOps({
+        inquiries: inquiriesRes.data || [],
+        interviews: interviewsRes.data || [],
+      })
+    } catch (err) {
+      console.warn('Error cargando operaciones de empresa:', err)
+    } finally {
+      setCompanyOpsLoading(false)
+    }
+  }
+
+  const handleUpdateInquiryStatus = async (inquiryId: string, nextStatus: 'pendiente' | 'aceptada' | 'rechazada' | 'cerrada') => {
+    try {
+      const { error } = await (supabase.from('company_candidate_inquiries') as any)
+        .update({ status: nextStatus, updated_at: new Date().toISOString() })
+        .eq('id', inquiryId)
+      if (error) {
+        setActionMessage(`Error al actualizar solicitud: ${error.message}`)
+        return
+      }
+      setCompanyOps((prev) => ({
+        ...prev,
+        inquiries: prev.inquiries.map((inq) => inq.id === inquiryId ? { ...inq, status: nextStatus } : inq),
+      }))
+      setActionMessage(`Estado de la solicitud actualizado a "${nextStatus}".`)
+    } catch (err: any) {
+      setActionMessage(`Error al actualizar solicitud: ${err.message}`)
+    }
+  }
+
+  const handleUpdateInterviewStatus = async (interviewId: string, nextStatus: 'propuesta' | 'confirmada' | 'realizada' | 'cancelada') => {
+    try {
+      const { error } = await (supabase.from('interviews') as any)
+        .update({ status: nextStatus, updated_at: new Date().toISOString() })
+        .eq('id', interviewId)
+      if (error) {
+        setActionMessage(`Error al actualizar entrevista: ${error.message}`)
+        return
+      }
+      setCompanyOps((prev) => ({
+        ...prev,
+        interviews: prev.interviews.map((item) => item.id === interviewId ? { ...item, status: nextStatus } : item),
+      }))
+      setActionMessage(`Entrevista actualizada a "${nextStatus}".`)
+    } catch (err: any) {
+      setActionMessage(`Error al actualizar entrevista: ${err.message}`)
+    }
+  }
+
+  const openInterviewEditor = (interview: any) => {
+    setEditingInterview(interview)
+    setInterviewEditForm({
+      scheduled_at: interview.scheduled_at ? new Date(interview.scheduled_at).toISOString().slice(0, 16) : '',
+      location_or_link: interview.location_or_link || '',
+      notes: interview.notes || '',
+      modality: interview.modality || 'virtual',
+      status: interview.status || 'propuesta',
+    })
+  }
+
+  const handleSaveInterviewDetails = async () => {
+    if (!editingInterview) return
+    try {
+      const { error } = await (supabase.from('interviews') as any)
+        .update({
+          scheduled_at: interviewEditForm.scheduled_at ? new Date(interviewEditForm.scheduled_at).toISOString() : null,
+          location_or_link: interviewEditForm.location_or_link.trim() || null,
+          notes: interviewEditForm.notes.trim() || null,
+          modality: interviewEditForm.modality,
+          status: interviewEditForm.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingInterview.id)
+      if (error) {
+        setActionMessage(`Error al actualizar entrevista: ${error.message}`)
+        return
+      }
+      setCompanyOps((prev) => ({
+        ...prev,
+        interviews: prev.interviews.map((item) =>
+          item.id === editingInterview.id
+            ? {
+                ...item,
+                scheduled_at: interviewEditForm.scheduled_at ? new Date(interviewEditForm.scheduled_at).toISOString() : null,
+                location_or_link: interviewEditForm.location_or_link.trim() || null,
+                notes: interviewEditForm.notes.trim() || null,
+                modality: interviewEditForm.modality,
+                status: interviewEditForm.status,
+              }
+            : item
+        ),
+      }))
+      setEditingInterview(null)
+      setActionMessage('Entrevista actualizada exitosamente.')
+    } catch (err: any) {
+      setActionMessage(`Error al actualizar entrevista: ${err.message}`)
+    }
+  }
+
   const handleAdminDeleteRec = async (id: string) => {
     if (!window.confirm('¿Confirmás que querés eliminar esta reseña definitivamente?')) return
     try {
@@ -1012,6 +1145,40 @@ export default function Admin() {
     })
 
   const pendingReviewsCount = recommendations.filter((r) => r.status === 'pendiente').length
+
+  const profileMap = new Map(profiles.map((p) => [p.id, p]))
+
+  const filteredCompanyInquiries = companyOps.inquiries.filter((inq) => {
+    if (companyOpsFilterType === 'entrevistas') return false
+    if (companyOpsFilterStatus !== 'todos' && inq.status !== companyOpsFilterStatus) return false
+    if (companyOpsSearch.trim()) {
+      const q = companyOpsSearch.toLowerCase()
+      const comp = profileMap.get(inq.company_id)
+      const cand = profileMap.get(inq.profile_id)
+      const matchComp = comp?.name?.toLowerCase().includes(q) || comp?.slug?.toLowerCase().includes(q)
+      const matchCand = cand?.name?.toLowerCase().includes(q) || cand?.slug?.toLowerCase().includes(q)
+      const matchMsg = inq.message?.toLowerCase().includes(q)
+      if (!matchComp && !matchCand && !matchMsg) return false
+    }
+    return true
+  })
+
+  const filteredCompanyInterviews = companyOps.interviews.filter((itv) => {
+    if (companyOpsFilterType === 'solicitudes') return false
+    if (companyOpsFilterStatus !== 'todos' && itv.status !== companyOpsFilterStatus) return false
+    if (companyOpsSearch.trim()) {
+      const q = companyOpsSearch.toLowerCase()
+      const host = profileMap.get(itv.host_id)
+      const cand = profileMap.get(itv.candidate_id)
+      const matchHost = host?.name?.toLowerCase().includes(q) || host?.slug?.toLowerCase().includes(q)
+      const matchCand = cand?.name?.toLowerCase().includes(q) || cand?.slug?.toLowerCase().includes(q)
+      const matchTitle = itv.title?.toLowerCase().includes(q)
+      const matchNotes = itv.notes?.toLowerCase().includes(q)
+      const matchLink = itv.location_or_link?.toLowerCase().includes(q)
+      if (!matchHost && !matchCand && !matchTitle && !matchNotes && !matchLink) return false
+    }
+    return true
+  })
 
   return (
     <div className="container py-8 md:py-12 max-w-5xl mx-auto space-y-8">
@@ -1160,6 +1327,16 @@ export default function Admin() {
           className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'companies' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
         >
           <Building2 size={16} /> Empresas ({profiles.filter((p) => p.account_type === 'empresa').length})
+        </button>
+        <button
+          onClick={() => { setActiveTab('company_ops'); loadCompanyOperations() }}
+          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'company_ops'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
+          }`}
+        >
+          <Briefcase size={16} /> Operaciones Empresa ({companyOps.inquiries.length + companyOps.interviews.length})
         </button>
 
         <button
@@ -2123,6 +2300,340 @@ export default function Admin() {
         </div>
       )}
 
+
+      {/* Tab: Operaciones de Empresa */}
+      {activeTab === 'company_ops' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="font-bold flex items-center gap-1.5 text-indigo-900">
+                <Briefcase size={16} className="text-indigo-600" />
+                Operaciones originadas en Empresas
+              </p>
+              <p className="mt-1 leading-relaxed text-indigo-950/80">
+                Supervisá y gestioná solicitudes de contacto directo a candidatos y entrevistas agendadas. Permite cancelar procesos trabados, reprogramar entrevistas o actualizar datos de conexión.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadCompanyOperations}
+              disabled={companyOpsLoading}
+              className="px-3 py-1.5 rounded-xl border border-indigo-300 bg-white hover:bg-indigo-100 text-indigo-900 font-semibold shrink-0 cursor-pointer text-xs flex items-center gap-1.5"
+            >
+              <RefreshCw size={12} className={companyOpsLoading ? 'animate-spin' : ''} />
+              Actualizar operaciones
+            </button>
+          </div>
+
+          {/* Filtros */}
+          <div className="flex flex-wrap items-center gap-3 p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-[var(--color-laburante-text-secondary)]">Tipo:</span>
+              <select
+                value={companyOpsFilterType}
+                onChange={(e) => setCompanyOpsFilterType(e.target.value as any)}
+                className="px-2.5 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-transparent font-medium"
+              >
+                <option value="todos">Todos ({companyOps.inquiries.length + companyOps.interviews.length})</option>
+                <option value="solicitudes">Solicitudes de Candidato ({companyOps.inquiries.length})</option>
+                <option value="entrevistas">Entrevistas ({companyOps.interviews.length})</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-[var(--color-laburante-text-secondary)]">Estado:</span>
+              <select
+                value={companyOpsFilterStatus}
+                onChange={(e) => setCompanyOpsFilterStatus(e.target.value)}
+                className="px-2.5 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-transparent font-medium"
+              >
+                <option value="todos">Todos los estados</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="aceptada">Aceptada</option>
+                <option value="rechazada">Rechazada</option>
+                <option value="cerrada">Cerrada / Cancelada</option>
+                <option value="propuesta">Entrevista Propuesta</option>
+                <option value="confirmada">Entrevista Confirmada</option>
+                <option value="realizada">Entrevista Realizada</option>
+                <option value="cancelada">Entrevista Cancelada</option>
+              </select>
+            </div>
+
+            <div className="flex-1 min-w-[200px]">
+              <input
+                type="text"
+                placeholder="Buscar por empresa, candidato o notas..."
+                value={companyOpsSearch}
+                onChange={(e) => setCompanyOpsSearch(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Listado de Solicitudes */}
+          {(companyOpsFilterType === 'todos' || companyOpsFilterType === 'solicitudes') && (
+            <div className="space-y-3">
+              <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)] flex items-center gap-2">
+                <Users size={16} className="text-indigo-600" />
+                Solicitudes de contacto directo ({filteredCompanyInquiries.length})
+              </h3>
+              {filteredCompanyInquiries.length === 0 ? (
+                <div className="p-6 rounded-2xl border border-dashed border-[var(--color-laburante-border)] text-center text-xs text-[var(--color-laburante-text-secondary)]">
+                  No hay solicitudes de contacto que coincidan con los filtros.
+                </div>
+              ) : (
+                filteredCompanyInquiries.map((inq) => {
+                  const comp = profileMap.get(inq.company_id)
+                  const cand = profileMap.get(inq.profile_id)
+                  return (
+                    <div
+                      key={inq.id}
+                      className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              inq.status === 'aceptada'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : inq.status === 'rechazada'
+                                ? 'bg-rose-100 text-rose-800'
+                                : inq.status === 'cerrada'
+                                ? 'bg-slate-100 text-slate-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {inq.status === 'cerrada' ? 'Cerrada / Cancelada' : inq.status}
+                          </span>
+                          <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                            Tipo: {inq.process_type || 'entrevista'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-[var(--color-laburante-text-muted)]">
+                          {new Date(inq.created_at).toLocaleDateString()} {new Date(inq.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <p className="text-[var(--color-laburante-text-muted)]">Empresa solicitante:</p>
+                          {comp ? (
+                            <Link to={`/p/${comp.slug}`} target="_blank" className="font-bold text-[var(--color-laburante-indigo)] hover:underline inline-flex items-center gap-1">
+                              {comp.name} (@{comp.slug})
+                              <ExternalLink size={11} />
+                            </Link>
+                          ) : (
+                            <span className="font-mono text-[11px]">ID: {inq.company_id}</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[var(--color-laburante-text-muted)]">Candidato convocado:</p>
+                          {cand ? (
+                            <Link to={`/p/${cand.slug}`} target="_blank" className="font-bold text-[var(--color-laburante-indigo)] hover:underline inline-flex items-center gap-1">
+                              {cand.name} (@{cand.slug})
+                              <ExternalLink size={11} />
+                            </Link>
+                          ) : (
+                            <span className="font-mono text-[11px]">ID: {inq.profile_id}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {inq.message && (
+                        <div className="p-3 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-xs text-[var(--color-laburante-text)] italic">
+                          "{inq.message}"
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--color-laburante-border)]/40">
+                        {inq.status !== 'aceptada' && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateInquiryStatus(inq.id, 'aceptada')}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+                          >
+                            Marcar Aceptada
+                          </button>
+                        )}
+                        {inq.status !== 'rechazada' && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateInquiryStatus(inq.id, 'rechazada')}
+                            className="px-3 py-1.5 rounded-lg border border-rose-300 hover:bg-rose-50 text-rose-800 text-xs font-semibold cursor-pointer"
+                          >
+                            Marcar Rechazada
+                          </button>
+                        )}
+                        {inq.status !== 'cerrada' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateInquiryStatus(inq.id, 'cerrada')}
+                            className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer ml-auto"
+                          >
+                            Cancelar / Cerrar proceso
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateInquiryStatus(inq.id, 'pendiente')}
+                            className="px-3 py-1.5 rounded-lg border border-amber-300 hover:bg-amber-50 text-amber-900 text-xs font-semibold cursor-pointer ml-auto"
+                          >
+                            Reabrir como Pendiente
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
+
+          {/* Listado de Entrevistas */}
+          {(companyOpsFilterType === 'todos' || companyOpsFilterType === 'entrevistas') && (
+            <div className="space-y-3 pt-4">
+              <h3 className="font-heading font-bold text-sm text-[var(--color-laburante-text)] flex items-center gap-2">
+                <Calendar size={16} className="text-indigo-600" />
+                Entrevistas agendadas ({filteredCompanyInterviews.length})
+              </h3>
+              {filteredCompanyInterviews.length === 0 ? (
+                <div className="p-6 rounded-2xl border border-dashed border-[var(--color-laburante-border)] text-center text-xs text-[var(--color-laburante-text-secondary)]">
+                  No hay entrevistas que coincidan con los filtros.
+                </div>
+              ) : (
+                filteredCompanyInterviews.map((itv) => {
+                  const host = profileMap.get(itv.host_id)
+                  const cand = profileMap.get(itv.candidate_id)
+                  return (
+                    <div
+                      key={itv.id}
+                      className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              itv.status === 'confirmada'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : itv.status === 'realizada'
+                                ? 'bg-indigo-100 text-indigo-800'
+                                : itv.status === 'cancelada'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {itv.status}
+                          </span>
+                          <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                            {itv.title}
+                          </h4>
+                          <span className="text-[11px] text-[var(--color-laburante-text-muted)] font-medium">
+                            · Modalidad: {itv.modality}
+                          </span>
+                        </div>
+                        <span className="text-xs text-[var(--color-laburante-text-muted)]">
+                          {new Date(itv.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <p className="text-[var(--color-laburante-text-muted)]">Empresa / Host:</p>
+                          {host ? (
+                            <Link to={`/p/${host.slug}`} target="_blank" className="font-bold text-[var(--color-laburante-indigo)] hover:underline inline-flex items-center gap-1">
+                              {host.name} (@{host.slug})
+                              <ExternalLink size={11} />
+                            </Link>
+                          ) : (
+                            <span className="font-mono text-[11px]">ID: {itv.host_id}</span>
+                          )}
+                        </div>
+
+                        <div>
+                          <p className="text-[var(--color-laburante-text-muted)]">Candidato:</p>
+                          {cand ? (
+                            <Link to={`/p/${cand.slug}`} target="_blank" className="font-bold text-[var(--color-laburante-indigo)] hover:underline inline-flex items-center gap-1">
+                              {cand.name} (@{cand.slug})
+                              <ExternalLink size={11} />
+                            </Link>
+                          ) : (
+                            <span className="font-mono text-[11px]">ID: {itv.candidate_id}</span>
+                          )}
+                        </div>
+
+                        <div>
+                          <p className="text-[var(--color-laburante-text-muted)]">Fecha agendada:</p>
+                          <p className="font-semibold text-[var(--color-laburante-text)]">
+                            {itv.scheduled_at ? new Date(itv.scheduled_at).toLocaleString() : 'No definida'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {itv.location_or_link && (
+                        <div className="text-xs text-[var(--color-laburante-text-secondary)]">
+                          <strong>Ubicación / Enlace de reunión:</strong>{' '}
+                          {itv.location_or_link.startsWith('http') ? (
+                            <a href={itv.location_or_link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline font-medium">
+                              {itv.location_or_link}
+                            </a>
+                          ) : (
+                            <span>{itv.location_or_link}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {itv.notes && (
+                        <div className="p-3 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-xs text-[var(--color-laburante-text)]">
+                          <strong>Notas:</strong> {itv.notes}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--color-laburante-border)]/40">
+                        {itv.status !== 'confirmada' && itv.status !== 'realizada' && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateInterviewStatus(itv.id, 'confirmada')}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+                          >
+                            Confirmar
+                          </button>
+                        )}
+                        {itv.status === 'confirmada' && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateInterviewStatus(itv.id, 'realizada')}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer"
+                          >
+                            Marcar Realizada
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openInterviewEditor(itv)}
+                          className="px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-xs font-semibold cursor-pointer"
+                        >
+                          <Pencil size={12} className="inline mr-1" />
+                          Editar / Reprogramar
+                        </button>
+                        {itv.status !== 'cancelada' && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateInterviewStatus(itv.id, 'cancelada')}
+                            className="px-3 py-1.5 rounded-lg border border-rose-300 hover:bg-rose-50 text-rose-800 text-xs font-semibold cursor-pointer ml-auto"
+                          >
+                            Cancelar entrevista
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTab === 'companies' && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-xs text-indigo-950">
@@ -2489,6 +3000,124 @@ export default function Admin() {
             >
               {settingsSaving ? 'Guardando...' : 'Guardar configuración'}
             </button>
+          </div>
+        </div>
+      )}
+
+
+      {/* Floating Administrative Modal: Editar Entrevista */}
+      {editingInterview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setEditingInterview(null)}
+        >
+          <div
+            className="relative w-full max-w-lg rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 shadow-2xl animate-in zoom-in-95 duration-150 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-[var(--color-laburante-border)] pb-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Gestión de Entrevista</p>
+                <h3 className="font-heading text-lg font-bold text-[var(--color-laburante-text)] mt-0.5">
+                  {editingInterview.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingInterview(null)}
+                className="p-1 rounded-xl text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)] cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-[var(--color-laburante-text)] mb-1">
+                  Estado de la entrevista
+                </label>
+                <select
+                  value={interviewEditForm.status}
+                  onChange={(e) => setInterviewEditForm({ ...interviewEditForm, status: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs"
+                >
+                  <option value="propuesta">Propuesta</option>
+                  <option value="confirmada">Confirmada</option>
+                  <option value="realizada">Realizada</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[var(--color-laburante-text)] mb-1">
+                  Modalidad
+                </label>
+                <select
+                  value={interviewEditForm.modality}
+                  onChange={(e) => setInterviewEditForm({ ...interviewEditForm, modality: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs"
+                >
+                  <option value="virtual">Virtual</option>
+                  <option value="presencial">Presencial</option>
+                  <option value="telefonica">Telefónica</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[var(--color-laburante-text)] mb-1">
+                  Fecha y Hora programada
+                </label>
+                <input
+                  type="datetime-local"
+                  value={interviewEditForm.scheduled_at}
+                  onChange={(e) => setInterviewEditForm({ ...interviewEditForm, scheduled_at: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[var(--color-laburante-text)] mb-1">
+                  Ubicación o Enlace de reunión (Google Meet, Zoom, etc.)
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://meet.google.com/... o dirección"
+                  value={interviewEditForm.location_or_link}
+                  onChange={(e) => setInterviewEditForm({ ...interviewEditForm, location_or_link: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[var(--color-laburante-text)] mb-1">
+                  Notas / Observaciones
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Instrucciones para la entrevista o notas internas..."
+                  value={interviewEditForm.notes}
+                  onChange={(e) => setInterviewEditForm({ ...interviewEditForm, notes: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--color-laburante-border)]">
+              <button
+                type="button"
+                onClick={() => setEditingInterview(null)}
+                className="px-4 py-2 rounded-xl border border-[var(--color-laburante-border)] text-xs font-semibold cursor-pointer"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveInterviewDetails}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer"
+              >
+                Guardar cambios
+              </button>
+            </div>
           </div>
         </div>
       )}

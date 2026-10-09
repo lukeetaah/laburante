@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Archive, ArrowRight, BadgeCheck, Building2, Check, ExternalLink, Folder, FolderPlus, Globe, Inbox, LockKeyhole, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users, Star, Trash2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
@@ -365,6 +365,21 @@ export default function CompanyWorkspace() {
     setArchiveMessage('No se pudo archivar este proceso. Verificá que la migración de selección Empresa esté aplicada en Supabase.')
   }
 
+  const cancelCandidateInquiry = async (inquiryId: string) => {
+    if (!window.confirm('¿Confirmás que querés cancelar este proceso de selección/entrevista?')) return
+    const now = new Date().toISOString()
+    const { error } = await (supabase.from('company_candidate_inquiries') as any)
+      .update({ status: 'cerrada', archived_at: now, updated_at: now })
+      .eq('id', inquiryId)
+      .eq('company_id', user.id)
+
+    if (!error) {
+      setCandidateInquiries((items) =>
+        items.map((item) => (item.id === inquiryId ? { ...item, status: 'cerrada', archived_at: now } : item))
+      )
+    }
+  }
+
   const filteredShortlist = selectedProjectFilter === 'todos'
     ? shortlist
     : selectedProjectFilter === 'sin_proyecto'
@@ -417,7 +432,7 @@ export default function CompanyWorkspace() {
              <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-bold text-[var(--color-laburante-text)]">{item.profile?.name || 'Profesional'}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{item.process_type === 'entrevista' ? 'Entrevista' : 'Contratación'} · {new Date(item.created_at).toLocaleDateString('es-AR')}</p></div><span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold uppercase text-indigo-800">{item.status}{isArchivedInquiry(item) ? ' · archivada' : ''}</span></div>
              {item.message && <p className="mt-2 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">{item.message}</p>}
              {item.status === 'rechazada' && (item as any).rejection_reason && <p className="mt-1 text-xs font-semibold text-rose-700">Devolución: {(item as any).rejection_reason}{(item as any).rejection_comment ? ` — ${(item as any).rejection_comment}` : ''}</p>}
-             <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCandidateInquiry(item)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{selected ? 'Selección abierta' : 'Abrir selección'}</button>{!isArchivedInquiry(item) && <button type="button" onClick={() => archiveCandidateInquiry(item.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"><Archive size={14} /> Archivar</button>}</div>
+             <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCandidateInquiry(item)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{selected ? 'Selección abierta' : 'Abrir selección'}</button>{!isArchivedInquiry(item) && <button type="button" onClick={() => archiveCandidateInquiry(item.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"><Archive size={14} /> Archivar</button>}{item.status !== 'cerrada' && <button type="button" onClick={() => cancelCandidateInquiry(item.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 cursor-pointer transition-colors">Cancelar proceso</button>}</div>
            </article>
          })}
        </div>

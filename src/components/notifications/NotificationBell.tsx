@@ -14,12 +14,14 @@ import {
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notification-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProfileStore } from '@/stores/profile-store'
 import { supabase } from '@/lib/supabase'
-import { navigateToContextualLink, parseContextualLink } from '@/lib/contextual-navigation'
+import { navigateToContextualLink, parseContextualLink, sanitizeNotificationLink } from '@/lib/contextual-navigation'
 import EmailPreferencesToggle from '@/components/notifications/EmailPreferencesToggle'
 
 export default function NotificationBell() {
-  const { user } = useAuthStore()
+  const { user, isAdmin } = useAuthStore()
+  const { myProfile } = useProfileStore()
   const {
     notifications,
     unreadCount,
@@ -89,16 +91,17 @@ export default function NotificationBell() {
   }
 
   const handleNotificationClick = async (id: string, read: boolean, link?: string | null) => {
-    const externalLink = link ? !parseContextualLink(link) : false
-    if (externalLink && link) {
-      navigateToContextualLink(navigate, link)
+    const safeLink = sanitizeNotificationLink(link, myProfile, isAdmin)
+    const externalLink = safeLink ? !parseContextualLink(safeLink) : false
+    if (externalLink && safeLink) {
+      navigateToContextualLink(navigate, safeLink)
       setIsOpen(false)
       if (!read) await markAsRead(id)
       return
     }
     if (!read) await markAsRead(id)
     setIsOpen(false)
-    if (link) navigateToContextualLink(navigate, link)
+    if (safeLink) navigateToContextualLink(navigate, safeLink)
   }
 
   const visibleNotifications = notifications.filter((notification) => view === 'new' ? !notification.read : notification.read)

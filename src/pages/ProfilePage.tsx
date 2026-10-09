@@ -33,6 +33,7 @@ export default function ProfilePage() {
   const { slug } = useParams<{ slug: string }>()
   const location = useLocation()
   const [searchParams] = useSearchParams()
+  const targetReviewId = searchParams.get('resena')
   const [rawProfile, setRawProfile] = useState<ProfileWithDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -84,16 +85,20 @@ export default function ProfilePage() {
 
   const isOwnerSession = Boolean(user && baseProfile && baseProfile.id === user.id)
 
-  // When viewing own profile, enrich with owner's complete contact_methods from myProfile
+  // When viewing own profile, enrich with owner's complete contact_methods and all received recommendations from myProfile
   const profile = useMemo(() => {
     if (!baseProfile) return null
     if (isOwnerSession && myProfile && myProfile.id === baseProfile.id) {
       const mergedContacts = (myProfile.contact_methods && myProfile.contact_methods.length > 0)
         ? myProfile.contact_methods
         : baseProfile.contact_methods
+      const mergedRecs = (myProfile.recommendations && myProfile.recommendations.length > 0)
+        ? myProfile.recommendations
+        : (baseProfile.recommendations || [])
       return {
         ...baseProfile,
         contact_methods: mergedContacts,
+        recommendations: mergedRecs,
         whatsapp_verified: myProfile.whatsapp_verified ?? baseProfile.whatsapp_verified,
         whatsapp_verified_at: myProfile.whatsapp_verified_at ?? baseProfile.whatsapp_verified_at,
       }
@@ -102,9 +107,14 @@ export default function ProfilePage() {
   }, [baseProfile, isOwnerSession, myProfile])
 
   useEffect(() => {
-    if (loading || !profile || location.hash !== '#resenas') return
-    return focusContextualElement({ id: 'resenas' })
-  }, [loading, profile?.slug, location.hash])
+    if (loading || !profile) return
+    if (targetReviewId) {
+      return focusContextualElement({ id: `resena-${targetReviewId}` })
+    }
+    if (location.hash === '#resenas') {
+      return focusContextualElement({ id: 'resenas' })
+    }
+  }, [loading, profile?.slug, location.hash, targetReviewId])
 
   useEffect(() => {
     let active = true
@@ -495,33 +505,159 @@ export default function ProfilePage() {
               const canEdit = !!user?.id && user.id === rec.from_user_id
               const canModerate = isOwnProfile || isAdmin
               const isEditing = editingRecommendationId === rec.id
-              return <div key={rec.id} className="p-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-[var(--color-laburante-text)]">{rec.from_name}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
-                      Cliente
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${rec.status === 'visible' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
-                      {rec.status === 'visible' ? 'Publicada' : 'Pendiente de revisión'}
-                    </span>
-                    {(rec.created_at || rec.date) && (
-                      <span className="text-[11px] text-[var(--color-laburante-text-muted)]">
-                        {new Date(rec.created_at || rec.date!).toLocaleDateString('es-AR')}
-                      </span>
+                const isTargetReview = targetReviewId === rec.id
+                const statusMeta = {
+                  visible: { label: 'Publicada', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                  pendiente: { label: 'Pendiente de tu decisión', className: 'bg-amber-50 text-amber-800 border-amber-300 font-bold' },
+                  oculto: { label: 'Oculta en tu perfil', className: 'bg-slate-100 text-slate-700 border-slate-300' },
+                  caducada: { label: 'Caducada (+30 días)', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+                }[rec.status as string] || { label: rec.status, className: 'bg-slate-50 text-slate-600 border-slate-200' }
+
+                return (
+                  <div
+                    key={rec.id}
+                    id={`resena-${rec.id}`}
+                    data-review-id={rec.id}
+                    className={`p-4 rounded-xl border transition-all space-y-2.5 ${
+                      isTargetReview
+                        ? 'border-indigo-400 bg-indigo-50/40 ring-2 ring-indigo-400'
+                        : rec.status === 'pendiente'
+                        ? 'border-amber-300 bg-amber-50/30'
+                        : 'border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/30'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-[var(--color-laburante-text)]">{rec.from_name || 'Usuario de LABURANTE'}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200">
+                          Reseña
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${statusMeta.className}`}>
+                          {statusMeta.label}
+                        </span>
+                        {(rec.created_at || rec.date) && (
+                          <span className="text-[11px] text-[var(--color-laburante-text-muted)]">
+                            {new Date(rec.created_at || rec.date!).toLocaleDateString('es-AR')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {isOwnProfile && rec.status === 'pendiente' && (
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-900 leading-snug">
+                        Esta reseña está pendiente de tu aprobación. Podés publicarla para que se vea en las búsquedas o descartarla.
+                      </div>
                     )}
+
+                    {rec.context && (
+                      <p className="text-[11px] text-[var(--color-laburante-indigo)] font-medium">
+                        Trabajo realizado: {rec.context}
+                      </p>
+                    )}
+
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          rows={3}
+                          className="w-full rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs"
+                        />
+                        <input
+                          value={editingContext}
+                          onChange={(e) => setEditingContext(e.target.value)}
+                          placeholder="Trabajo realizado (opcional)"
+                          className="w-full rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const result = await updateRecommendation(rec.id, { text: editingText, context: editingContext })
+                              setRecommendationMessage(result.error || 'Reseña actualizada.')
+                              if (!result.error) setEditingRecommendationId(null)
+                            }}
+                            className="rounded-lg bg-indigo-700 px-3 py-2 text-[11px] font-bold text-white cursor-pointer"
+                          >
+                            Guardar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingRecommendationId(null)}
+                            className="rounded-lg border px-3 py-2 text-[11px] cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed pt-1">"{rec.text}"</p>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {canModerate && rec.status === 'pendiente' && (
+                        <button
+                          type="button"
+                          onClick={() => moderateRecommendation(rec.id, 'visible')}
+                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-[11px] font-bold text-white transition-colors cursor-pointer"
+                        >
+                          Publicar en mi perfil ✓
+                        </button>
+                      )}
+                      {canModerate && rec.status === 'oculto' && (
+                        <button
+                          type="button"
+                          onClick={() => moderateRecommendation(rec.id, 'visible')}
+                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-[11px] font-bold text-white transition-colors cursor-pointer"
+                        >
+                          Volver a publicar
+                        </button>
+                      )}
+                      {canModerate && rec.status === 'visible' && (
+                        <button
+                          type="button"
+                          onClick={() => moderateRecommendation(rec.id, 'oculto')}
+                          className="rounded-lg border border-amber-300 hover:bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-800 transition-colors cursor-pointer"
+                        >
+                          Ocultar
+                        </button>
+                      )}
+                      {canEdit && !isEditing && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingRecommendationId(rec.id)
+                            setEditingText(rec.text)
+                            setEditingContext(rec.context || '')
+                          }}
+                          className="rounded-lg border border-indigo-200 px-3 py-1.5 text-[11px] font-semibold text-indigo-800 cursor-pointer"
+                        >
+                          Editar
+                        </button>
+                      )}
+                      {(canEdit || canModerate) && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm('¿Querés eliminar esta reseña definitivamente?')) return
+                            const result = await deleteRecommendation(rec.id)
+                            if (!result.error) {
+                              setRawProfile((prev) => prev ? { ...prev, recommendations: (prev.recommendations || []).filter((r) => r.id !== rec.id) } : null)
+                              setRecommendationMessage('Reseña eliminada.')
+                            } else {
+                              setRecommendationMessage(result.error)
+                            }
+                          }}
+                          className="rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50 cursor-pointer"
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-                {rec.context && (
-                  <p className="text-[11px] text-[var(--color-laburante-indigo)] font-medium">
-                    Trabajo realizado: {rec.context}
-                  </p>
-                )}
-                {isEditing ? <div className="space-y-2"><textarea value={editingText} onChange={(e) => setEditingText(e.target.value)} rows={3} className="w-full rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs" /><input value={editingContext} onChange={(e) => setEditingContext(e.target.value)} placeholder="Trabajo realizado (opcional)" className="w-full rounded-lg border border-[var(--color-laburante-border)] px-3 py-2 text-xs" /><div className="flex gap-2"><button type="button" onClick={async () => { const result = await updateRecommendation(rec.id, { text: editingText, context: editingContext }); setRecommendationMessage(result.error || 'Reseña actualizada.'); if (!result.error) setEditingRecommendationId(null) }} className="rounded-lg bg-indigo-700 px-3 py-2 text-[11px] font-bold text-white">Guardar</button><button type="button" onClick={() => setEditingRecommendationId(null)} className="rounded-lg border px-3 py-2 text-[11px]">Cancelar</button></div></div> : <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed pt-1">"{rec.text}"</p>}
-                <div className="flex flex-wrap gap-2 pt-1">{canModerate && rec.status !== 'visible' && <button type="button" onClick={() => moderateRecommendation(rec.id, 'visible')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white">Publicar reseña</button>}{canModerate && rec.status === 'visible' && <button type="button" onClick={() => moderateRecommendation(rec.id, 'oculto')} className="rounded-lg border border-amber-300 px-3 py-1.5 text-[11px] font-semibold text-amber-800">Ocultar</button>}{canEdit && !isEditing && <button type="button" onClick={() => { setEditingRecommendationId(rec.id); setEditingText(rec.text); setEditingContext(rec.context || '') }} className="rounded-lg border border-indigo-200 px-3 py-1.5 text-[11px] font-semibold text-indigo-800">Editar</button>}{(canEdit || canModerate) && <button type="button" onClick={async () => { if (!window.confirm('¿Querés eliminar esta reseña definitivamente?')) return; const result = await deleteRecommendation(rec.id); if (!result.error) { setRawProfile((prev) => prev ? { ...prev, recommendations: (prev.recommendations || []).filter((r) => r.id !== rec.id) } : null); setRecommendationMessage('Reseña eliminada.'); } else { setRecommendationMessage(result.error); } }} className="rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">Eliminar</button>}</div>
-              </div>
+                )
             })}
           </div>
         ) : (

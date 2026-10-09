@@ -230,9 +230,29 @@ export default function CreateProfile() {
   }
 
   // Contact handlers
-  const handleAddContact = () => setContactMethods([...contactMethods, { type: 'whatsapp', value: '' }])
-  const handleRemoveContact = (idx: number) => setContactMethods(contactMethods.filter((_, i) => i !== idx))
+  const handleAddContact = () => {
+    const existingTypes = new Set(contactMethods.map((c) => c.type))
+    const availableTypes = ['email', 'telefono', 'instagram', 'linkedin', 'portfolio', 'web']
+    if (!myProfile?.whatsapp_verified) {
+      availableTypes.push('whatsapp')
+    }
+    const nextType = availableTypes.find((t) => !existingTypes.has(t)) || 'email'
+    setContactMethods([...contactMethods, { type: nextType, value: '' }])
+  }
+
+  const handleRemoveContact = (idx: number) => {
+    const target = contactMethods[idx]
+    if (myProfile?.whatsapp_verified && target?.type === 'whatsapp') {
+      return
+    }
+    setContactMethods(contactMethods.filter((_, i) => i !== idx))
+  }
+
   const handleContactChange = (idx: number, field: string, val: string) => {
+    const target = contactMethods[idx]
+    if (myProfile?.whatsapp_verified && target?.type === 'whatsapp') {
+      return
+    }
     const updated = [...contactMethods]
     updated[idx] = { ...updated[idx], [field]: val }
     setContactMethods(updated)
@@ -1073,63 +1093,82 @@ export default function CreateProfile() {
           </p>
 
           <div className="space-y-3">
-            {contactMethods.map((c, idx) => (
-              <div key={idx} className="flex flex-col sm:flex-row items-center gap-2">
-                <select
-                  value={c.type}
-                  onChange={(e) => handleContactChange(idx, 'type', e.target.value)}
-                  className="w-full sm:w-40 px-3 py-2 text-xs rounded-xl border border-[var(--color-laburante-border)] bg-transparent capitalize"
-                >
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="telefono">Teléfono</option>
-                  <option value="email">Email</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="linkedin">LinkedIn</option>
-                  <option value="portfolio">Portfolio</option>
-                  <option value="web">Sitio Web</option>
-                </select>
+            {contactMethods.map((c, idx) => {
+              const isVerifiedWA = Boolean(myProfile?.whatsapp_verified && c.type === 'whatsapp')
 
-                <input
-                  type="text"
-                  value={c.value}
-                  onChange={(e) => handleContactChange(idx, 'value', e.target.value)}
-                  placeholder="ej: 11 2345-6789 o @mi.perfil o miweb.com"
-                  className="flex-1 w-full px-3.5 py-2 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
-                />
+              return (
+                <div key={idx} className="space-y-1.5">
+                  <div className="flex flex-col sm:flex-row items-center gap-2">
+                    <select
+                      value={c.type}
+                      disabled={isVerifiedWA}
+                      onChange={(e) => handleContactChange(idx, 'type', e.target.value)}
+                      className={`w-full sm:w-40 px-3 py-2 text-xs rounded-xl border border-[var(--color-laburante-border)] bg-transparent capitalize ${isVerifiedWA ? 'bg-slate-50 opacity-80 cursor-not-allowed font-semibold' : ''}`}
+                    >
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="telefono">Teléfono</option>
+                      <option value="email">Email</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="linkedin">LinkedIn</option>
+                      <option value="portfolio">Portfolio</option>
+                      <option value="web">Sitio Web</option>
+                    </select>
 
-                {/* WhatsApp Verification Status / Action */}
-                {c.type === 'whatsapp' && c.value.trim() && (
-                  <div className="self-end sm:self-center shrink-0">
-                    {myProfile?.whatsapp_verified ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <ShieldCheck size={14} className="text-emerald-600" />
-                        <span>Verificado</span>
-                      </span>
-                    ) : (
+                    <input
+                      type="text"
+                      value={c.value}
+                      readOnly={isVerifiedWA}
+                      disabled={isVerifiedWA}
+                      onChange={(e) => handleContactChange(idx, 'value', e.target.value)}
+                      placeholder="ej: 11 2345-6789 o @mi.perfil o miweb.com"
+                      className={`flex-1 w-full px-3.5 py-2 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent ${isVerifiedWA ? 'bg-emerald-50/40 border-emerald-300 font-semibold text-emerald-950 cursor-not-allowed' : ''}`}
+                    />
+
+                    {/* WhatsApp Verification Status / Action */}
+                    {c.type === 'whatsapp' && c.value.trim() && (
+                      <div className="self-end sm:self-center shrink-0">
+                        {myProfile?.whatsapp_verified ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <ShieldCheck size={14} className="text-emerald-600" />
+                            <span>Verificado</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setWhatsappModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors shadow-2xs cursor-pointer"
+                            title="Certificar que este número te pertenece"
+                          >
+                            <ShieldAlert size={14} className="text-amber-600" />
+                            <span>Verificar WhatsApp</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {!isVerifiedWA && contactMethods.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => setWhatsappModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors shadow-2xs cursor-pointer"
-                        title="Certificar que este número te pertenece"
+                        onClick={() => handleRemoveContact(idx)}
+                        className="p-2 text-[var(--color-laburante-text-muted)] hover:text-rose-600 self-end sm:self-center cursor-pointer"
+                        title="Eliminar este medio de contacto"
                       >
-                        <ShieldAlert size={14} className="text-amber-600" />
-                        <span>Verificar WhatsApp</span>
+                        <Trash2 size={16} />
                       </button>
                     )}
                   </div>
-                )}
 
-                {contactMethods.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveContact(idx)}
-                    className="p-2 text-[var(--color-laburante-text-muted)] hover:text-rose-600 self-end sm:self-center"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
+                  {isVerifiedWA && (
+                    <div className="rounded-xl bg-emerald-50/70 border border-emerald-200 px-3 py-2 text-xs text-emerald-900 flex items-start gap-2">
+                      <ShieldCheck size={15} className="text-emerald-600 shrink-0 mt-0.5" />
+                      <span className="text-[11px] leading-relaxed">
+                        <strong>WhatsApp verificado oficialmente:</strong> este número está protegido contra modificaciones accidentales. Para cambiarlo, comunicate con Administración.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {/* CRITICAL CONSENT CHECKBOX */}

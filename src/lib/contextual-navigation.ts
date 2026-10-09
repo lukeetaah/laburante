@@ -43,6 +43,21 @@ export function getPostLoginPath(intent: unknown) {
   return '/crear-perfil'
 }
 
+export function sanitizeNotificationLink(
+  link: string | null | undefined,
+  userProfile?: { slug?: string } | null,
+  isAdmin?: boolean
+): string | null {
+  if (!link) return null
+  const trimmed = link.trim()
+  if (trimmed.startsWith('/admin') && !isAdmin) {
+    // Protección en frontend: evita que usuarios normales caigan en /admin por notificaciones históricas
+    if (userProfile?.slug) return `/p/${userProfile.slug}`
+    return '/crear-perfil'
+  }
+  return trimmed
+}
+
 export function parseContextualLink(link: string): ContextualLink | null {
   try {
     const url = new URL(link, window.location.origin)
@@ -52,7 +67,9 @@ export function parseContextualLink(link: string): ContextualLink | null {
     if (requestId) return { kind: 'request', id: requestId, href }
     const inquiryId = url.searchParams.get('seleccion')
     if (inquiryId) return { kind: 'inquiry', id: inquiryId, href }
-    if (url.pathname.startsWith('/p/') && url.hash === '#resenas') return { kind: 'reviews', href }
+    if (url.pathname.startsWith('/p/') && (url.hash === '#resenas' || url.searchParams.has('resena'))) {
+      return { kind: 'reviews', href }
+    }
     return { kind: 'generic', href }
   } catch {
     return null

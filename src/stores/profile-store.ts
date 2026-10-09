@@ -233,6 +233,105 @@ async function replaceProfileLanguages(profileId: string, languages: any[]) {
   }
 }
 
+async function reconcileContactMethods(
+  userId: string,
+  desiredMethods: any[],
+  isWhatsAppVerified: boolean
+): Promise<{ error: string | null }> {
+  try {
+    const { data: existingRows, error: fetchErr } = await (supabase.from('contact_methods') as any)
+      .select('id, type, value, is_public')
+      .eq('profile_id', userId)
+
+    if (fetchErr) {
+      return { error: `Error al leer medios de contacto actuales: ${fetchErr.message}` }
+    }
+
+    const existing: Array<{ id: string; type: string; value: string; is_public: boolean }> = existingRows || []
+    const verifiedRow = isWhatsAppVerified ? existing.find((r) => r.type === 'whatsapp') : null
+
+    const sanitizedDesired = dedupeContactMethods(desiredMethods || []).filter(
+      (c: any) => Boolean(c?.value && String(c.value).trim())
+    )
+
+    if (verifiedRow) {
+      const idx = sanitizedDesired.findIndex((c: any) => c.type === 'whatsapp')
+      if (idx >= 0) {
+        sanitizedDesired[idx].value = verifiedRow.value
+      } else {
+        sanitizedDesired.unshift({
+          type: 'whatsapp',
+          value: verifiedRow.value,
+          is_public: verifiedRow.is_public !== false,
+        })
+      }
+    }
+
+    const rowsToDelete = existing.filter((ex) => {
+      if (verifiedRow && ex.id === verifiedRow.id) return false
+      const stillDesired = sanitizedDesired.some(
+        (des: any) => des.type === ex.type && des.value.trim().toLowerCase() === ex.value.trim().toLowerCase()
+      )
+      return !stillDesired
+    })
+
+    if (rowsToDelete.length > 0) {
+      const deleteIds = rowsToDelete.map((r) => r.id)
+      const { error: delErr } = await (supabase.from('contact_methods') as any)
+        .delete()
+        .in('id', deleteIds)
+        .eq('profile_id', userId)
+
+      if (delErr) {
+        return { error: `Error al actualizar medios de contacto eliminados: ${delErr.message}` }
+      }
+    }
+
+    const now = new Date().toISOString()
+    const rowsToInsert: any[] = []
+
+    for (const des of sanitizedDesired) {
+      const match = existing.find(
+        (ex) => ex.type === des.type && ex.value.trim().toLowerCase() === des.value.trim().toLowerCase()
+      )
+
+      if (match) {
+        if (Boolean(des.is_public !== false) !== Boolean(match.is_public)) {
+          const { error: upErr } = await (supabase.from('contact_methods') as any)
+            .update({ is_public: des.is_public !== false })
+            .eq('id', match.id)
+            .eq('profile_id', userId)
+
+          if (upErr) {
+            return { error: `Error al actualizar visibilidad de contacto: ${upErr.message}` }
+          }
+        }
+      } else {
+        rowsToInsert.push({
+          profile_id: userId,
+          type: des.type,
+          value: des.value.trim(),
+          is_public: des.is_public !== false,
+          consent_at: now,
+        })
+      }
+    }
+
+    if (rowsToInsert.length > 0) {
+      const { error: insErr } = await (supabase.from('contact_methods') as any)
+        .insert(rowsToInsert)
+
+      if (insErr) {
+        return { error: `Error al guardar nuevos medios de contacto: ${insErr.message}` }
+      }
+    }
+
+    return { error: null }
+  } catch (e: any) {
+    return { error: e.message || 'Error inesperado al sincronizar medios de contacto.' }
+  }
+}
+
 const PUBLIC_PROFILE_FIELDS = 'id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, account_type, hybrid_presencial_pct, hybrid_remoto_pct, intent, has_resume, whatsapp_verified'
 
 async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]> {
@@ -469,7 +568,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         services: item.services || [],
         contact_methods: dedupeContactMethods(item.contact_methods || []),
         languages: item.profile_languages || [],
-        recommendations: (item.recommendations || []).filter((r: any) => r.from_user_id !== null),
+        recommendations: item.recommendations || [],
         categories: [],
       }
       set({ myProfile: profile })
@@ -571,10 +670,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
         if (profileError) return { error: profileError.message }
 
-        // Clean previous related records to replace cleanly
+        // Clean previous related records to replace cleanly (contact_methods is reconciled separately)
         await (supabase.from('skills') as any).delete().eq('profile_id', userId)
         await (supabase.from('services') as any).delete().eq('profile_id', userId)
-        await (supabase.from('contact_methods') as any).delete().eq('profile_id', userId)
       } else {
         // 1. Insert Profile
         const insertPayload: any = {
@@ -645,19 +743,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }
       }
 
-      // 4. Insert Contact Methods (only authorized ones with consent)
-      if (profileData.contact_methods?.length) {
-        const contactRows = dedupeContactMethods(profileData.contact_methods).map((c: any) => ({
-          profile_id: userId,
-          type: c.type,
-          value: c.value,
-          is_public: c.is_public !== false,
-          consent_at: new Date().toISOString()
-        })).filter((c: any) => c.value)
-
-        if (contactRows.length) {
-          await (supabase.from('contact_methods') as any).insert(contactRows)
-        }
+      // 4. Reconcile Contact Methods safely (never deletes or alters verified WhatsApp)
+      const isWAVerified = Boolean(existingProfile?.whatsapp_verified || get().myProfile?.whatsapp_verified)
+      const contactSync = await reconcileContactMethods(userId, profileData.contact_methods || [], isWAVerified)
+      if (contactSync.error) {
+        captureAppError(new Error(contactSync.error), 'profile_contact_sync')
+        return { error: contactSync.error }
       }
 
       // Refresh myProfile in state
