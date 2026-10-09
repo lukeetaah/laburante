@@ -288,10 +288,18 @@ export default function CreateProfile() {
         const validPhotoExts = ['jpg', 'jpeg', 'png', 'webp']
         const isPhotoValid = validPhotoMimes.includes(mime) || validPhotoExts.includes(extension)
         if (!isPhotoValid) {
-          throw new Error('La foto debe ser formato JPG, PNG o WebP.')
+          const err = new Error('La foto debe ser formato JPG, PNG o WebP.') as any
+          err._stage = 'validation'
+          err._resource = 'avatar'
+          err._code = 'invalid_format'
+          throw err
         }
         if (file.size > 5 * 1024 * 1024) {
-          throw new Error('La foto no puede superar los 5 MB.')
+          const err = new Error('La foto no puede superar los 5 MB.') as any
+          err._stage = 'validation'
+          err._resource = 'avatar'
+          err._code = 'size_exceeded'
+          throw err
         }
       } else {
         const validDocMimes = [
@@ -306,10 +314,18 @@ export default function CreateProfile() {
         const validDocExts = ['pdf', 'doc', 'docx', 'csv', 'txt']
         const isDocValid = validDocMimes.includes(mime) || validDocExts.includes(extension)
         if (!isDocValid) {
-          throw new Error('El CV debe ser PDF, DOC, DOCX, CSV o TXT.')
+          const err = new Error('El CV debe ser PDF, DOC, DOCX, CSV o TXT.') as any
+          err._stage = 'validation'
+          err._resource = 'resume'
+          err._code = 'invalid_format'
+          throw err
         }
         if (file.size > 10 * 1024 * 1024) {
-          throw new Error('El archivo de CV no puede superar los 10 MB.')
+          const err = new Error('El archivo de CV no puede superar los 10 MB.') as any
+          err._stage = 'validation'
+          err._resource = 'resume'
+          err._code = 'size_exceeded'
+          throw err
         }
       }
 
@@ -323,7 +339,15 @@ export default function CreateProfile() {
         contentType,
       })
       if (uploadError) {
-        throw new Error(uploadError.message || 'No se pudo subir el archivo a Supabase Storage.')
+        const err = new Error(uploadError.message || 'No se pudo subir el archivo a Supabase Storage.') as any
+        err._stage = 'storage_upload'
+        err._resource = kind === 'photo' ? 'avatar' : 'resume'
+        err._bucket = bucket
+        err.name = uploadError.name || 'StorageApiError'
+        err._code = (uploadError as any).code || (uploadError as any).error
+        err.status = (uploadError as any).status || (uploadError as any).statusCode
+        err.statusCode = (uploadError as any).statusCode || (uploadError as any).status
+        throw err
       }
       if (kind === 'resume') return `profile-documents:${path}`
       const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(path)
@@ -389,6 +413,12 @@ export default function CreateProfile() {
       setSubmitting(false)
 
       if (res.error) {
+        captureAppError(new Error(res.error), 'profile_asset_upload_or_save', {
+          stage: 'profile_save',
+          resource: 'profile',
+          errorCode: 'profile_creation_failed',
+          route: '/crear-perfil',
+        })
         setError(res.error)
       } else if (res.slug) {
         // Registrar habilidades personalizadas en proposed_skills para revisión de admin
@@ -431,7 +461,15 @@ export default function CreateProfile() {
         navigate(`/p/${res.slug}`)
       }
     } catch (uploadError: any) {
-      captureAppError(uploadError, 'profile_asset_upload_or_save')
+      captureAppError(uploadError, 'profile_asset_upload_or_save', {
+        stage: uploadError._stage || 'storage_upload',
+        resource: uploadError._resource || 'asset',
+        bucket: uploadError._bucket,
+        errorType: uploadError.name || 'StorageError',
+        errorCode: uploadError.code || uploadError._code,
+        statusCode: uploadError.status || uploadError.statusCode,
+        route: '/crear-perfil',
+      })
       setSubmitting(false)
       setError(uploadError.message || 'No se pudo procesar el archivo.')
     }
@@ -1177,7 +1215,7 @@ export default function CreateProfile() {
           void fetchMyProfile()
         }}
         profileId={myProfile?.id || user?.id || ''}
-        phone={contactMethods.find((c) => c.type === 'whatsapp')?.value || ''}
+        phone={contactMethods.find((c) => c.type === 'whatsapp')?.value || contactMethods.find((c) => c.type === 'telefono')?.value || ''}
         profileName={name || myProfile?.name || 'Mi Perfil'}
         profileSlug={myProfile?.slug || (name ? name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '')}
       />

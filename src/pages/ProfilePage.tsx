@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, Link, useSearchParams, useLocation } from 'react-router-dom'
 import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages, Edit3 } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
@@ -50,6 +50,7 @@ export default function ProfilePage() {
   const [resumeLoading, setResumeLoading] = useState(false)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
+  const fetchMyProfile = useProfileStore((s) => s.fetchMyProfile)
   const updateProfileVisibility = useProfileStore((s) => s.updateProfileVisibility)
   const currentProfile = useProfileStore((s) => s.currentProfile)
   const myProfile = useProfileStore((s) => s.myProfile)
@@ -71,9 +72,34 @@ export default function ProfilePage() {
     return () => { active = false }
   }, [slug, fetchProfileBySlug, user?.id])
 
+  useEffect(() => {
+    if (user?.id && !myProfile) {
+      void fetchMyProfile()
+    }
+  }, [user?.id, myProfile, fetchMyProfile])
+
   // Prefer store's currentProfile so newly added recommendations reflect immediately
   const normalizedRouteSlug = slug ? decodeURIComponent(slug).trim() : ''
-  const profile = (currentProfile && currentProfile.slug === normalizedRouteSlug) ? currentProfile : rawProfile
+  const baseProfile = (currentProfile && currentProfile.slug === normalizedRouteSlug) ? currentProfile : rawProfile
+
+  const isOwnerSession = Boolean(user && baseProfile && baseProfile.id === user.id)
+
+  // When viewing own profile, enrich with owner's complete contact_methods from myProfile
+  const profile = useMemo(() => {
+    if (!baseProfile) return null
+    if (isOwnerSession && myProfile && myProfile.id === baseProfile.id) {
+      const mergedContacts = (myProfile.contact_methods && myProfile.contact_methods.length > 0)
+        ? myProfile.contact_methods
+        : baseProfile.contact_methods
+      return {
+        ...baseProfile,
+        contact_methods: mergedContacts,
+        whatsapp_verified: myProfile.whatsapp_verified ?? baseProfile.whatsapp_verified,
+        whatsapp_verified_at: myProfile.whatsapp_verified_at ?? baseProfile.whatsapp_verified_at,
+      }
+    }
+    return baseProfile
+  }, [baseProfile, isOwnerSession, myProfile])
 
   useEffect(() => {
     if (loading || !profile || location.hash !== '#resenas') return
@@ -575,15 +601,22 @@ export default function ProfilePage() {
         profileSlug={profile.slug}
       />}
 
-      {isOwnProfile && (
+      {isOwnProfile && profile && (
         <WhatsAppVerificationModal
           isOpen={whatsAppVerifyOpen}
           onClose={() => {
             setWhatsAppVerifyOpen(false)
-            if (slug) fetchProfileBySlug(decodeURIComponent(slug).trim())
+            if (slug) void fetchProfileBySlug(decodeURIComponent(slug).trim())
+            void fetchMyProfile()
           }}
           profileId={profile.id}
-          phone={(profile.contact_methods || []).find((c: any) => c.type === 'whatsapp')?.value || ''}
+          phone={
+            (profile.contact_methods || []).find((c: any) => c.type === 'whatsapp')?.value ||
+            (profile.contact_methods || []).find((c: any) => c.type === 'telefono')?.value ||
+            (myProfile?.contact_methods || []).find((c: any) => c.type === 'whatsapp')?.value ||
+            (myProfile?.contact_methods || []).find((c: any) => c.type === 'telefono')?.value ||
+            ''
+          }
           profileName={profile.name}
           profileSlug={profile.slug}
         />

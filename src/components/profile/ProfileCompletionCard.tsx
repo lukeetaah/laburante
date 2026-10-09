@@ -20,7 +20,10 @@ export default function ProfileCompletionCard({
   const hasBio = Boolean(profile.bio?.trim())
   const hasSkills = Boolean((profile.skills && profile.skills.length > 0) || (profile.services && profile.services.length > 0))
   const hasLocation = Boolean(profile.provincia?.trim() && profile.localidad?.trim())
-  const hasContact = Boolean(profile.contact_methods && profile.contact_methods.length > 0)
+  const hasContact = Boolean(
+    profile.contact_methods &&
+    profile.contact_methods.some((c) => Boolean(c && c.value && String(c.value).trim().length > 0))
+  )
   const isWhatsAppVerified = Boolean(profile.whatsapp_verified)
 
   const steps = [

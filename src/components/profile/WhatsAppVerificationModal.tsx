@@ -48,44 +48,78 @@ export default function WhatsAppVerificationModal({
   const [isAlreadyPending, setIsAlreadyPending] = useState(false)
   const [initLoading, setInitLoading] = useState(false)
 
+  const handleRetry = () => {
+    if (!phone.trim()) return
+    setError(null)
+    setInitLoading(true)
+    const slug = profileSlug || profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    requestWhatsAppVerification(profileId, profileName, slug, phone).then((res) => {
+      setInitLoading(false)
+      if (res.error) setError(res.error)
+      if (res.code) setVerificationCode(res.code)
+      if (res.requestId) setRequestId(res.requestId)
+      if (res.alreadyPending) setIsAlreadyPending(true)
+    }).catch(() => {
+      setInitLoading(false)
+      setError('Error al reintentar solicitud de WhatsApp.')
+    })
+  }
+
   // Initialize or request verification code when opened
   useEffect(() => {
-    if (isOpen) {
-      setError(null)
-      setInputPin('')
-      setStep('send')
-      setIsAlreadyPending(false)
+    if (!isOpen) return
 
-      if (!phone.trim()) {
-        // No phone registered — clear any stale state and stop here
-        setVerificationCode('')
-        setRequestId('')
-        setInitLoading(false)
-        return
-      }
+    setError(null)
+    setInputPin('')
+    setStep('send')
+    setIsAlreadyPending(false)
 
-      setInitLoading(true)
-      const slug = profileSlug || profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-      requestWhatsAppVerification(profileId, profileName, slug, phone).then((res) => {
-        setInitLoading(false)
-        if (res.error) {
-          setError(res.error)
-        }
-        if (res.code) {
-          setVerificationCode(res.code)
-        }
-        if (res.requestId) {
-          setRequestId(res.requestId)
-        }
-        if (res.alreadyPending) {
-          setIsAlreadyPending(true)
-        }
-      }).catch(() => {
-        setInitLoading(false)
-        setError('Error al verificar solicitud de WhatsApp.')
-      })
+    if (!phone.trim()) {
+      // No phone registered — clear any stale state and stop here
+      setVerificationCode('')
+      setRequestId('')
+      setInitLoading(false)
+      return
     }
-  }, [isOpen, profileId, profileName, profileSlug, phone])
+
+    setInitLoading(true)
+    let cancelled = false
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        setInitLoading(false)
+        setError('La solicitud demoró más de lo esperado. Podés reintentar.')
+      }
+    }, 10000)
+
+    const slug = profileSlug || profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    requestWhatsAppVerification(profileId, profileName, slug, phone).then((res) => {
+      if (cancelled) return
+      clearTimeout(timeoutId)
+      setInitLoading(false)
+      if (res.error) {
+        setError(res.error)
+      }
+      if (res.code) {
+        setVerificationCode(res.code)
+      }
+      if (res.requestId) {
+        setRequestId(res.requestId)
+      }
+      if (res.alreadyPending) {
+        setIsAlreadyPending(true)
+      }
+    }).catch(() => {
+      if (cancelled) return
+      clearTimeout(timeoutId)
+      setInitLoading(false)
+      setError('Error al verificar solicitud de WhatsApp. Podés reintentar.')
+    })
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [isOpen, profileId, profileName, profileSlug, phone, requestWhatsAppVerification])
 
   // Polling check while in 'waiting' step
   useEffect(() => {
@@ -375,25 +409,50 @@ export default function WhatsAppVerificationModal({
               </p>
               <div className="flex items-center justify-center gap-2">
                 <span className="font-mono text-2xl sm:text-3xl font-extrabold tracking-widest text-emerald-950 px-4 py-1.5 rounded-xl bg-white border border-emerald-300 shadow-2xs">
-                  {verificationCode || 'Generando...'}
+                  {initLoading
+                    ? 'Generando...'
+                    : verificationCode || (hasPhone ? (error ? 'No disponible' : 'Pendiente') : 'Sin teléfono')}
                 </span>
-                <button
-                  type="button"
-                  onClick={handleCopyCode}
-                  className="p-2.5 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-100 text-xs font-semibold text-emerald-900 transition-colors cursor-pointer"
-                  title="Copiar código"
-                >
-                  {copied ? '¡Copiado!' : 'Copiar'}
-                </button>
+                {verificationCode ? (
+                  <button
+                    type="button"
+                    onClick={handleCopyCode}
+                    className="p-2.5 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-100 text-xs font-semibold text-emerald-900 transition-colors cursor-pointer"
+                    title="Copiar código"
+                  >
+                    {copied ? '¡Copiado!' : 'Copiar'}
+                  </button>
+                ) : null}
               </div>
+              {!verificationCode && !initLoading && hasPhone && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="text-xs text-emerald-800 hover:text-emerald-950 font-semibold underline cursor-pointer"
+                  >
+                    Reintentar generar código
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Botón principal */}
             <div className="space-y-2">
               {!hasPhone && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
-                  <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600" />
-                  <span>Necesitás agregar tu número de WhatsApp en los medios de contacto de tu perfil antes de poder verificarlo.</span>
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600" />
+                    <span>Necesitás agregar tu número de WhatsApp o teléfono en los medios de contacto de tu perfil antes de poder verificarlo.</span>
+                  </div>
+                  <div className="pt-1">
+                    <a
+                      href="/crear-perfil"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-amber-950 underline hover:text-amber-800"
+                    >
+                      Ir a cargar teléfono en mi perfil →
+                    </a>
+                  </div>
                 </div>
               )}
               <button
