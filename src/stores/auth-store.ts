@@ -18,6 +18,8 @@ export interface SignUpMetadata {
   companyPlan?: 'gratis' | 'pago'
   companySector?: string
   teamSize?: string
+  legalTermsVersion?: string
+  isOfLegalAge?: boolean
 }
 
 export const RESEND_COOLDOWN_SECONDS = 60
@@ -132,6 +134,14 @@ async function ensureUserProfile(user: User | null) {
           is_public: true,
         })
       }
+
+      // Si el usuario se registró con confirmación posterior o metadata legal previa,
+      // asegurar persistencia en la tabla legal_acceptances una vez creado su perfil.
+      if (meta.terms_accepted_version && meta.is_of_legal_age) {
+        import('@/lib/legal-acceptance').then(({ recordLegalAcceptance }) => {
+          recordLegalAcceptance(user.id, meta.terms_accepted_version)
+        }).catch(() => {})
+      }
     }
   } catch (err) {
     captureAppError(err, 'ensure_user_profile')
@@ -185,6 +195,9 @@ export const useAuthStore = create<AuthState>((set) => ({
           company_plan_requested: metadata.accountType === 'empresa' && metadata.companyPlan === 'pago',
           company_sector: metadata.accountType === 'empresa' ? (metadata.companySector || '') : undefined,
           team_size: metadata.accountType === 'empresa' ? (metadata.teamSize || '') : undefined,
+          terms_accepted_version: metadata.legalTermsVersion,
+          terms_accepted_at: metadata.legalTermsVersion ? new Date().toISOString() : undefined,
+          is_of_legal_age: metadata.isOfLegalAge ?? true,
         },
       },
     })
@@ -198,6 +211,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         loading: false,
       })
       await ensureUserProfile(data.session.user)
+      if (metadata.legalTermsVersion && data.session.user?.id) {
+        // Persistir en la tabla legal_acceptances en segundo plano
+        import('@/lib/legal-acceptance').then(({ recordLegalAcceptance }) => {
+          recordLegalAcceptance(data.session!.user.id, metadata.legalTermsVersion)
+        }).catch(() => {})
+      }
     } else if (data.user) {
       // Registro inicial sin sesión inmediata (esperando confirmación por correo)
       // Activar cooldown inmediato de 60s para evitar clics de reenvío duplicados en el día 0

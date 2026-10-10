@@ -17,7 +17,7 @@ export default function Privacy() {
           Política de Privacidad
         </h1>
         <p className="text-xs text-[var(--color-laburante-text-muted)]">
-          Tratamiento de datos personales y compromiso de minimización · República Argentina · Borrador sujeto a revisión legal
+          Tratamiento de datos personales y compromiso de minimización · República Argentina (Versión 2026-10-v1)
         </p>
       </div>
 
@@ -43,18 +43,15 @@ export default function Privacy() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">6. Solicitudes y datos de contacto</h2>
-          <p>Cuando una persona pide un presupuesto, LABURANTE procesa los datos necesarios para enviar la solicitud, gestionar el presupuesto, mostrar el estado y registrar el resultado informado por cada parte. Los datos de contacto no deben cargarse para terceros sin autorización.</p>
-          <p>Los medios de contacto y la información de una solicitud se utilizan para operar LABURANTE, facilitar el contacto solicitado, prevenir abusos, moderar reportes y cumplir obligaciones legales. No se venden ni se entregan para bases comerciales ajenas. Pueden intervenir proveedores tecnológicos que alojan autenticación, base de datos y archivos bajo instrucciones de LABURANTE.</p>
-        </section>
-
-        <section className="space-y-3">
           <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
             2. Qué datos recopilamos y para qué
           </h2>
           <ul className="list-disc list-inside space-y-2 pl-2">
             <li>
               <strong>Para la cuenta:</strong> Correo electrónico y contraseña cifrada (gestionada de forma segura mediante Supabase Auth) para que puedas acceder y administrar tu perfil.
+            </li>
+            <li>
+              <strong>Registro de aceptación legal:</strong> Declaración de mayoría de edad (18 años o más), versión de Términos y Condiciones aceptada y fecha/hora de aceptación, conservados exclusivamente para acreditar la conformidad contractual y responder ante eventuales requerimientos legales o controversias.
             </li>
             <li>
               <strong>Para el perfil público:</strong> Nombre o denominación profesional, localidad, provincia, zona de cobertura, habilidades y descripción de servicios.
@@ -86,10 +83,17 @@ export default function Privacy() {
             <li><strong>Rectificar</strong> o actualizar cualquier información incorrecta o desactualizada.</li>
             <li><strong>Solicitar la supresión</strong> definitiva de tu cuenta y todos los datos asociados a tu perfil.</li>
           </ul>
-          <p>
-            Podés ejercer estos derechos directamente desde tu cuenta o enviando un mensaje a través del{' '}
-            <strong className="text-[var(--color-laburante-text)]">formulario de contacto al pie de página</strong> indicando "Derechos de Datos Personales".
-          </p>
+          <div className="p-4 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] text-xs space-y-1.5 mt-3">
+            <p className="font-semibold text-[var(--color-laburante-text)]">
+              Información de la Agencia de Acceso a la Información Pública (AAIP)
+            </p>
+            <p>
+              El titular de los datos personales tiene la facultad de ejercer el derecho de acceso a los mismos en forma gratuita a intervalos no inferiores a seis meses, salvo que se acredite un interés legítimo al efecto conforme lo establecido en el artículo 14, inciso 3 de la Ley Nº 25.326.
+            </p>
+            <p>
+              La AGENCIA DE ACCESO A LA INFORMACIÓN PÚBLICA, en su carácter de Órgano de Control de la Ley Nº 25.326, tiene la atribución de atender las denuncias y reclamos que interpongan quienes resulten afectados en sus derechos por incumplimiento de las normas vigentes en materia de protección de datos personales.
+            </p>
+          </div>
         </section>
 
         <section className="space-y-3">
@@ -100,6 +104,12 @@ export default function Privacy() {
             Implementamos protocolos modernos de seguridad, políticas de Row Level Security (RLS) en la base de datos PostgreSQL y cifrado en tránsito (HTTPS) para proteger la integridad y privacidad de las cuentas.
           </p>
           <p>El acceso se limita por cuenta y por participación en cada solicitud; se minimiza la exposición del contacto en la interfaz y se eliminan o anonimizan datos cuando corresponde. Ningún sistema conectado a Internet puede prometer seguridad absoluta, por eso también recomendamos no publicar información sensible, contraseñas, datos bancarios o documentos innecesarios.</p>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">6. Solicitudes y datos de contacto</h2>
+          <p>Cuando una persona pide un presupuesto, LABURANTE procesa los datos necesarios para enviar la solicitud, gestionar el presupuesto, mostrar el estado y registrar el resultado informado por cada parte. Los datos de contacto no deben cargarse para terceros sin autorización.</p>
+          <p>Los medios de contacto y la información de una solicitud se utilizan para operar LABURANTE, facilitar el contacto solicitado, prevenir abusos, moderar reportes y cumplir obligaciones legales. No se venden ni se entregan para bases comerciales ajenas. Pueden intervenir proveedores tecnológicos que alojan autenticación, base de datos y archivos bajo instrucciones de LABURANTE.</p>
         </section>
       </div>
     </div>

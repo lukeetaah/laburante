@@ -5,6 +5,7 @@ import { useProfileStore } from '@/stores/profile-store'
 import { PROVINCES } from '@/data/provinces'
 import { CheckCircle2, ArrowRight, Building2, Mail, RefreshCw } from 'lucide-react'
 import { resolvePostLoginRedirect } from '@/lib/contextual-navigation'
+import { CURRENT_TERMS_VERSION } from '@/lib/constants'
 
 export default function Register() {
   const [searchParams] = useSearchParams()
@@ -20,6 +21,7 @@ export default function Register() {
   const [intent, setIntent] = useState<'ofrecer' | 'buscar' | 'ambas'>(isCompany ? 'buscar' : 'ofrecer')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [legalAgeAccepted, setLegalAgeAccepted] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
 
   const [loading, setLoading] = useState(false)
@@ -60,6 +62,23 @@ export default function Register() {
 
   const handleGoogleLogin = async () => {
     setError(null)
+    if (!legalAgeAccepted) {
+      setError('Debés confirmar que tenés 18 años cumplidos o más para registrarte.')
+      return
+    }
+    if (!termsAccepted) {
+      setError('Debés aceptar los Términos de uso y la Política de privacidad.')
+      return
+    }
+    // Guardar consentimiento legal de OAuth en sessionStorage para verificación post-login
+    try {
+      sessionStorage.setItem('laburante_oauth_legal_consent', JSON.stringify({
+        terms_version: CURRENT_TERMS_VERSION,
+        is_of_legal_age: true,
+        consented_at: new Date().toISOString(),
+      }))
+    } catch {}
+
     setOauthLoading('google')
     const res = await signInWithGoogle()
     if (res.error) {
@@ -159,6 +178,11 @@ export default function Register() {
       return
     }
 
+    if (!legalAgeAccepted) {
+      setError('Debés confirmar que tenés 18 años cumplidos o más para registrarte.')
+      return
+    }
+
     if (!termsAccepted) {
       setError('Debés aceptar los términos de uso y la política de privacidad.')
       return
@@ -191,6 +215,8 @@ export default function Register() {
         companyPlan: isCompany ? companyPlan : undefined,
         companySector: isCompany ? companySector.trim() : undefined,
         teamSize: isCompany ? teamSize : undefined,
+        legalTermsVersion: CURRENT_TERMS_VERSION,
+        isOfLegalAge: true,
       })
     } finally {
       if (localStorage.getItem(signupLockKey) === lockValue) localStorage.removeItem(signupLockKey)
@@ -324,7 +350,41 @@ export default function Register() {
         {/* Botones de OAuth — solo para registro de persona, no para empresa */}
         {!isCompany && (
           <>
-            <div className="space-y-2.5">
+            <div className="space-y-3 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 p-4">
+              <div className="space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={legalAgeAccepted}
+                    onChange={(e) => setLegalAgeAccepted(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-[var(--color-laburante-border)] text-[var(--color-laburante-indigo)] focus:ring-0"
+                  />
+                  <span className="text-xs text-[var(--color-laburante-text)] font-semibold leading-relaxed">
+                    Declaro que tengo 18 años cumplidos o más.
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-[var(--color-laburante-border)] text-[var(--color-laburante-indigo)] focus:ring-0"
+                  />
+                  <span className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
+                    Acepto los{' '}
+                    <Link to="/terminos" target="_blank" className="underline font-semibold text-[var(--color-laburante-text)]">
+                      Términos de uso
+                    </Link>{' '}
+                    y la{' '}
+                    <Link to="/privacidad" target="_blank" className="underline font-semibold text-[var(--color-laburante-text)]">
+                      Política de privacidad
+                    </Link>{' '}
+                    de LABURANTE.
+                  </span>
+                </label>
+              </div>
+
               <button
                 type="button"
                 onClick={handleGoogleLogin}
@@ -542,7 +602,20 @@ export default function Register() {
             </div>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 space-y-3">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={legalAgeAccepted}
+                onChange={(e) => setLegalAgeAccepted(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-[var(--color-laburante-border)] text-[var(--color-laburante-indigo)] focus:ring-0"
+                required
+              />
+              <span className="text-xs text-[var(--color-laburante-text)] font-semibold leading-relaxed">
+                Declaro que tengo 18 años cumplidos o más.
+              </span>
+            </label>
+
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
                 type="checkbox"

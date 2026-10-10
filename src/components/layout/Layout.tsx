@@ -4,6 +4,7 @@ import Footer from './Footer'
 import AuthNotifier from './AuthNotifier'
 import WelcomeModal from './WelcomeModal'
 import IntentPromptModal from '@/components/profile/IntentPromptModal'
+import LegalGateModal from './LegalGateModal'
 import ScrollToTop from './ScrollToTop'
 import HelpRibbon from './HelpRibbon'
 
@@ -16,6 +17,7 @@ export default function Layout() {
       <HelpRibbon />
       <WelcomeModal />
       <IntentPromptModal />
+      <LegalGateModal />
       <main className="flex-1">
         <Outlet />
       </main>

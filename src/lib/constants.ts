@@ -17,3 +17,7 @@ export const SITE_CONFIG = {
 } as const
 
 export const PROFILE_SLUG_PREFIX = '/p/'
+
+// Versión vigente de Términos y Condiciones y Política de Privacidad
+// Se utiliza para trazabilidad legal y consentimiento de mayoría de edad (18+).
+export const CURRENT_TERMS_VERSION = '2026-10-v1'

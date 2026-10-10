@@ -17,7 +17,7 @@ export default function Terms() {
           Términos y Condiciones de Uso
         </h1>
         <p className="text-xs text-[var(--color-laburante-text-muted)]">
-          Última actualización: Septiembre 2026 · República Argentina · Borrador sujeto a revisión legal
+          Última actualización: Octubre 2026 (Versión 2026-10-v1) · República Argentina
         </p>
       </div>
 
@@ -32,19 +32,6 @@ export default function Terms() {
           <p>
             LABURANTE actúa exclusivamente como una <strong>infraestructura digital de contacto</strong>. No es una agencia de empleo, no es una empresa de contratación, no es intermediaria laboral ni comercial, y no forma parte de los acuerdos, contrataciones, presupuestos o relaciones que eventualmente celebren los usuarios entre sí.
           </p>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">4 bis. Solicitudes, presupuestos y cierre</h2>
-          <p>Una solicitud de presupuesto permite ordenar la conversación entre las partes. LABURANTE puede habilitar herramientas de contacto dentro del flujo cuando existe una solicitud, un presupuesto o una aceptación; no garantiza que el trabajo se concrete ni que las partes respondan.</p>
-          <p>Las cuentas Empresa utilizan un recorrido distinto para selección: pueden guardar perfiles y enviar propuestas de entrevista o contratación directa. El alta de proveedor, la orden de compra, las retenciones, facturación y aprobaciones internas corresponden exclusivamente a la Empresa y no son emitidas ni gestionadas por LABURANTE.</p>
-          <p>Quien solicita y quien ofrece el servicio deben informar el resultado del caso cuando la plataforma lo solicite: realizado, en proceso, no realizado o cancelado. Esa información se usa para mantener el historial, mejorar las sugerencias y reducir solicitudes abandonadas. La plataforma podrá recordar el cierre pendiente y limitar avances dentro del flujo, sin asumir responsabilidad por la relación entre las partes.</p>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">4 ter. Independencia y contratación</h2>
-          <p>LABURANTE no contrata trabajadores, no fija precios, no cobra ni retiene pagos, no garantiza resultados y no participa como parte en acuerdos laborales, civiles, comerciales o de consumo. Cada usuario debe cumplir la normativa que le corresponda, incluyendo obligaciones fiscales, laborales, profesionales, de seguridad e higiene y de protección al consumidor.</p>
-          <p>La exclusión o limitación de responsabilidad se aplica únicamente en la medida permitida por la legislación vigente y no alcanza obligaciones que legalmente no puedan excluirse. Estos términos no reemplazan asesoramiento jurídico local.</p>
         </section>
 
         <section className="space-y-3">
@@ -67,6 +54,26 @@ export default function Terms() {
           <p>
             <strong>Queda terminantemente prohibido publicar datos personales, teléfonos o correos electrónicos de terceras personas sin su expreso consentimiento.</strong>
           </p>
+          <div className="pt-2 space-y-2">
+            <h3 className="font-heading text-sm font-bold text-[var(--color-laburante-text)]">
+              Edad mínima y condiciones de uso
+            </h3>
+            <p>
+              LABURANTE está destinado exclusivamente a personas humanas mayores de edad. Para registrarse, mantener una cuenta y utilizar las funcionalidades que requieren autenticación, es necesario tener 18 años cumplidos o más.
+            </p>
+            <p>
+              No está permitido registrarse ni utilizar la plataforma mediante una cuenta propia si no se cumple este requisito.
+            </p>
+            <p>
+              La persona usuaria declara que cumple con la edad mínima establecida al registrarse y se compromete a mantener el cumplimiento de estas condiciones durante el uso de la plataforma.
+            </p>
+            <p>
+              Si LABURANTE detecta indicios razonables de incumplimiento, podrá restringir preventivamente el acceso al perfil o a las funcionalidades correspondientes mientras verifica la situación. Si se confirma el incumplimiento, podrá inhabilitar el perfil y dar de baja la cuenta.
+            </p>
+            <p>
+              Los datos personales asociados se eliminarán cuando dejen de ser necesarios para las finalidades que justificaron su recopilación, sin perjuicio de las obligaciones legales de conservación que pudieran corresponder y de lo establecido en la Política de Privacidad.
+            </p>
+          </div>
         </section>
 
         <section className="space-y-3">
@@ -86,7 +93,24 @@ export default function Terms() {
 
         <section className="space-y-3">
           <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
-            5. Conductas prohibidas
+            5. Solicitudes, presupuestos y cierre
+          </h2>
+          <p>Una solicitud de presupuesto permite ordenar la conversación entre las partes. LABURANTE puede habilitar herramientas de contacto dentro del flujo cuando existe una solicitud, un presupuesto o una aceptación; no garantiza que el trabajo se concrete ni que las partes respondan.</p>
+          <p>Las cuentas Empresa utilizan un recorrido distinto para selección: pueden guardar perfiles y enviar propuestas de entrevista o contratación directa. El alta de proveedor, la orden de compra, las retenciones, facturación y aprobaciones internas corresponden exclusivamente a la Empresa y no son emitidas ni gestionadas por LABURANTE.</p>
+          <p>Quien solicita y quien ofrece el servicio deben informar el resultado del caso cuando la plataforma lo solicite: realizado, en proceso, no realizado o cancelado. Esa información se usa para mantener el historial, mejorar las sugerencias y reducir solicitudes abandonadas. La plataforma podrá recordar el cierre pendiente y limitar avances dentro del flujo, sin asumir responsabilidad por la relación entre las partes.</p>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
+            6. Independencia y contratación
+          </h2>
+          <p>LABURANTE no contrata trabajadores, no fija precios, no cobra ni retiene pagos, no garantiza resultados y no participa como parte en acuerdos laborales, civiles, comerciales o de consumo. Cada usuario debe cumplir la normativa que le corresponda, incluyendo obligaciones fiscales, laborales, profesionales, de seguridad e higiene y de protección al consumidor.</p>
+          <p>La exclusión o limitación de responsabilidad se aplica únicamente en la medida permitida por la legislación vigente y no alcanza obligaciones que legalmente no puedan excluirse. Estos términos no reemplazan asesoramiento jurídico local.</p>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
+            7. Conductas prohibidas
           </h2>
           <ul className="list-disc list-inside space-y-1.5 pl-2">
             <li>Publicar información engañosa, falsa o fraudulenta.</li>
@@ -99,7 +123,7 @@ export default function Terms() {
 
         <section className="space-y-3">
           <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
-            6. Reportes, moderación y suspensión
+            8. Reportes, moderación y suspensión
           </h2>
           <p>
             Cualquier usuario puede reportar perfiles sospechosos a través de la herramienta pública de "Reportar perfil". LABURANTE se reserva el derecho de retirar contenidos, pausar visibilidad o suspender temporal o permanentemente cuentas que vulneren estas reglas o pongan en riesgo a la comunidad.
@@ -108,7 +132,7 @@ export default function Terms() {
 
         <section className="space-y-3">
           <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
-            7. Modificaciones y contacto
+            9. Modificaciones y contacto
           </h2>
           <p>
             Estos términos podrán actualizarse para acompañar el crecimiento del proyecto o modificaciones normativas. Las versiones actualizadas estarán siempre disponibles en esta misma sección.
