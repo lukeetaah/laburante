@@ -48,7 +48,12 @@ import {
   Briefcase,
   Calendar,
   Video,
+  Scale,
+  ArrowLeft,
+  Search,
+  AlertCircle,
 } from 'lucide-react'
+import { CURRENT_TERMS_VERSION } from '@/lib/constants'
 
 function isValidPhotoUrl(photo: string): boolean {
   if (typeof photo !== 'string') return false
@@ -93,11 +98,15 @@ export default function Admin() {
 
   const [searchParams] = useSearchParams()
   const initialUrlTab = searchParams.get('tab')
-  const validTabs = ['analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'settings'] as const
+  const validTabs = ['analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'legal', 'settings'] as const
   type AdminTab = typeof validTabs[number]
-  const [activeTab, setActiveTab] = useState<AdminTab>(
-    validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : 'analytics'
+  const [activeTab, setActiveTab] = useState<AdminTab | null>(
+    validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : null
   )
+  const [legalAcceptances, setLegalAcceptances] = useState<any[]>([])
+  const [legalFilter, setLegalFilter] = useState<'todos' | 'vigente' | 'anterior' | 'pendiente'>('todos')
+  const [legalSearch, setLegalSearch] = useState('')
+  const [legalPage, setLegalPage] = useState(1)
   const [profileFilter, setProfileFilter] = useState<'todos' | 'activos' | 'privados' | 'verificados' | 'suspendidos' | 'incompletos'>('todos')
   const [adminFilters, setAdminFilters] = useState({
     query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '',
@@ -291,6 +300,19 @@ export default function Admin() {
 
       // 7. Fetch Company Operations (solicitudes y entrevistas)
       await loadCompanyOperations()
+
+      // 8. Fetch Legal Acceptances (evidencia de mayoría de edad y términos)
+      try {
+        const { data: legalData, error: legalErr } = await (supabase.from('legal_acceptances') as any)
+          .select('id, user_id, terms_version, is_of_legal_age, accepted_at, created_at')
+          .order('accepted_at', { ascending: false })
+
+        if (!legalErr && legalData) {
+          setLegalAcceptances(legalData)
+        }
+      } catch (lErr) {
+        console.warn('Error loading legal acceptances:', lErr)
+      }
     } catch (err) {
       captureAppError(err, 'admin_data_load')
       console.warn('Error loading admin data:', err)
@@ -1148,6 +1170,52 @@ export default function Admin() {
 
   const profileMap = new Map(profiles.map((p) => [p.id, p]))
 
+  // Agrupar aceptaciones legales por user_id
+  const legalAcceptancesByUser = new Map<string, any[]>()
+  legalAcceptances.forEach((acc) => {
+    const list = legalAcceptancesByUser.get(acc.user_id) || []
+    list.push(acc)
+    legalAcceptancesByUser.set(acc.user_id, list)
+  })
+
+  // Mapear cada perfil con su estado legal comprobable
+  const legalUsersList = profiles.map((p) => {
+    const userAccs = legalAcceptancesByUser.get(p.id) || []
+    const currentAcc = userAccs.find((a) => a.terms_version === CURRENT_TERMS_VERSION && a.is_of_legal_age === true)
+    const latestAnyAcc = userAccs.length > 0 ? userAccs[0] : null
+
+    let status: 'vigente' | 'anterior' | 'pendiente' = 'pendiente'
+    if (currentAcc) {
+      status = 'vigente'
+    } else if (latestAnyAcc) {
+      status = 'anterior'
+    }
+
+    return {
+      profile: p,
+      status,
+      currentAcceptance: currentAcc || null,
+      latestAcceptance: latestAnyAcc || null,
+      allAcceptances: userAccs,
+    }
+  })
+
+  const legalVigenteCount = legalUsersList.filter((u) => u.status === 'vigente').length
+  const legalAnteriorCount = legalUsersList.filter((u) => u.status === 'anterior').length
+  const legalPendienteCount = legalUsersList.filter((u) => u.status === 'pendiente').length
+
+  const filteredLegalUsers = legalUsersList.filter((item) => {
+    if (legalFilter !== 'todos' && item.status !== legalFilter) return false
+    if (legalSearch.trim()) {
+      const q = legalSearch.toLowerCase().trim()
+      const matchName = (item.profile.name || '').toLowerCase().includes(q)
+      const matchEmail = (item.profile.auth_email || '').toLowerCase().includes(q)
+      const matchSlug = (item.profile.slug || '').toLowerCase().includes(q)
+      if (!matchName && !matchEmail && !matchSlug) return false
+    }
+    return true
+  })
+
   const filteredCompanyInquiries = companyOps.inquiries.filter((inq) => {
     if (companyOpsFilterType === 'entrevistas') return false
     if (companyOpsFilterStatus !== 'todos' && inq.status !== companyOpsFilterStatus) return false
@@ -1262,148 +1330,659 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-[var(--color-laburante-border)] overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'analytics' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
-        >
-          <BarChart3 size={16} /> Métricas
-        </button>
-        <button
-          onClick={() => setActiveTab('jobs')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'jobs' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
-        >
-          <ClipboardList size={16} /> Pedidos ({jobRequests.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('verifications')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
-            activeTab === 'verifications'
-              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
-              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
-          }`}
-        >
-          <ShieldCheck size={16} />
-          Verificaciones WA
-          {pendingWaCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
-              {pendingWaCount}
+      {/* Dashboard Grid (when no module is selected) */}
+      {!activeTab && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
+                Módulos de administración
+              </h2>
+              <p className="text-xs text-[var(--color-laburante-text-secondary)]">
+                Seleccioná una sección para gestionar la plataforma o auditar registros.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* 1. Edad y aceptación legal */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('legal')}
+              className="group p-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-indigo-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Scale size={22} />
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-200">
+                    {legalVigenteCount} vigentes
+                  </span>
+                  {legalPendienteCount > 0 && (
+                    <span className="text-[10px] text-amber-700 font-semibold">
+                      {legalPendienteCount} pendientes
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-indigo-950 group-hover:text-indigo-900 flex items-center gap-1.5">
+                  Edad y aceptación legal
+                </h3>
+                <p className="text-xs text-indigo-950/70 mt-1 leading-relaxed">
+                  Auditoría de mayoría de edad (18+), términos vigentes y fechas de aceptación registradas.
+                </p>
+              </div>
+            </button>
+
+            {/* 2. Métricas y Analytics */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('analytics')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-slate-900 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <BarChart3 size={22} />
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                  {completionRate}% completados
+                </span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Métricas y Operatoria
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Embudo de solicitudes, pedidos presupuestados y análisis del flujo de trabajo.
+                </p>
+              </div>
+            </button>
+
+            {/* 3. Pedidos */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('jobs')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <ClipboardList size={22} />
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800">
+                  {jobRequests.length} pedidos
+                </span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Pedidos de trabajo
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Gestión y seguimiento de solicitudes de presupuesto, acuerdos y reclamos asociados.
+                </p>
+              </div>
+            </button>
+
+            {/* 4. Verificaciones WhatsApp */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('verifications')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-emerald-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-emerald-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <ShieldCheck size={22} />
+                </div>
+                {pendingWaCount > 0 ? (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    {pendingWaCount} pendientes
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
+                    Al día
+                  </span>
+                )}
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Verificaciones WhatsApp
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Revisión y certificación de números telefónicos solicitados por profesionales.
+                </p>
+              </div>
+            </button>
+
+            {/* 5. Confirmaciones de correo */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('confirmations')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-amber-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Mail size={22} />
+                </div>
+                {unconfirmedRegistrations.length > 0 ? (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                    {unconfirmedRegistrations.length} esperando
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
+                    0 pendientes
+                  </span>
+                )}
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Confirmaciones de correo
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Altas pendientes de validación, reenvíos asistidos y limpieza de cuentas abandonadas.
+                </p>
+              </div>
+            </button>
+
+            {/* 6. Mensajes y soporte */}
+            <button
+              type="button"
+              onClick={() => { setActiveTab('messages'); loadAdminConversations() }}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-indigo-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <MessageCircle size={22} />
+                </div>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Mensajes y soporte
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Canal directo de comunicación administrativa con usuarios y profesionales.
+                </p>
+              </div>
+            </button>
+
+            {/* 7. Empresas y planes */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('companies')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Building2 size={22} />
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-900">
+                  {profiles.filter((p) => p.account_type === 'empresa').length} empresas
+                </span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Cuentas Empresa
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Administración de organizaciones, planes corporativos y permisos de contratación.
+                </p>
+              </div>
+            </button>
+
+            {/* 8. Operaciones Empresa */}
+            <button
+              type="button"
+              onClick={() => { setActiveTab('company_ops'); loadCompanyOperations() }}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Briefcase size={22} />
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800">
+                  {companyOps.inquiries.length + companyOps.interviews.length} registros
+                </span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Operaciones de Empresa
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Consultas directas a candidatos, entrevistas agendadas y estados de selección.
+                </p>
+              </div>
+            </button>
+
+            {/* 9. Reportes y denuncias */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('reports')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-rose-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-rose-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <AlertTriangle size={22} />
+                </div>
+                {pendingReportsCount > 0 ? (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                    {pendingReportsCount} pendientes
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
+                    0 pendientes
+                  </span>
+                )}
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Reportes y moderación
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Denuncias de usuarios, perfiles reportados y solicitudes en revisión.
+                </p>
+              </div>
+            </button>
+
+            {/* 10. Perfiles de usuario */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('profiles')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-slate-900 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Users size={22} />
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800">
+                  {profiles.length} perfiles
+                </span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Directorio de Perfiles
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Búsqueda, edición administrativa, reseteo de claves y visibilidad de usuarios.
+                </p>
+              </div>
+            </button>
+
+            {/* 11. Bajas y Motivos */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('deletions')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-rose-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-rose-700 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Trash2 size={22} />
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800">
+                  {deletions.length} bajas
+                </span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Bajas de cuentas
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Registro de bajas voluntarias, motivos declarados y feedback de egreso.
+                </p>
+              </div>
+            </button>
+
+            {/* 12. Reseñas y recomendaciones */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('reviews')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-amber-500 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Star size={22} />
+                </div>
+                {pendingReviewsCount > 0 ? (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                    {pendingReviewsCount} pendientes
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
+                    {recommendations.length} total
+                  </span>
+                )}
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Reseñas y testimonios
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Moderación, aprobación y auditoría de recomendaciones entre usuarios.
+                </p>
+              </div>
+            </button>
+
+            {/* 13. Configuración operativa */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-slate-700 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <KeyRound size={22} />
+                </div>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
+                  Configuración operativa
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
+                  Canales oficiales de WhatsApp, contacto institucional y variables globales.
+                </p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation Bar when inside a specific module */}
+      {activeTab && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[var(--color-laburante-surface-alt)]/60 border border-[var(--color-laburante-border)] p-3 sm:px-4 rounded-2xl">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab(null)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-laburante-surface)] hover:bg-white text-xs font-bold text-[var(--color-laburante-text)] border border-[var(--color-laburante-border)] transition-colors shadow-2xs cursor-pointer"
+            >
+              <ArrowLeft size={14} />
+              Volver al panel principal
+            </button>
+            <div className="h-4 w-px bg-[var(--color-laburante-border)] hidden sm:block" />
+            <span className="text-xs font-semibold text-[var(--color-laburante-text-secondary)]">
+              Módulo activo: <strong className="text-[var(--color-laburante-text)] capitalize">
+                {activeTab === 'legal' && 'Edad y aceptación legal'}
+                {activeTab === 'analytics' && 'Métricas y Operatoria'}
+                {activeTab === 'jobs' && 'Pedidos de trabajo'}
+                {activeTab === 'verifications' && 'Verificaciones WhatsApp'}
+                {activeTab === 'confirmations' && 'Confirmaciones de correo'}
+                {activeTab === 'messages' && 'Mensajes y soporte'}
+                {activeTab === 'companies' && 'Cuentas Empresa'}
+                {activeTab === 'company_ops' && 'Operaciones Empresa'}
+                {activeTab === 'reports' && 'Reportes y moderación'}
+                {activeTab === 'profiles' && 'Directorio de Perfiles'}
+                {activeTab === 'deletions' && 'Bajas de cuentas'}
+                {activeTab === 'reviews' && 'Reseñas'}
+                {activeTab === 'settings' && 'Configuración operativa'}
+              </strong>
             </span>
-          )}
-        </button>
+          </div>
 
-        <button
-          onClick={() => setActiveTab('confirmations')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
-            activeTab === 'confirmations'
-              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
-              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
-          }`}
-        >
-          <Mail size={16} />
-          Confirmaciones
-          {unconfirmedRegistrations.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900">
-              {unconfirmedRegistrations.length}
-            </span>
-          )}
-        </button>
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 text-xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab(null)}
+              className="text-[11px] text-[var(--color-laburante-text-muted)] hover:text-[var(--color-laburante-text)] underline cursor-pointer"
+            >
+              Ver todos los módulos
+            </button>
+          </div>
+        </div>
+      )}
 
-        <button
-          onClick={() => { setActiveTab('messages'); loadAdminConversations() }}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
-            activeTab === 'messages'
-              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
-              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
-          }`}
-        >
-          <MessageCircle size={16} />
-          Mensajes
-        </button>
+      {activeTab === 'legal' && (
+        <div className="space-y-6">
+          {/* Header informativo y de alcance legal */}
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
+            <div className="flex items-center gap-2 text-indigo-900">
+              <Scale size={20} />
+              <h2 className="font-heading text-lg font-bold">Auditoría de mayoría de edad y aceptación legal</h2>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-indigo-950/80">
+              Registro inmutable de aceptaciones de Términos y Condiciones y declaración expresa de ser mayor de 18 años.
+              Versión vigente actual del sistema: <strong className="font-mono bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded text-[11px]">{CURRENT_TERMS_VERSION}</strong>.
+            </p>
+            <div className="mt-3 text-[11px] leading-relaxed text-indigo-900/70 border-t border-indigo-200/60 pt-2 flex items-center gap-1.5">
+              <span>ℹ️</span>
+              <span>
+                <strong>Criterio de auditoría:</strong> La ausencia de registro refleja cuentas creadas con anterioridad a la implementación del registro inmutable o pendientes de revalidación. La manifestación es voluntaria del usuario y no constituye comprobación biométrica ni documental de identidad.
+              </span>
+            </div>
+          </div>
 
-        <button
-          onClick={() => setActiveTab('companies')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'companies' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
-        >
-          <Building2 size={16} /> Empresas ({profiles.filter((p) => p.account_type === 'empresa').length})
-        </button>
-        <button
-          onClick={() => { setActiveTab('company_ops'); loadCompanyOperations() }}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
-            activeTab === 'company_ops'
-              ? 'border-indigo-500 text-indigo-600'
-              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
-          }`}
-        >
-          <Briefcase size={16} /> Operaciones Empresa ({companyOps.inquiries.length + companyOps.interviews.length})
-        </button>
+          {/* Tarjetas de métricas del módulo */}
+          <div className="grid gap-3 sm:grid-cols-4">
+            <article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4 shadow-2xs">
+              <p className="text-xs font-semibold text-[var(--color-laburante-text-muted)]">Usuarios en directorio</p>
+              <p className="mt-1 font-heading text-2xl font-extrabold text-[var(--color-laburante-text)]">{profiles.length}</p>
+              <p className="text-[11px] text-[var(--color-laburante-text-secondary)] mt-1">Total de perfiles registrados</p>
+            </article>
 
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
-            activeTab === 'reports'
-              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
-              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
-          }`}
-        >
-          <AlertTriangle size={16} />
-          Reportes ({reports.length})
-          {pendingReportsCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
-              {pendingReportsCount}
-            </span>
-          )}
-        </button>
+            <article className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs">
+              <p className="text-xs font-semibold text-emerald-900">Aceptación vigente (18+)</p>
+              <p className="mt-1 font-heading text-2xl font-extrabold text-emerald-950">{legalVigenteCount}</p>
+              <p className="text-[11px] text-emerald-800 mt-1">Con versión {CURRENT_TERMS_VERSION}</p>
+            </article>
 
-        <button
-          onClick={() => setActiveTab('profiles')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
-            activeTab === 'profiles'
-              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
-              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
-          }`}
-        >
-          <Users size={16} />
-          Perfiles ({profiles.length})
-        </button>
+            <article className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-2xs">
+              <p className="text-xs font-semibold text-amber-900">Versión anterior</p>
+              <p className="mt-1 font-heading text-2xl font-extrabold text-amber-950">{legalAnteriorCount}</p>
+              <p className="text-[11px] text-amber-800 mt-1">Aceptaron versiones previas</p>
+            </article>
 
-        <button
-          onClick={() => setActiveTab('deletions')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
-            activeTab === 'deletions'
-              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
-              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
-          }`}
-        >
-          <Trash2 size={16} />
-          Bajas y Motivos ({deletions.length})
-        </button>
+            <article className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 shadow-2xs">
+              <p className="text-xs font-semibold text-slate-700">Sin registro / Pendiente</p>
+              <p className="mt-1 font-heading text-2xl font-extrabold text-slate-900">{legalPendienteCount}</p>
+              <p className="text-[11px] text-slate-600 mt-1">Cuentas históricas o sin registrar</p>
+            </article>
+          </div>
 
-        <button
-          onClick={() => setActiveTab('reviews')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${
-            activeTab === 'reviews'
-              ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]'
-              : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
-          }`}
-        >
-          <Star size={16} />
-          Reseñas ({recommendations.length})
-          {pendingReviewsCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-              {pendingReviewsCount}
-            </span>
-          )}
-        </button>
+          {/* Filtros y búsqueda */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[var(--color-laburante-surface)] border border-[var(--color-laburante-border)] p-4 rounded-2xl shadow-2xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  { key: 'todos', label: 'Todos', count: legalUsersList.length },
+                  { key: 'vigente', label: 'Vigentes (18+)', count: legalVigenteCount },
+                  { key: 'anterior', label: 'Versión previa', count: legalAnteriorCount },
+                  { key: 'pendiente', label: 'Sin registro', count: legalPendienteCount },
+                ] as const
+              ).map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => {
+                    setLegalFilter(f.key)
+                    setLegalPage(1)
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                    legalFilter === f.key
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
+                  }`}
+                >
+                  {f.label} ({f.count})
+                </button>
+              ))}
+            </div>
 
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`pb-3 px-4 font-heading font-semibold text-xs sm:text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 shrink-0 cursor-pointer ${activeTab === 'settings' ? 'border-[var(--color-laburante-indigo)] text-[var(--color-laburante-indigo)]' : 'border-transparent text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'}`}
-        >
-          <KeyRound size={16} /> Configuración
-        </button>
-      </div>
+            <div className="relative min-w-[240px] sm:w-72">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, slug o correo..."
+                value={legalSearch}
+                onChange={(e) => {
+                  setLegalSearch(e.target.value)
+                  setLegalPage(1)
+                }}
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-[var(--color-laburante-text)] focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+          </div>
+
+          {/* Tabla de auditoría */}
+          <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/60 text-[var(--color-laburante-text-muted)] font-semibold uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-4">Usuario / Cuenta</th>
+                    <th className="py-3 px-4">Tipo de cuenta</th>
+                    <th className="py-3 px-4">Mayoría de edad (18+)</th>
+                    <th className="py-3 px-4">Versión de términos</th>
+                    <th className="py-3 px-4">Fecha y hora (UTC / Local)</th>
+                    <th className="py-3 px-4 text-right">Historial</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-laburante-border)]">
+                  {filteredLegalUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-[var(--color-laburante-text-muted)]">
+                        No se encontraron usuarios que coincidan con los filtros aplicados.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredLegalUsers
+                      .slice((legalPage - 1) * 20, legalPage * 20)
+                      .map(({ profile, status, currentAcceptance, latestAcceptance, allAcceptances }) => {
+                        const accToDisplay = currentAcceptance || latestAcceptance
+                        return (
+                          <tr key={profile.id} className="hover:bg-[var(--color-laburante-surface-alt)]/40 transition-colors">
+                            {/* Usuario */}
+                            <td className="py-3.5 px-4">
+                              <div className="font-semibold text-[var(--color-laburante-text)]">
+                                {profile.name || 'Sin nombre'}
+                              </div>
+                              <div className="text-[11px] text-[var(--color-laburante-text-muted)] font-mono">
+                                {profile.slug ? `@${profile.slug}` : profile.id.slice(0, 8)}
+                              </div>
+                              {profile.auth_email && (
+                                <div className="text-[11px] text-slate-500 mt-0.5">
+                                  {profile.auth_email}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Tipo de cuenta */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <span className="capitalize px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700">
+                                {profile.account_type === 'empresa' ? 'Empresa' : 'Personal'}
+                              </span>
+                            </td>
+
+                            {/* Mayoría de edad (18+) */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              {status === 'vigente' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-200">
+                                  <CheckCircle size={12} />
+                                  Declaró +18 años
+                                </span>
+                              ) : status === 'anterior' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-100 text-amber-900 border border-amber-200">
+                                  <Clock size={12} />
+                                  Registrado previo
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                  <AlertCircle size={12} />
+                                  Pendiente / Previa a regla
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Versión de términos */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              {status === 'vigente' && currentAcceptance ? (
+                                <span className="font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold text-[11px]">
+                                  {currentAcceptance.terms_version} (Vigente)
+                                </span>
+                              ) : status === 'anterior' && latestAcceptance ? (
+                                <span className="font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px]">
+                                  {latestAcceptance.terms_version} (Anterior)
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-[var(--color-laburante-text-muted)] italic">
+                                  Sin registro
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Fecha y hora */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              {accToDisplay ? (
+                                <div>
+                                  <div className="text-[11px] text-[var(--color-laburante-text)] font-medium">
+                                    {new Date(accToDisplay.accepted_at).toLocaleDateString('es-AR', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric',
+                                    })}
+                                  </div>
+                                  <div className="text-[10px] text-[var(--color-laburante-text-muted)]">
+                                    {new Date(accToDisplay.accepted_at).toLocaleTimeString('es-AR', {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      second: '2-digit',
+                                    })} hs
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-[var(--color-laburante-text-muted)] italic">
+                                  No disponible
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Historial / Registros */}
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              {allAcceptances.length > 0 ? (
+                                <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">
+                                  {allAcceptances.length} {allAcceptances.length === 1 ? 'registro' : 'registros'}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-slate-400">0</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Paginación */}
+            {filteredLegalUsers.length > 20 && (
+              <div className="p-4 border-t border-[var(--color-laburante-border)] flex items-center justify-between text-xs">
+                <span className="text-[var(--color-laburante-text-muted)]">
+                  Mostrando {(legalPage - 1) * 20 + 1} - {Math.min(legalPage * 20, filteredLegalUsers.length)} de {filteredLegalUsers.length} usuarios
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={legalPage === 1}
+                    onClick={() => setLegalPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-1 rounded-lg border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] disabled:opacity-40 cursor-pointer"
+                  >
+                    Anterior
+                  </button>
+                  <span className="px-2 font-bold text-slate-700">
+                    Página {legalPage} de {Math.ceil(filteredLegalUsers.length / 20)}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={legalPage >= Math.ceil(filteredLegalUsers.length / 20)}
+                    onClick={() => setLegalPage((p) => p + 1)}
+                    className="px-3 py-1 rounded-lg border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] disabled:opacity-40 cursor-pointer"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {activeTab === 'analytics' && (
         <div className="space-y-5">
