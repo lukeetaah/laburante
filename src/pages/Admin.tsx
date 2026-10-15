@@ -3498,6 +3498,14 @@ export default function Admin() {
                           <span>ID: {rec.to_profile_id}</span>
                         )}
                       </p>
+                      {typeof rec.rating === 'number' && (
+                        <p className="inline-flex items-center gap-1 font-semibold text-amber-700">
+                          <Star size={14} className="fill-amber-400 text-amber-500" /> {rec.rating}/5 — puntuación explícita
+                        </p>
+                      )}
+                      {rec.job_request_id && (
+                        <p className="text-[11px] text-emerald-700">Experiencia vinculada: {rec.job_request_id}</p>
+                      )}
                       {rec.context && (
                         <p className="text-[11px] text-[var(--color-laburante-indigo)] font-medium">
                           <strong>Trabajo realizado:</strong> {rec.context}

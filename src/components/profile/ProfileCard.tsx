@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Briefcase, Star } from 'lucide-react'
+import { MapPin, Briefcase } from 'lucide-react'
 import type { ProfileWithDetails } from '@/stores/profile-store'
 import { formatModality } from '@/lib/profile-format'
+import ReviewStars from './ReviewStars'
 
 interface ProfileCardProps {
   profile: ProfileWithDetails
@@ -26,7 +27,7 @@ export default function ProfileCard({ profile }: ProfileCardProps) {
                   className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
                   title="Número de WhatsApp verificado por LABURANTE"
                 >
-                  ✓ Verificado
+                  ✓ Número verificado
                 </span>
               )}
             </div>
@@ -69,7 +70,7 @@ export default function ProfileCard({ profile }: ProfileCardProps) {
         <div className="flex items-center gap-3 text-[var(--color-laburante-text-muted)] font-medium">
           <Briefcase size={13} />
           <span>{formatModality(profile.modalidad, profile.hybrid_presencial_pct, profile.hybrid_remoto_pct)}</span>
-          {!!profile.recommendations?.length && <span className="inline-flex items-center gap-1 text-amber-700" title="Reseñas publicadas"><Star size={13} className="fill-amber-400" /> {profile.recommendations.length}</span>}
+          {!!profile.review_count && <span className="inline-flex items-center gap-1 text-amber-700" title="Reseñas publicadas"><ReviewStars value={profile.review_average || 0} size={13} /> {profile.review_average?.toFixed(1)} · {profile.review_count}</span>}
         </div>
         <Link
           to={`/p/${profile.slug}`}

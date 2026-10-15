@@ -49,7 +49,7 @@ const REJECTION_REASONS = [
 ]
 
 export default function OrdersDashboard() {
-  const { user } = useAuthStore()
+  const { user, loading: authLoading } = useAuthStore()
   const { myProfile, fetchMyProfile } = useProfileStore()
   const companyAccount = isCompanyAccount(user, myProfile)
   const {
@@ -109,45 +109,46 @@ export default function OrdersDashboard() {
   }, [searchParams, selectedJobId, selectedCompanyInquiryId])
 
   useEffect(() => {
+    if (authLoading || !user) return
+
     fetchMyRequests()
-    if (user) {
-      fetchMyProfile()
-      fetchMyJobs()
-      if (!companyAccount) {
-        ;(async () => {
-          const { data } = await (supabase.from('company_candidate_inquiries') as any)
-            .select('*').eq('profile_id', user.id).order('created_at', { ascending: false })
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const staleIds = (data || []).filter((item: any) => item.status === 'pendiente' && !isArchivedInquiry(item) && new Date(item.created_at) < today).map((item: any) => item.id)
-          if (staleIds.length) await (supabase.from('company_candidate_inquiries') as any).update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }).in('id', staleIds).eq('profile_id', user.id)
-          const normalized = (data || []).map((item: any) => staleIds.includes(item.id) ? { ...item, archived_at: new Date().toISOString() } : item)
-          const companyIds = Array.from(new Set(normalized.map((item: any) => item.company_id).filter(Boolean)))
-          let companies: any[] = []
-          if (companyIds.length) {
-            const { data: authCompanies } = await (supabase.from('authenticated_company_profiles') as any)
+    fetchMyProfile()
+    fetchMyJobs()
+
+    if (!companyAccount) {
+      ;(async () => {
+        const { data } = await (supabase.from('company_candidate_inquiries') as any)
+          .select('*').eq('profile_id', user.id).order('created_at', { ascending: false })
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const staleIds = (data || []).filter((item: any) => item.status === 'pendiente' && !isArchivedInquiry(item) && new Date(item.created_at) < today).map((item: any) => item.id)
+        if (staleIds.length) await (supabase.from('company_candidate_inquiries') as any).update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }).in('id', staleIds).eq('profile_id', user.id)
+        const normalized = (data || []).map((item: any) => staleIds.includes(item.id) ? { ...item, archived_at: new Date().toISOString() } : item)
+        const companyIds = Array.from(new Set(normalized.map((item: any) => item.company_id).filter(Boolean)))
+        let companies: any[] = []
+        if (companyIds.length) {
+          const { data: authCompanies } = await (supabase.from('authenticated_company_profiles') as any)
+            .select('id, name, slug, photo_url, provincia, localidad')
+            .in('id', companyIds)
+          if (authCompanies && authCompanies.length > 0) {
+            companies = authCompanies
+          } else {
+            const { data: pubCompanies } = await (supabase.from('public_profiles') as any)
               .select('id, name, slug, photo_url, provincia, localidad')
               .in('id', companyIds)
-            if (authCompanies && authCompanies.length > 0) {
-              companies = authCompanies
-            } else {
-              const { data: pubCompanies } = await (supabase.from('public_profiles') as any)
-                .select('id, name, slug, photo_url, provincia, localidad')
-                .in('id', companyIds)
-              companies = pubCompanies || []
-            }
+            companies = pubCompanies || []
           }
-          const companyById = new Map((companies || []).map((company: any) => [company.id, company]))
-          const hydrated = normalized.map((item: any) => ({ ...item, company: companyById.get(item.company_id) }))
-          setCompanyInquiries(hydrated)
-          if (selectedCompanyInquiryId) {
-            const selected = hydrated.find((item: any) => item.id === selectedCompanyInquiryId)
-            if (selected) setSelectedCompanyInquiry(selected)
-          }
-        })()
-      }
+        }
+        const companyById = new Map((companies || []).map((company: any) => [company.id, company]))
+        const hydrated = normalized.map((item: any) => ({ ...item, company: companyById.get(item.company_id) }))
+        setCompanyInquiries(hydrated)
+        if (selectedCompanyInquiryId) {
+          const selected = hydrated.find((item: any) => item.id === selectedCompanyInquiryId)
+          if (selected) setSelectedCompanyInquiry(selected)
+        }
+      })()
     }
-  }, [user, companyAccount, fetchMyRequests, fetchMyJobs, fetchMyProfile, selectedCompanyInquiryId])
+  }, [authLoading, user, companyAccount, fetchMyRequests, fetchMyJobs, fetchMyProfile, selectedCompanyInquiryId])
 
   // Explicit navigation state takes priority over the automatic professional default.
   useEffect(() => {
@@ -164,26 +165,43 @@ export default function OrdersDashboard() {
 
   const currentList = activeTab === 'cliente' ? clientRequests : proJobs
 
+  // Conceptos formales de ciclo de vida para clasificación consistente
+  const isJobArchived = (item: any) => Boolean(item?.archived_at)
+  const isJobFinished = (item: any) =>
+    item?.status === 'completado' ||
+    item?.client_outcome === 'completado' ||
+    item?.professional_outcome === 'completado'
+  const isJobCancelled = (item: any) =>
+    item?.status === 'cancelado' ||
+    item?.client_outcome === 'cancelado' ||
+    item?.professional_outcome === 'cancelado' ||
+    item?.client_outcome === 'no_realizado' ||
+    item?.professional_outcome === 'no_realizado'
+  const isJobActive = (item: any) =>
+    !isJobArchived(item) &&
+    !isJobFinished(item) &&
+    !isJobCancelled(item) &&
+    ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(item?.status)
+
   const filteredList = currentList.filter((item) => {
-    const archived = Boolean((item as any).archived_at)
     if (statusFilter === 'activos') {
-      return !archived && ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(item.status)
+      return isJobActive(item)
     }
     if (statusFilter === 'completados') {
-      return !archived && item.status === 'completado'
+      return !isJobArchived(item) && isJobFinished(item)
     }
     if (statusFilter === 'cancelados') {
-      return !archived && item.status === 'cancelado'
+      return !isJobArchived(item) && isJobCancelled(item) && !isJobFinished(item)
     }
     if (statusFilter === 'archivados') {
-      return archived
+      return isJobArchived(item)
     }
     return true
   }).sort((a, b) => {
     const priority = (item: JobRequestWithDetails) => {
-      if ((item as any).archived_at) return 3
-      if (['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(item.status)) return 0
-      if (item.status === 'completado') return 1
+      if (isJobArchived(item)) return 3
+      if (isJobActive(item)) return 0
+      if (isJobFinished(item)) return 1
       return 2
     }
     return priority(a) - priority(b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -199,16 +217,12 @@ export default function OrdersDashboard() {
     return focusContextualElement({ attribute: 'data-inquiry-id', value: selectedCompanyInquiryId })
   }, [selectedCompanyInquiryId, companyInquiries.length, showArchivedCompany])
 
-  const activeCount = currentList.filter((i) =>
-    !(i as any).archived_at && ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(i.status)
-  ).length
-  const archivedCount = currentList.filter((i) => Boolean((i as any).archived_at)).length
-  const pendingClientCount = clientRequests.filter((item) =>
-    !(item as any).archived_at && ['solicitado', 'presupuestado', 'aceptado', 'en_progreso'].includes(item.status)
-  ).length
-  const historicalCount = currentList.filter((i) =>
-    Boolean((i as any).archived_at) || ['completado', 'cancelado'].includes(i.status)
-  ).length
+  const activeCount = currentList.filter(isJobActive).length
+  const completedCount = currentList.filter((i) => !isJobArchived(i) && isJobFinished(i)).length
+  const cancelledCount = currentList.filter((i) => !isJobArchived(i) && isJobCancelled(i) && !isJobFinished(i)).length
+  const archivedCount = currentList.filter(isJobArchived).length
+  const pendingClientCount = clientRequests.filter(isJobActive).length
+  const historicalCount = currentList.filter((i) => isJobArchived(i) || isJobFinished(i) || isJobCancelled(i)).length
 
   const handleOpenWhatsApp = (phone: string, text: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '')
@@ -399,6 +413,47 @@ export default function OrdersDashboard() {
     } finally {
       setSendingMessage(false)
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="container py-24 text-center space-y-3">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-indigo-600 border-t-transparent" />
+        <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Cargando tus pedidos y trabajos...</p>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container py-16 sm:py-24 max-w-lg mx-auto text-center space-y-5 px-4">
+        <div className="h-16 w-16 rounded-2xl bg-indigo-50 text-indigo-600 mx-auto flex items-center justify-center border border-indigo-100 shadow-2xs">
+          <Briefcase size={28} />
+        </div>
+        <div className="space-y-2">
+          <h1 className="font-heading text-2xl font-extrabold text-[var(--color-laburante-text)]">
+            Accedé para ver «Mis trabajos»
+          </h1>
+          <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] leading-relaxed">
+            Iniciá sesión para consultar tus pedidos de presupuesto, el seguimiento de tus trabajos y las conversaciones oficiales.
+          </p>
+        </div>
+        <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            to="/ingresar?redirect=/mis-trabajos"
+            className="btn-dark inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold shadow-sm"
+          >
+            Iniciar sesión <ArrowRight size={16} />
+          </Link>
+          <Link
+            to="/registrar"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-5 py-3 text-sm font-semibold text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]"
+          >
+            Crear cuenta
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -668,17 +723,26 @@ export default function OrdersDashboard() {
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[var(--color-laburante-border)]">
         <div className="flex items-center gap-2">
-          {(['activos', 'completados', 'cancelados', 'archivados', 'todos'] as const).map((filterKey) => (
+          {([
+            { key: 'activos', label: 'Activos', count: activeCount },
+            { key: 'completados', label: 'Completados', count: completedCount },
+            { key: 'cancelados', label: 'Cancelados', count: cancelledCount },
+            { key: 'archivados', label: 'Archivados', count: archivedCount },
+            { key: 'todos', label: 'Todos', count: currentList.length },
+          ] as const).map(({ key, label, count }) => (
             <button
-              key={filterKey}
-              onClick={() => setStatusFilter(filterKey)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium capitalize transition-colors ${
-                statusFilter === filterKey
+              key={key}
+              onClick={() => setStatusFilter(key)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                statusFilter === key
                   ? 'bg-[var(--color-laburante-text)] text-white font-semibold'
                   : 'text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)]'
               }`}
             >
-              {filterKey}
+              <span>{label}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${statusFilter === key ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                {count}
+              </span>
             </button>
           ))}
         </div>
@@ -686,6 +750,11 @@ export default function OrdersDashboard() {
         {activeCount > 0 && (
           <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
             {activeCount} {activeCount === 1 ? 'trabajo activo' : 'trabajos activos'}
+          </span>
+        )}
+        {completedCount > 0 && (
+          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+            {completedCount} terminado{completedCount === 1 ? '' : 's'}
           </span>
         )}
         {archivedCount > 0 && (

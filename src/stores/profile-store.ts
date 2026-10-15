@@ -35,6 +35,8 @@ export interface ProfileWithDetails {
   notify_whatsapp?: boolean
   created_at: string
   updated_at?: string
+  review_average?: number
+  review_count?: number
   categories?: string[]
   skills?: string[]
   services?: { title: string; description: string | null; precio_orientativo?: string | null }[]
@@ -50,11 +52,19 @@ export interface ProfileWithDetails {
     from_name: string
     text: string
     context: string | null
+    rating?: number
+    job_request_id?: string | null
     date?: string
     created_at?: string
-    status?: 'pendiente' | 'visible' | 'oculto' | 'reportado'
+    status?: 'pendiente' | 'visible' | 'oculto' | 'reportado' | 'caducada'
   }[]
   languages?: { language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue' | 'nativo'; is_public: boolean }[]
+}
+
+export interface ReviewableJob {
+  id: string
+  title: string
+  created_at: string
 }
 
 export interface AccountDeletionRecord {
@@ -106,7 +116,8 @@ interface ProfileState {
   adminCleanupAbandonedAccounts: (dryRun?: boolean) => Promise<{ error: string | null; results?: any[] }>
   deleteAccount: (profileId: string, payload: { reason: string; explanation: string; userEmail?: string }) => Promise<{ error: string | null; success?: boolean }>
   fetchAccountDeletions: () => Promise<AccountDeletionRecord[]>
-  submitRecommendation: (profileId: string, data: { from_name: string; text: string; context?: string }) => Promise<{ error: string | null }>
+  fetchReviewableJobs: (profileId: string) => Promise<ReviewableJob[]>
+  submitRecommendation: (profileId: string, data: { job_request_id: string; rating: number; text: string; context?: string }) => Promise<{ error: string | null }>
   updateRecommendation: (recommendationId: string, data: { text: string; context?: string }) => Promise<{ error: string | null }>
   moderateRecommendation: (recommendationId: string, status: 'visible' | 'oculto') => Promise<{ error: string | null }>
   deleteRecommendation: (recommendationId: string) => Promise<{ error: string | null }>
@@ -338,14 +349,15 @@ async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]>
   const profileIds = rows.map((row) => row.id).filter(Boolean)
   if (!profileIds.length) return []
 
-  const [{ data: authData }, [skillsResult, servicesResult, contactsResult, languagesResult, recommendationsResult]] = await Promise.all([
+  const [{ data: authData }, [skillsResult, servicesResult, contactsResult, languagesResult, recommendationsResult, reputationResult]] = await Promise.all([
     supabase.auth.getUser(),
     Promise.all([
       (supabase.from('public_profile_skills') as any).select('profile_id, name').in('profile_id', profileIds),
       (supabase.from('public_profile_services') as any).select('profile_id, title, description, precio_orientativo').in('profile_id', profileIds),
       (supabase.from('public_profile_contacts') as any).select('profile_id, type, value, is_public').in('profile_id', profileIds),
       (supabase.from('public_profile_languages') as any).select('profile_id, language, level, is_public').in('profile_id', profileIds),
-      (supabase.from('public_profile_recommendations') as any).select('id, to_profile_id, from_name, text, context, created_at, status, is_author').in('to_profile_id', profileIds),
+      (supabase.from('public_profile_recommendations') as any).select('id, to_profile_id, from_name, text, context, created_at, status, is_author, rating').in('to_profile_id', profileIds),
+      (supabase.from('public_profile_reputation') as any).select('profile_id, average_rating, review_count').in('profile_id', profileIds),
     ]),
   ])
   const currentUserId = authData.user?.id || null
@@ -364,7 +376,16 @@ async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]>
   const servicesByProfile = byProfile(servicesResult.data)
   const contactsByProfile = byProfile(contactsResult.data)
   const languagesByProfile = byProfile(languagesResult.data)
-  const recommendationsByProfile = byProfile(recommendationsResult.data, 'to_profile_id')
+  let publicRecommendations = recommendationsResult
+  if (recommendationsResult.error) {
+    // Compatibilidad durante el despliegue gradual: las reseñas siguen siendo
+    // legibles aunque la vista aún no tenga la columna rating.
+    publicRecommendations = await (supabase.from('public_profile_recommendations') as any)
+      .select('id, to_profile_id, from_name, text, context, created_at, status, is_author')
+      .in('to_profile_id', profileIds)
+  }
+  const recommendationsByProfile = byProfile(publicRecommendations.data, 'to_profile_id')
+  const reputationByProfile = new Map<string, any>((reputationResult.data || []).map((item: any) => [item.profile_id, item]))
 
   return Promise.all(rows.map(async (row) => ({
     ...row,
@@ -377,6 +398,8 @@ async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]>
     whatsapp_verified: Boolean(row.whatsapp_verified),
     whatsapp_verified_at: null,
     created_at: '',
+    review_average: Number(reputationByProfile.get(row.id)?.average_rating || 0),
+    review_count: Number(reputationByProfile.get(row.id)?.review_count || 0),
     skills: (skillsByProfile.get(row.id) || []).map((item: any) => item.name),
     services: servicesByProfile.get(row.id) || [],
     contact_methods: dedupeContactMethods((contactsByProfile.get(row.id) || []) as any),
@@ -538,7 +561,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           skills ( name ),
           services ( title, description, precio_orientativo ),
           contact_methods ( id, type, value, is_public ),
-          recommendations ( id, from_user_id, from_name, text, context, created_at, status ),
+          recommendations ( id, from_user_id, from_name, text, context, rating, job_request_id, created_at, status ),
           profile_languages ( language, level, is_public )
         `)
         .eq('id', userId)
@@ -559,11 +582,17 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
 
       const item = data as any
+      const { data: reputation } = await (supabase.from('public_profile_reputation') as any)
+        .select('average_rating, review_count')
+        .eq('profile_id', userId)
+        .maybeSingle()
       const profile: ProfileWithDetails = {
         ...item,
         photo_url: await resolveProfilePhotoUrl(item.photo_url),
         whatsapp_verified: Boolean(item.whatsapp_verified),
         whatsapp_verified_at: item.whatsapp_verified_at || null,
+        review_average: Number(reputation?.average_rating || 0),
+        review_count: Number(reputation?.review_count || 0),
         skills: item.skills?.map((s: any) => s.name) || [],
         services: item.services || [],
         contact_methods: dedupeContactMethods(item.contact_methods || []),
@@ -1235,14 +1264,36 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     return local
   },
 
+  fetchReviewableJobs: async (profileId) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData.user) return []
+      const { data, error } = await (supabase.from('job_requests') as any)
+        .select('id, title, created_at')
+        .eq('client_id', userData.user.id)
+        .eq('profile_id', profileId)
+        .eq('status', 'completado')
+        .order('created_at', { ascending: false })
+      if (error) {
+        captureAppError(error, 'reviewable_jobs_load')
+        return []
+      }
+      return (data || []) as ReviewableJob[]
+    } catch (err) {
+      captureAppError(err, 'reviewable_jobs_load')
+      return []
+    }
+  },
+
   submitRecommendation: async (profileId, data) => {
     addAppBreadcrumb('review_submit_started')
     try {
-      if (!data.from_name?.trim()) {
-        return { error: 'Por favor ingresá tu nombre o iniciales.' }
-      }
       if (!data.text || data.text.trim().length < 10) {
         return { error: 'La reseña debe tener al menos 10 caracteres.' }
+      }
+      if (!data.job_request_id) return { error: 'Seleccioná el trabajo realizado.' }
+      if (!Number.isInteger(data.rating) || data.rating < 1 || data.rating > 5) {
+        return { error: 'Seleccioná una puntuación de 1 a 5 estrellas.' }
       }
 
       const { data: userData } = await supabase.auth.getUser()
@@ -1253,40 +1304,32 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return { error: 'No podés escribir una reseña sobre tu propio perfil.' }
       }
 
-      // Obtener el nombre real del perfil del autor autenticado
-      const authorProfile = get().myProfile
-      const authorName = authorProfile?.name || userData.user.user_metadata?.name || userData.user.user_metadata?.full_name || data.from_name?.trim() || 'Usuario de LABURANTE'
-
-      const { data: inserted, error } = await (supabase.from('recommendations') as any).insert({
-        to_profile_id: profileId,
-        from_name: authorName,
-        text: data.text.trim(),
-        context: data.context?.trim() || null,
-        from_user_id: userData.user.id,
-        status: 'pendiente'
-      }).select('id').single()
+      const authorName = get().myProfile?.name || 'Usuario de LABURANTE'
+      const { data: inserted, error } = await (supabase.rpc as any)('submit_review', {
+        p_target_profile_id: profileId,
+        p_job_request_id: data.job_request_id,
+        p_rating: data.rating,
+        p_text: data.text.trim(),
+        p_context: data.context?.trim() || null,
+      })
 
       if (error) return { error: error.message }
-      const insertedId = inserted?.id
+      const insertedId = typeof inserted === 'string' ? inserted : inserted?.id
 
-      // Optimistically append new review to currentProfile if matching
       const current = get().currentProfile
       if (current && (current.id === profileId || current.slug === profileId)) {
         const newRec = {
           id: insertedId || `rec_${Date.now()}`,
-          from_user_id: userData?.user?.id || null,
-          from_name: data.from_name.trim(),
+          from_user_id: userData.user.id,
+          from_name: authorName,
           text: data.text.trim(),
           context: data.context?.trim() || null,
+          rating: data.rating,
+          job_request_id: data.job_request_id,
           created_at: new Date().toISOString(),
           status: 'pendiente' as const
         }
-        set({
-          currentProfile: {
-            ...current,
-            recommendations: [newRec, ...(current.recommendations || [])]
-          }
-        })
+        set({ currentProfile: { ...current, recommendations: [newRec, ...(current.recommendations || [])] } })
       }
 
       if (insertedId && userData?.user?.id) {

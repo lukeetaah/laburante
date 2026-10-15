@@ -124,9 +124,12 @@ CREATE TABLE IF NOT EXISTS public.recommendations (
     from_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     from_name TEXT NOT NULL,
     to_profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    job_request_id UUID,
+    rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
     text TEXT NOT NULL CHECK (char_length(trim(text)) >= 10),
     context TEXT,
-    status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'visible', 'oculto', 'reportado')),
+    status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'visible', 'oculto', 'reportado', 'caducada')),
+    expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

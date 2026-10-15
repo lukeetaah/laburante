@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const CRON_SECRET = Deno.env.get('CRON_SECRET') || ''
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
 const SITE_URL = Deno.env.get('SITE_URL') || 'https://laburante.ar'
 const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'notificaciones@laburante.ar'
@@ -42,7 +43,7 @@ function corsHeaders(request: Request) {
   const origin = request.headers.get('Origin') || ''
   return {
     'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : SITE_URL,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-region, baggage, traceparent, tracestate, sentry-trace',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-region, baggage, traceparent, tracestate, sentry-trace, x-cron-secret',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json',
   }
@@ -110,7 +111,26 @@ async function updateDelivery(admin: ReturnType<typeof createClient>, notificati
   await admin.from('notification_email_deliveries').update({ ...values, updated_at: new Date().toISOString() }).eq('notification_id', notificationId)
 }
 
-async function isValidNotificationContext(admin: ReturnType<typeof createClient>, notification: Notification, actor: { id: string; app_metadata?: Record<string, unknown> }) {
+async function isValidNotificationContext(
+  admin: ReturnType<typeof createClient>,
+  notification: Notification,
+  actor: { id: string; app_metadata?: Record<string, unknown> },
+  systemDispatch = false,
+) {
+  if (systemDispatch) {
+    if (notification.created_by !== null || notification.type !== 'system') return false
+    if (notification.link === '/crear-perfil') {
+      const { data: targetProfile } = await admin.from('profiles').select('id').eq('id', notification.user_id).maybeSingle()
+      return Boolean(targetProfile)
+    }
+    if (notification.link?.startsWith('/p/')) {
+      const slug = decodeURIComponent(notification.link.slice(3))
+      const { data: targetProfile } = await admin.from('profiles').select('id').eq('id', notification.user_id).eq('slug', slug).maybeSingle()
+      return Boolean(targetProfile)
+    }
+    return false
+  }
+
   if (notification.link === '/crear-perfil') {
     if (actor.app_metadata?.role !== 'admin') return false
     const { data: targetProfile } = await admin.from('profiles').select('id').eq('id', notification.user_id).maybeSingle()
@@ -190,15 +210,20 @@ Deno.serve(async (request) => {
   if (request.method !== 'POST') return json(request, { error: 'method_not_allowed' }, 405)
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) return json(request, { error: 'email_service_unavailable' }, 503)
 
+  const cronDispatch = Boolean(CRON_SECRET && request.headers.get('x-cron-secret') === CRON_SECRET)
   const authorization = request.headers.get('Authorization')
-  if (!authorization) return json(request, { error: 'unauthorized' }, 401)
+  if (!authorization && !cronDispatch) return json(request, { error: 'unauthorized' }, 401)
 
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authorization } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-  const { data: authData, error: authError } = await userClient.auth.getUser()
-  if (authError || !authData.user) return json(request, { error: 'unauthorized' }, 401)
+  let authData: { user: { id: string; app_metadata?: Record<string, unknown> } | null } = { user: null }
+  if (!cronDispatch) {
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authorization! } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const userResult = await userClient.auth.getUser()
+    if (userResult.error || !userResult.data.user) return json(request, { error: 'unauthorized' }, 401)
+    authData = { user: userResult.data.user }
+  }
 
   let body: { notification_id?: unknown }
   try {
@@ -220,11 +245,16 @@ Deno.serve(async (request) => {
     .eq('id', notificationId)
     .maybeSingle() as { data: Notification | null; error: { message: string } | null }
 
-  if (notificationError || !notification || notification.created_by !== authData.user.id) {
+  if (notificationError || !notification || (!cronDispatch && notification.created_by !== authData.user!.id)) {
     return json(request, { error: 'notification_not_found' }, 404)
   }
   if (!allowedTypes.has(notification.type)) return json(request, { error: 'notification_type_not_allowed' }, 400)
-  if (!await isValidNotificationContext(admin, notification, authData.user)) {
+  if (!await isValidNotificationContext(
+    admin,
+    notification,
+    authData.user || { id: '', app_metadata: {} },
+    cronDispatch,
+  )) {
     console.warn('notification_email_invalid_context', { notificationId })
     return json(request, { ok: true, status: 'skipped', reason: 'invalid_context' })
   }
@@ -277,7 +307,7 @@ Deno.serve(async (request) => {
     return json(request, { ok: true, status: 'skipped', reason })
   }
 
-  const effectiveFrom = (notification.link?.includes('conversacion=') && authData.user.app_metadata?.role === 'admin')
+  const effectiveFrom = (notification.link?.includes('conversacion=') && authData.user?.app_metadata?.role === 'admin')
     ? ADMIN_FROM_EMAIL
     : FROM_EMAIL
 

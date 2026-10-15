@@ -90,10 +90,13 @@ export type Database = {
           from_user_id: string | null
           from_name: string
           to_profile_id: string
+          job_request_id: string | null
+          rating: number
           text: string
           context: string | null
+          expires_at?: string | null
           created_at: string
-          status: 'pendiente' | 'visible' | 'oculto' | 'reportado'
+          status: 'pendiente' | 'visible' | 'oculto' | 'reportado' | 'caducada'
         }
         Insert: Omit<Database['public']['Tables']['recommendations']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['recommendations']['Insert']>
@@ -273,6 +276,20 @@ export type Database = {
       notify_review: {
         Args: { target_recommendation_id: string }
         Returns: string
+      }
+      submit_review: {
+        Args: {
+          p_target_profile_id: string
+          p_job_request_id: string
+          p_rating: number
+          p_text: string
+          p_context?: string | null
+        }
+        Returns: string
+      }
+      touch_my_activity: {
+        Args: Record<string, never>
+        Returns: boolean
       }
       notify_profile_whatsapp_verified: {
         Args: { target_profile_id: string }

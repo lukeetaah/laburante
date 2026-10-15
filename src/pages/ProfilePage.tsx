@@ -10,6 +10,7 @@ import CompanyProfileActions from '@/components/profile/CompanyProfileActions'
 import EmailPreferencesToggle from '@/components/notifications/EmailPreferencesToggle'
 import ProfileCompletionCard from '@/components/profile/ProfileCompletionCard'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
+import ReviewStars from '@/components/profile/ReviewStars'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
 import { isProviderProfile } from '@/lib/profile-publication'
@@ -99,6 +100,8 @@ export default function ProfilePage() {
         ...baseProfile,
         contact_methods: mergedContacts,
         recommendations: mergedRecs,
+        review_average: myProfile.review_average ?? baseProfile.review_average,
+        review_count: myProfile.review_count ?? baseProfile.review_count,
         whatsapp_verified: myProfile.whatsapp_verified ?? baseProfile.whatsapp_verified,
         whatsapp_verified_at: myProfile.whatsapp_verified_at ?? baseProfile.whatsapp_verified_at,
       }
@@ -249,7 +252,7 @@ export default function ProfilePage() {
                   title="Titularidad de número de WhatsApp certificada por LABURANTE"
                 >
                   <ShieldCheck size={14} className="text-emerald-600" />
-                  <span>WhatsApp Verificado</span>
+                  <span>Número verificado</span>
                 </span>
               )}
             </div>
@@ -481,10 +484,14 @@ export default function ProfilePage() {
             <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
               Referencias y experiencias de trabajo
             </h2>
-            {profile.recommendations && profile.recommendations.length > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-laburante-surface-alt)] font-semibold text-[var(--color-laburante-text-secondary)]">
-                {profile.recommendations.length}
-              </span>
+            {profile.review_count ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-laburante-text-secondary)]" aria-label={`${profile.review_average?.toFixed(1)} de 5, ${profile.review_count} calificaciones`}>
+                <ReviewStars value={profile.review_average || 0} />
+                <strong className="text-[var(--color-laburante-text)]">{profile.review_average?.toFixed(1)}/5</strong>
+                <span>· {profile.review_count} {profile.review_count === 1 ? 'calificación' : 'calificaciones'}</span>
+              </div>
+            ) : (
+              <span className="text-xs text-[var(--color-laburante-text-muted)]">Todavía no tiene calificaciones</span>
             )}
           </div>
 
@@ -555,6 +562,13 @@ export default function ProfilePage() {
                       <p className="text-[11px] text-[var(--color-laburante-indigo)] font-medium">
                         Trabajo realizado: {rec.context}
                       </p>
+                    )}
+
+                    {typeof rec.rating === 'number' && (
+                      <div className="flex items-center gap-2 text-xs text-[var(--color-laburante-text-secondary)]">
+                        <ReviewStars value={rec.rating} size={14} label={`${rec.rating} de 5 estrellas`} />
+                        <span>{rec.rating}/5</span>
+                      </div>
                     )}
 
                     {isEditing ? (

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Archive, ArrowRight, BadgeCheck, Building2, Check, ExternalLink, Folder, FolderPlus, Globe, Inbox, LockKeyhole, Mail, MessageCircle, Phone, RefreshCw, Search, Send, Users, Star, Trash2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
@@ -121,18 +121,37 @@ export default function CompanyWorkspace() {
       }
 
       const projectsMap = new Map((projectsData || []).map((p: any) => [p.id, p.name]))
-      const candidateIds = (data || []).map((item: any) => item.candidate_profile_id)
-      if (candidateIds.length > 0) {
+      const candidateIds: string[] = (data || []).map((item: any) => item.candidate_profile_id).filter(Boolean) as string[]
+      const uniqueCandidateIds = Array.from(new Set(candidateIds))
+      if (uniqueCandidateIds.length > 0) {
+        // 1. Intentar resolver primero desde authenticated_candidate_profiles
         const { data: candidates } = await (supabase.from('authenticated_candidate_profiles') as any)
           .select('id, name, slug, localidad, provincia')
-          .in('id', candidateIds)
+          .in('id', uniqueCandidateIds)
 
-        const candidateMap = new Map((candidates || []).map((c: any) => [c.id, c]))
-        setShortlist((data || []).map((item: any) => ({
-          ...item,
-          projectName: item.project_id ? projectsMap.get(item.project_id) : null,
-          candidate: candidateMap.get(item.candidate_profile_id) || null,
-        })))
+        const candidateMap = new Map<string, any>((candidates || []).map((c: any) => [c.id, c]))
+        const missingIds = uniqueCandidateIds.filter((id) => !candidateMap.has(id))
+
+        // 2. Fallback resiliente a public_profiles para cualquier candidato no resuelto
+        if (missingIds.length > 0) {
+          const { data: fallbackCandidates } = await (supabase.from('public_profiles') as any)
+            .select('id, name, slug, localidad, provincia')
+            .in('id', missingIds)
+
+          ;(fallbackCandidates || []).forEach((c: any) => {
+            if (c?.id) candidateMap.set(c.id, c)
+          })
+        }
+
+        setShortlist((data || []).map((item: any) => {
+          const cand = candidateMap.get(item.candidate_profile_id) || null
+          return {
+            ...item,
+            projectName: item.project_id ? projectsMap.get(item.project_id) : null,
+            candidate: cand,
+            isUnavailable: !cand,
+          }
+        }))
       } else {
         setShortlist([])
       }
@@ -589,12 +608,25 @@ export default function CompanyWorkspace() {
                 <div key={item.id} className="p-4 rounded-xl border border-[var(--color-laburante-border)] bg-white space-y-3 text-xs shadow-2xs">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-bold text-sm text-[var(--color-laburante-text)]">
-                        {item.candidate?.name || 'Profesional'}
-                      </p>
-                      <p className="text-[11px] text-[var(--color-laburante-text-secondary)] mt-0.5">
-                        {[item.candidate?.localidad, item.candidate?.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}
-                      </p>
+                      {item.candidate ? (
+                        <>
+                          <p className="font-bold text-sm text-[var(--color-laburante-text)]">
+                            {item.candidate.name}
+                          </p>
+                          <p className="text-[11px] text-[var(--color-laburante-text-secondary)] mt-0.5">
+                            {[item.candidate.localidad, item.candidate.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-semibold text-sm text-slate-500 italic">
+                            Perfil no disponible
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Este candidato ya no está activo o fue despublicado
+                          </p>
+                        </>
+                      )}
                     </div>
                     {item.candidate?.slug && (
                       <Link

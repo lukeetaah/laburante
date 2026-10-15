@@ -3,8 +3,8 @@
 ## A. Diagnóstico de la Infraestructura Actual
 * **Plan Supabase**: **Free Tier** (`lukeetaah@gmail.com's Org Free`).
 * **Backups Nativos**:
-  * Supabase en plan Free realiza backups diarios automáticos con retención limitada a 7 días, pero gestionados internamente sin capacidad de PITR (Point-in-Time Recovery).
-  * No hay acceso a dumps automáticos programados fuera de Supabase desde la UI en el plan Free.
+  * El panel de Supabase verificado el 15/10/2026 indica que el plan Free **no incluye backups del proyecto** ni PITR (Point-in-Time Recovery).
+  * Por lo tanto, no se considera disponible una recuperación operativa hasta configurar un backup externo o contratar un plan que lo incluya.
 * **Storage (`profile-assets`)**:
   * Los objetos en Supabase Storage (fotos y CVs) **NO** están incluidos en los backups de la base de datos PostgreSQL.
 * **Procedimiento de contingencia**: No existía procedimiento formal de restauración externa documentado.
@@ -15,6 +15,8 @@
 1. **Copias de seguridad independientes de Supabase**: Si el proyecto sufre suspensión, pausa por inactividad o fallo de región, los datos deben estar resguardados externamente.
 2. **Resguardo de Storage**: Sincronización de los archivos de `storage.objects` (`profile-assets`).
 3. **Prueba periódica de restauración**: Comprobar mensualmente que un dump puede restaurarse en una base local o de testing.
+
+> Estado actual: no se verificó un backup recuperable ni existe un entorno local con PostgreSQL/Docker en el checkout. No aplicar migraciones destructivas o irreversibles sobre producción hasta resolver este punto.
 
 ---
 

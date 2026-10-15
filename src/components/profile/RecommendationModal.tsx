@@ -19,14 +19,29 @@ export default function RecommendationModal({
 }: RecommendationModalProps) {
   const user = useAuthStore((s) => s.user)
   const myProfile = useProfileStore((s) => s.myProfile)
-  const realAuthorName = myProfile?.name || user?.user_metadata?.name || user?.user_metadata?.full_name || 'Usuario de LABURANTE'
+  const realAuthorName = myProfile?.name || 'Tu perfil de LABURANTE'
   const [context, setContext] = useState('')
   const [text, setText] = useState('')
+  const [rating, setRating] = useState(0)
+  const [jobRequestId, setJobRequestId] = useState('')
+  const [reviewableJobs, setReviewableJobs] = useState<{ id: string; title: string; created_at: string }[]>([])
+  const [loadingJobs, setLoadingJobs] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const submitRecommendation = useProfileStore((s) => s.submitRecommendation)
+  const fetchReviewableJobs = useProfileStore((s) => s.fetchReviewableJobs)
+
+  useEffect(() => {
+    if (!isOpen || !user || user.id === profileId) return
+    setLoadingJobs(true)
+    fetchReviewableJobs(profileId).then((jobs) => {
+      setReviewableJobs(jobs)
+      setJobRequestId((current) => current || jobs[0]?.id || '')
+      setLoadingJobs(false)
+    })
+  }, [isOpen, user, profileId, fetchReviewableJobs])
 
   if (!isOpen || (user?.id && user.id === profileId)) return null
 
@@ -34,6 +49,9 @@ export default function RecommendationModal({
     setSuccess(false)
     setContext('')
     setText('')
+    setRating(0)
+    setJobRequestId('')
+    setReviewableJobs([])
     setError(null)
     onClose()
   }
@@ -91,12 +109,21 @@ export default function RecommendationModal({
       setError('Por favor escribí una reseña de al menos 10 caracteres contando cómo fue el trabajo.')
       return
     }
+    if (!jobRequestId) {
+      setError('Seleccioná un trabajo completado para asociar esta reseña.')
+      return
+    }
+    if (rating < 1 || rating > 5) {
+      setError('Seleccioná una puntuación de 1 a 5 estrellas.')
+      return
+    }
 
     setSubmitting(true)
     setError(null)
 
     const res = await submitRecommendation(profileId, {
-      from_name: realAuthorName,
+      job_request_id: jobRequestId,
+      rating,
       context: context.trim() || undefined,
       text: text.trim(),
     })
@@ -160,12 +187,36 @@ export default function RecommendationModal({
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {loadingJobs ? (
+                <p className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">Buscando trabajos completados con este perfil...</p>
+              ) : reviewableJobs.length === 0 ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                  Solo podés reseñar trabajos registrados en LABURANTE y marcados como completados. Todavía no encontramos una experiencia elegible con este perfil.
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">Trabajo realizado <span className="text-rose-500">*</span></label>
+                    <select value={jobRequestId} onChange={(e) => setJobRequestId(e.target.value)} required className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+                      {reviewableJobs.map((job) => <option key={job.id} value={job.id}>{job.title} · {new Date(job.created_at).toLocaleDateString('es-AR')}</option>)}
+                    </select>
+                  </div>
+                  <fieldset>
+                    <legend className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">¿Cómo calificás el trabajo? <span className="text-rose-500">*</span></legend>
+                    <div className="flex items-center gap-1" aria-label="Puntuación de 1 a 5 estrellas">
+                      {[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" onClick={() => setRating(value)} aria-label={`${value} ${value === 1 ? 'estrella' : 'estrellas'}`} aria-pressed={rating === value} className="rounded-md p-1 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-400"><Star size={27} className={value <= rating ? 'fill-amber-400 text-amber-500' : 'text-slate-300'} /></button>)}
+                      <span className="ml-2 text-xs text-[var(--color-laburante-text-secondary)]">{rating ? `${rating}/5` : 'Elegí una puntuación'}</span>
+                    </div>
+                  </fieldset>
+                </>
+              )}
+
               <div className="p-3 rounded-xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)]">
                 <span className="block text-[11px] font-semibold text-[var(--color-laburante-text-secondary)]">
                   Firmás esta reseña como:
                 </span>
                 <p className="text-xs font-bold text-[var(--color-laburante-text)] mt-0.5">
-                  {realAuthorName} <span className="text-[10px] font-normal text-emerald-700 font-sans ml-1">✓ Cuenta verificada</span>
+                  {realAuthorName} <span className="text-[10px] font-normal text-emerald-700 font-sans ml-1">✓ Identidad tomada de tu sesión</span>
                 </p>
               </div>
 
@@ -214,7 +265,7 @@ export default function RecommendationModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || loadingJobs || reviewableJobs.length === 0}
                   className="flex-1 py-2.5 px-4 rounded-xl btn-dark font-heading font-bold text-xs disabled:opacity-50"
                 >
                   {submitting ? 'Enviando...' : 'Enviar reseña'}

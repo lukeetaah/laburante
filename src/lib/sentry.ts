@@ -59,17 +59,28 @@ Sentry.init({
       : null
   },
   beforeSend: (event) => {
-    // Keep stack traces while removing request, identity and arbitrary payloads.
+    // Keep stack traces and technical diagnostic tags while removing identity and arbitrary user payloads.
     delete event.request
     delete event.user
     delete event.extra
     if (event.exception?.values) {
       event.exception.values = event.exception.values.map((exception) => {
         const val = exception.value || ''
-        const isSafeFormatted = val.includes('LABURANTE SENTRY TEST') || /^\[[\w_-]+\] stage=/.test(val)
+        const isAlreadyFormatted = val.includes('LABURANTE SENTRY TEST') || /^\[[\w_-]+\]/.test(val)
+        if (isAlreadyFormatted) {
+          return exception
+        }
+        // Sanitize sensitive PII (emails, tokens, secrets) while preserving the real technical exception
+        const sanitizedVal = val
+          .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[redacted_email]')
+          .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [redacted_token]')
+          .replace(/(?:key|token|secret|password|credential)=[^&\s]+/gi, '$1=[redacted]')
+          .slice(0, 500)
+
+        const fallbackMessage = exception.type ? `${exception.type}: Technical error` : 'Technical application error'
         return {
           ...exception,
-          value: isSafeFormatted ? val : (exception.type ? `${exception.type}: Technical error` : 'Application error'),
+          value: sanitizedVal.trim() ? sanitizedVal : fallbackMessage,
         }
       })
     }

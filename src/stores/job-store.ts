@@ -88,51 +88,53 @@ export const useJobStore = create<JobState>((set, get) => ({
       currentUserId = userId || null
       const localItems = getLocalCache(userId)
 
-      if (userId) {
-        const { data, error } = await (supabase.from('job_requests') as any)
-          .select('*')
-          .eq('client_id', userId)
-          .order('created_at', { ascending: false })
-
-        if (!error && data) {
-          const profileIds = [...new Set(data.map((item: any) => item.profile_id).filter(Boolean))]
-          const [{ data: profiles }, { data: contactMethods }] = await Promise.all([
-            profileIds.length
-              ? await (supabase.from('authenticated_job_profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', profileIds)
-              : { data: [] },
-            profileIds.length
-              ? await (supabase.from('contact_methods') as any).select('profile_id, type, value, is_public').in('profile_id', profileIds)
-              : { data: [] },
-          ])
-          const profilesById = new Map<string, any>((profiles || []).map((profile: any) => [profile.id, profile]))
-          const contactsByProfile = new Map<string, any[]>()
-          ;(contactMethods || []).forEach((contact: any) => {
-            const contacts = contactsByProfile.get(contact.profile_id) || []
-            contacts.push(contact)
-            contactsByProfile.set(contact.profile_id, contacts)
-          })
-          const formatted: JobRequestWithDetails[] = data.map((item: any) => ({
-            ...item,
-            pro_name: profilesById.get(item.profile_id)?.name || 'Profesional',
-            pro_slug: profilesById.get(item.profile_id)?.slug || '',
-            pro_photo: profilesById.get(item.profile_id)?.photo_url || null,
-            pro_provincia: profilesById.get(item.profile_id)?.provincia || '',
-            pro_localidad: profilesById.get(item.profile_id)?.localidad || '',
-            pro_contact: contactsByProfile.get(item.profile_id)?.find((contact: any) => contact.type === 'whatsapp' && contact.is_public)?.value || null,
-            pro_contacts: contactsByProfile.get(item.profile_id) || [],
-          }))
-          set({ clientRequests: formatted, loading: false })
-          return
-        }
+      if (!userId) {
+        set({ clientRequests: [], loading: false })
+        return
       }
 
-      // Fallback to local cache (for guests or before Supabase sync)
-      const filtered = localItems.filter((i) => !userId || i.client_id === userId || !i.client_id)
-      set({ clientRequests: filtered, loading: false })
+      const { data, error } = await (supabase.from('job_requests') as any)
+        .select('*')
+        .eq('client_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (!error && data) {
+        const profileIds = [...new Set(data.map((item: any) => item.profile_id).filter(Boolean))]
+        const [{ data: profiles }, { data: contactMethods }] = await Promise.all([
+          profileIds.length
+            ? await (supabase.from('authenticated_job_profiles') as any).select('id, name, slug, photo_url, provincia, localidad').in('id', profileIds)
+            : { data: [] },
+          profileIds.length
+            ? await (supabase.from('contact_methods') as any).select('profile_id, type, value, is_public').in('profile_id', profileIds)
+            : { data: [] },
+        ])
+        const profilesById = new Map<string, any>((profiles || []).map((profile: any) => [profile.id, profile]))
+        const contactsByProfile = new Map<string, any[]>()
+        ;(contactMethods || []).forEach((contact: any) => {
+          const contacts = contactsByProfile.get(contact.profile_id) || []
+          contacts.push(contact)
+          contactsByProfile.set(contact.profile_id, contacts)
+        })
+        const formatted: JobRequestWithDetails[] = data.map((item: any) => ({
+          ...item,
+          pro_name: profilesById.get(item.profile_id)?.name || 'Profesional',
+          pro_slug: profilesById.get(item.profile_id)?.slug || '',
+          pro_photo: profilesById.get(item.profile_id)?.photo_url || null,
+          pro_provincia: profilesById.get(item.profile_id)?.provincia || '',
+          pro_localidad: profilesById.get(item.profile_id)?.localidad || '',
+          pro_contact: contactsByProfile.get(item.profile_id)?.find((contact: any) => contact.type === 'whatsapp' && contact.is_public)?.value || null,
+          pro_contacts: contactsByProfile.get(item.profile_id) || [],
+        }))
+        saveLocalCache(formatted, userId)
+        set({ clientRequests: formatted, loading: false })
+        return
+      }
+
+      set({ clientRequests: getLocalCache(userId), loading: false })
     } catch (err: any) {
       captureAppError(err, 'job_requests_load')
       console.warn('fetchMyRequests error, using cache:', err)
-      set({ clientRequests: getLocalCache(currentUserId), loading: false })
+      set({ clientRequests: currentUserId ? getLocalCache(currentUserId) : [], loading: false })
     }
   },
 
@@ -464,8 +466,11 @@ export const useJobStore = create<JobState>((set, get) => ({
         outcome_updated_at: now,
         updated_at: now,
       }
-      if (role === 'profesional') {
+      const cleanOutcome = outcome.trim()
+      if (cleanOutcome === 'completado') {
         await get().updateJobStatus(requestId, 'completado')
+      } else if (cleanOutcome === 'cancelado') {
+        await get().updateJobStatus(requestId, 'cancelado')
       }
       const { error } = await (supabase.from('job_requests') as any).update(updateData).eq('id', requestId)
       if (error) throw error

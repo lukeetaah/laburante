@@ -20,6 +20,7 @@ import Companies from '@/pages/Companies'
 import CompanyWorkspace from '@/pages/CompanyWorkspace'
 import { Analytics } from '@vercel/analytics/react'
 import { addAppBreadcrumb } from '@/lib/sentry'
+import { recordUserActivity } from '@/lib/user-activity'
 
 function NavigationBreadcrumb() {
   const location = useLocation()
@@ -33,10 +34,15 @@ function NavigationBreadcrumb() {
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
+  const user = useAuthStore((s) => s.user)
 
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  useEffect(() => {
+    if (user?.id) void recordUserActivity(user.id)
+  }, [user?.id])
 
   return (
     <BrowserRouter>

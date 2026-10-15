@@ -28,7 +28,11 @@ export async function dispatchNotificationEmail(notificationId: string): Promise
     })
 
     if (error) {
-      captureAppError(error, 'notification_email_dispatch')
+      captureAppError(error, 'notification_email_dispatch', {
+        stage: 'email_dispatch',
+        errorType: (error as any)?.name || 'FunctionsError',
+        route: typeof window !== 'undefined' ? window.location.pathname : undefined,
+      })
       console.warn('Notification email dispatch failed:', error.message)
       return { ok: false, status: 'failed', error: error.message }
     }
@@ -40,7 +44,11 @@ export async function dispatchNotificationEmail(notificationId: string): Promise
 
     return { ok: true, status: data?.status || 'sent' }
   } catch (error) {
-    captureAppError(error, 'notification_email_dispatch')
+    captureAppError(error, 'notification_email_dispatch', {
+      stage: 'email_dispatch',
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+      route: typeof window !== 'undefined' ? window.location.pathname : undefined,
+    })
     console.warn('Notification email dispatch failed:', error)
     return { ok: false, status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }
