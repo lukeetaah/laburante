@@ -291,6 +291,18 @@ export type Database = {
         Args: Record<string, never>
         Returns: boolean
       }
+      normalize_whatsapp_phone: {
+        Args: { p_phone: string }
+        Returns: string
+      }
+      admin_approve_whatsapp_verification: {
+        Args: { p_request_id: string; p_code: string }
+        Returns: {
+          approved_profile_id: string
+          approved_phone: string
+          normalized_phone: string
+        }[]
+      }
       notify_profile_whatsapp_verified: {
         Args: { target_profile_id: string }
         Returns: string

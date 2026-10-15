@@ -187,7 +187,7 @@ export default function WhatsAppVerificationModal({
   const handleAdminDirectApprove = async () => {
     setLoading(true)
     setError(null)
-    const res = await adminApproveWhatsAppVerification(requestId, profileId, phone)
+    const res = await adminApproveWhatsAppVerification(requestId, verificationCode)
     setLoading(false)
     if (res.error) {
       setError(res.error)

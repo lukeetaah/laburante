@@ -104,8 +104,7 @@ interface ProfileState {
   fetchPendingWhatsAppVerifications: () => Promise<WhatsAppVerificationRequest[]>
   adminApproveWhatsAppVerification: (
     requestId: string,
-    profileId: string,
-    phone: string
+    code: string
   ) => Promise<{ error: string | null }>
   adminRejectWhatsAppVerification: (
     requestId: string
@@ -989,19 +988,20 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     return local
   },
 
-  adminApproveWhatsAppVerification: async (requestId, profileId, phone) => {
+  adminApproveWhatsAppVerification: async (requestId, code) => {
     addAppBreadcrumb('whatsapp_verification_approval_started')
     try {
-      const now = new Date().toISOString()
-      const { error: requestError } = await (supabase.from('whatsapp_verification_requests') as any)
-        .update({ status: 'aprobado', reviewed_at: now })
-        .eq('id', requestId)
-      if (requestError) return { error: requestError.message }
+      const { data, error } = await (supabase.rpc as any)('admin_approve_whatsapp_verification', {
+        p_request_id: requestId,
+        p_code: code,
+      })
+      if (error) return { error: error.message }
 
-      const { error: profileError } = await (supabase.from('profiles') as any)
-        .update({ whatsapp_verified: true, whatsapp_verified_at: now })
-        .eq('id', profileId)
-      if (profileError) return { error: profileError.message }
+      const approved = Array.isArray(data) ? data[0] : data
+      const profileId = approved?.approved_profile_id
+      const phone = approved?.approved_phone
+      if (!profileId || !phone) return { error: 'La aprobación no devolvió un perfil o teléfono válido.' }
+      const now = new Date().toISOString()
 
       const local = getLocalWARequests().map((r) =>
         r.id === requestId || (r.profile_id === profileId && r.status === 'pendiente')
@@ -1016,16 +1016,28 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       // 5. Update Zustand store
       set((s) => {
         const updateObj = (p: ProfileWithDetails | null) =>
-          p && p.id === profileId
-            ? { ...p, whatsapp_verified: true, whatsapp_verified_at: now }
-            : p
+          p && p.id === profileId ? {
+            ...p,
+            whatsapp_verified: true,
+            whatsapp_verified_at: now,
+            contact_methods: (() => {
+              const contacts = p.contact_methods || []
+              const whatsappIndex = contacts.findIndex((contact) => contact.type === 'whatsapp')
+              if (whatsappIndex < 0) {
+                return [...contacts, { type: 'whatsapp' as const, value: phone, is_public: false }]
+              }
+              return contacts.map((contact, index) =>
+                index === whatsappIndex ? { ...contact, value: phone } : contact
+              )
+            })(),
+          } : p
 
         return {
           currentProfile: updateObj(s.currentProfile),
           myProfile: updateObj(s.myProfile),
           profiles: s.profiles.map((p) =>
             p.id === profileId
-              ? { ...p, whatsapp_verified: true, whatsapp_verified_at: now }
+              ? updateObj(p)!
               : p
           ),
         }

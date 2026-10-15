@@ -822,21 +822,23 @@ export default function Admin() {
   }
 
   const handleApproveWA = async (req: WhatsAppVerificationRequest) => {
-    // Validate that the declared number matches the current WhatsApp in the profile
-    const currentProfile = profiles.find((p) => p.id === req.profile_id)
-    const currentWA = (currentProfile?.contact_methods || []).find((c: any) => c.type === 'whatsapp')
-    const currentDigits = (currentWA?.value || '').replace(/[^0-9]/g, '')
-    const declaredDigits = (req.phone_declared || '').replace(/[^0-9]/g, '')
-    if (currentDigits && declaredDigits && currentDigits !== declaredDigits) {
-      setActionMessage(`⚠️ No se puede aprobar: la solicitud corresponde al número ${req.phone_declared}, pero el perfil tiene registrado ${currentWA?.value}. El usuario debe generar una nueva solicitud con el número actual.`)
-      return
-    }
-
-    const res = await adminApproveWhatsAppVerification(req.id, req.profile_id, req.phone_declared)
+    const res = await adminApproveWhatsAppVerification(req.id, req.code)
     if (!res.error) {
       setWaRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: 'aprobado' as const, reviewed_at: new Date().toISOString() } : r))
-      setProfiles((prev) => prev.map((p) => p.id === req.profile_id ? { ...p, whatsapp_verified: true } : p))
+      setProfiles((prev) => prev.map((p) => {
+        if (p.id !== req.profile_id) return p
+        const contacts = p.contact_methods || []
+        const whatsappIndex = contacts.findIndex((contact: any) => contact.type === 'whatsapp')
+        const nextContacts = whatsappIndex < 0
+          ? [...contacts, { type: 'whatsapp', value: req.phone_declared, is_public: false }]
+          : contacts.map((contact: any, index: number) => index === whatsappIndex
+            ? { ...contact, value: req.phone_declared }
+            : contact)
+        return { ...p, whatsapp_verified: true, contact_methods: nextContacts }
+      }))
       setActionMessage(`✅ WhatsApp de ${req.profile_name} (${req.phone_declared}) certificado y aprobado.`)
+    } else {
+      setActionMessage(`No se pudo aprobar la verificación: ${res.error}`)
     }
   }
 
