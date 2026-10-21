@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:search": "node --experimental-strip-types --test tests/search-matching.test.ts"
   },
   "dependencies": {
     "@sentry/react": "^10.74.0",

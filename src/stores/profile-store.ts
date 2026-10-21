@@ -9,6 +9,12 @@ import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 import { getOperationalSettings } from '@/lib/operational-settings'
 import { isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 import { resolveProfilePhotoUrl } from '@/lib/profile-assets'
+import {
+  expandSearchTermVariants,
+  isCatalogSearch,
+  matchesSearchDocument,
+  scoreSearchDocument,
+} from '@/lib/search-matching'
 
 export interface ProfileWithDetails {
   id: string
@@ -343,6 +349,87 @@ async function reconcileContactMethods(
 }
 
 const PUBLIC_PROFILE_FIELDS = 'id, name, slug, photo_url, bio, provincia, localidad, zona_trabajo, disponibilidad, modalidad, account_type, hybrid_presencial_pct, hybrid_remoto_pct, intent, has_resume, whatsapp_verified'
+const PUBLIC_PROFILE_SEARCH_FIELDS = ['name', 'bio', 'provincia', 'localidad', 'zona_trabajo']
+const SEARCH_CANDIDATE_LIMIT = 1000
+
+function searchDocumentForProfile(profile: ProfileWithDetails) {
+  return {
+    publicText: [profile.name, profile.bio || '', profile.provincia, profile.localidad, profile.zona_trabajo || ''].join(' '),
+    workText: [...(profile.skills || []), ...(profile.services || []).map((service) => service.title)].join(' '),
+  }
+}
+
+function normalizedSearchTerms(filters: { query?: string; category?: string }) {
+  const terms = new Set<string>()
+  if (filters.query?.trim()) {
+    const interpretation = interpretSearch(filters.query)
+    terms.add(normalizeSearchText(filters.query))
+    interpretation.expandedTerms.forEach((term) => terms.add(normalizeSearchText(term)))
+  }
+
+  if (filters.category) {
+    const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
+    ;[filters.category, ...(categoryDef?.subcategories || [])]
+      .map(normalizeSearchText)
+      .forEach((term) => terms.add(term))
+  }
+
+  return Array.from(terms)
+    .flatMap((term) => [term, ...expandSearchTermVariants(term)])
+    .flatMap((term) => {
+      const safeTerm = term.replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+      return [safeTerm, ...safeTerm.split(' ')]
+    })
+    .filter((term, index, all) => term.length > 2 && all.indexOf(term) === index)
+    .slice(0, 32)
+}
+
+function postgrestLikeFilters(fields: string[], terms: string[]) {
+  return fields.flatMap((field) => terms.map((term) => `${field}.ilike.*${term}*`)).join(',')
+}
+
+async function fetchSearchCandidateIds(filters: {
+  query?: string
+  category?: string
+  provincia?: string
+  localidad?: string
+  modalidad?: string
+}) {
+  const terms = normalizedSearchTerms(filters)
+  if (!terms.length) return []
+
+  const profileQuery = (supabase.from('public_profiles') as any)
+    .select('id')
+    .or(postgrestLikeFilters(PUBLIC_PROFILE_SEARCH_FIELDS, terms))
+    .eq('account_type', 'persona')
+    .in('intent', ['ofrecer', 'ambas'])
+    .limit(SEARCH_CANDIDATE_LIMIT)
+
+  if (filters.provincia) profileQuery.eq('provincia', filters.provincia)
+  if (filters.localidad) profileQuery.ilike('localidad', `%${filters.localidad}%`)
+  if (filters.modalidad && filters.modalidad !== 'todas') profileQuery.eq('modalidad', filters.modalidad)
+
+  const [profilesResult, skillsResult, servicesResult] = await Promise.all([
+    profileQuery,
+    (supabase.from('public_profile_skills') as any)
+      .select('profile_id')
+      .or(postgrestLikeFilters(['name'], terms))
+      .limit(SEARCH_CANDIDATE_LIMIT),
+    (supabase.from('public_profile_services') as any)
+      .select('profile_id')
+      .or(postgrestLikeFilters(['title'], terms))
+      .limit(SEARCH_CANDIDATE_LIMIT),
+  ])
+
+  const firstError = [profilesResult, skillsResult, servicesResult].find((result) => result.error)?.error
+  if (firstError) throw firstError
+
+  return Array.from(new Set([
+    ...(profilesResult.data || []).map((row: any) => row.id),
+    ...(skillsResult.data || []).map((row: any) => row.profile_id),
+    ...(servicesResult.data || []).map((row: any) => row.profile_id),
+  ].filter(Boolean))).slice(0, SEARCH_CANDIDATE_LIMIT)
+}
 
 async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]> {
   const profileIds = rows.map((row) => row.id).filter(Boolean)
@@ -420,8 +507,21 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     addAppBreadcrumb('profile_search_started')
     set({ loading: true })
     try {
+      const hasTextSearch = Boolean(filters.query?.trim() || filters.category)
+      const searchCandidateIds = hasTextSearch ? await fetchSearchCandidateIds(filters) : null
+
+      if (searchCandidateIds && !searchCandidateIds.length) {
+        set({ profiles: [], loading: false })
+        return
+      }
+
       let query = (supabase.from('public_profiles') as any)
         .select(PUBLIC_PROFILE_FIELDS)
+
+      if (searchCandidateIds) {
+        query = query.in('id', searchCandidateIds)
+      }
+      query = query.eq('account_type', 'persona').in('intent', ['ofrecer', 'ambas'])
 
       if (filters.provincia) {
         query = query.eq('provincia', filters.provincia)
@@ -456,26 +556,20 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       // Filter by text query if given
       if (filters.query && filters.query.trim()) {
         const interpretation = interpretSearch(filters.query)
-        const q = normalizeSearchText(filters.query)
         const catalogTerms = CATEGORIES.flatMap((category) => category.subcategories || []).map(normalizeSearchText)
-        const catalogQuery = catalogTerms.includes(q)
-        const catalogMatches = new Set([
-          q,
-          ...interpretation.expandedTerms.filter((term) => catalogTerms.includes(term)),
-        ])
-        const score = (p: ProfileWithDetails) => {
-          const text = normalizeSearchText([p.name, p.bio || '', p.provincia, p.localidad, ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' '))
-          const exact = text.includes(q) ? 3 : 0
-          const hits = interpretation.expandedTerms.filter((term) => text.includes(term)).length
-          return exact + hits
-        }
-        if (catalogQuery) {
-          realProfiles = realProfiles.filter((profile) => {
-            const workText = normalizeSearchText([...(profile.skills || []), ...(profile.services || []).map((service) => service.title)].join(' '))
-            return Array.from(catalogMatches).some((term) => workText.includes(term))
-          })
+        if (isCatalogSearch(filters.query, catalogTerms, interpretation.expandedTerms)) {
+          realProfiles = realProfiles.filter((profile) => matchesSearchDocument(
+            filters.query!,
+            searchDocumentForProfile(profile),
+            catalogTerms,
+            interpretation.expandedTerms,
+          ))
         } else {
-          realProfiles = realProfiles.map((profile) => ({ profile, rank: score(profile) })).filter((item) => item.rank > 0).sort((a, b) => b.rank - a.rank).map((item) => item.profile)
+          realProfiles = realProfiles
+            .map((profile) => ({ profile, rank: scoreSearchDocument(filters.query!, searchDocumentForProfile(profile), interpretation.expandedTerms) }))
+            .filter((item) => item.rank > 0)
+            .sort((a, b) => b.rank - a.rank)
+            .map((item) => item.profile)
         }
       }
 
