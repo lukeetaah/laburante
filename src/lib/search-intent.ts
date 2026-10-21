@@ -1,5 +1,5 @@
 import { CATEGORIES } from '@/data/categories'
-import { expandSearchTermVariants, normalizeSearchText } from './search-matching'
+import { expandCategorySearchTerms, expandSearchTermVariants, normalizeSearchText } from './search-matching'
 
 export { normalizeSearchText } from './search-matching'
 
@@ -114,6 +114,11 @@ export function interpretSearch(input: string): SearchInterpretation {
       })
     }
   })
+
+  // A parent category can be searched by one of its words, e.g. Finanzas
+  // belongs to "Negocios, administración y finanzas". Expand only taxonomy
+  // terms, never arbitrary synonyms or unrelated profile data.
+  expandCategorySearchTerms(normalized, CATEGORIES).forEach((term) => expanded.add(term))
 
   const intent = /ofrezco|ofrecer|busco trabajo|quiero trabajar|estoy disponible/.test(normalized)
     ? 'ofrecer'

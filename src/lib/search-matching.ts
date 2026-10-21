@@ -52,6 +52,45 @@ export interface SearchDocument {
   workText: string
 }
 
+export function expandCategorySearchTerms(
+  input: string,
+  categories: Array<{ name: string; subcategories?: string[] }>,
+) {
+  const normalized = normalizeSearchText(input)
+  if (normalized.length <= 2) return []
+
+  const expanded = new Set<string>()
+  categories.forEach((category) => {
+    const categoryName = normalizeSearchText(category.name)
+    if (normalized === categoryName || categoryName.includes(normalized)) {
+      expanded.add(categoryName)
+      ;(category.subcategories || []).forEach((subcategory) => {
+        const normalizedSubcategory = normalizeSearchText(subcategory)
+        expanded.add(normalizedSubcategory)
+        expandSearchTermVariants(normalizedSubcategory).forEach((variant) => expanded.add(variant))
+      })
+    }
+  })
+  return Array.from(expanded)
+}
+
+function tokens(value: string) {
+  return normalizeSearchText(value).split(/[^a-z0-9]+/).filter(Boolean)
+}
+
+function containsWholeTerm(text: string, term: string) {
+  const textTokens = tokens(text)
+  const termTokens = tokens(term)
+  if (!termTokens.length || termTokens.length > textTokens.length) return false
+
+  return textTokens.some((_, index) => termTokens.every((token, offset) => textTokens[index + offset] === token))
+}
+
+export function matchesCategoryDocument(document: SearchDocument, categoryTerms: string[]) {
+  const terms = categoryTerms.flatMap((term) => [term, ...expandSearchTermVariants(term)])
+  return terms.some((term) => containsWholeTerm(document.publicText, term) || containsWholeTerm(document.workText, term))
+}
+
 function normalizedTerms(terms: string[]) {
   return Array.from(new Set(terms.flatMap((term) => [
     normalizeSearchText(term),

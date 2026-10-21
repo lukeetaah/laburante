@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import LuksonUniverse from '@/components/lukson/LuksonUniverse'
 import ContactForm from '@/components/layout/ContactForm'
+import SocialLinks from '@/components/layout/SocialLinks'
 import { SITE_CONFIG } from '@/lib/constants'
 
 export default function Footer() {
@@ -29,6 +30,7 @@ export default function Footer() {
                 </a>
                 .
               </p>
+              <SocialLinks />
             </div>
 
             {/* Links */}

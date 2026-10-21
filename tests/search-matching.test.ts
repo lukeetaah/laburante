@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  expandCategorySearchTerms,
+  matchesCategoryDocument,
   matchesSearchDocument,
   normalizeSearchText,
   scoreSearchDocument,
@@ -32,4 +34,30 @@ test('specific searches score matching profiles and ignore empty input', () => {
   const document = { publicText: 'Contadora', workText: 'Impuestos' }
   assert.ok(scoreSearchDocument('contador', document, ['contador']) > 0)
   assert.equal(matchesSearchDocument('   ', document, catalogTerms, ['contador']), false)
+})
+
+test('category matching uses declared taxonomy terms as whole words', () => {
+  const constructionTerms = ['Construcción', 'Arquitectura', 'Techado']
+  assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Arquitectura y techado' }, constructionTerms), true)
+  assert.equal(matchesCategoryDocument({ publicText: 'Construcción de viviendas', workText: '' }, constructionTerms), true)
+  assert.equal(matchesCategoryDocument({ publicText: 'Gestión administrativa', workText: '' }, constructionTerms), false)
+})
+
+test('Cuidado accepts declared care work and rejects unrelated construction work', () => {
+  const careTerms = ['Cuidado', 'Niñera', 'Cuidado de mascotas', 'Paseo de perros', 'Enfermería']
+  assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Paseo de perros' }, careTerms), true)
+  assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Albañilería y techado' }, careTerms), false)
+  assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Enfermería y acompañante terapéutico' }, careTerms), true)
+})
+
+test('Finanzas expands through the existing category taxonomy', () => {
+  const expandedTerms = expandCategorySearchTerms('FINANZAS', [{
+    name: 'Negocios, administración y finanzas',
+    subcategories: ['Administración', 'Ventas'],
+  }])
+  assert.ok(expandedTerms.includes('administracion'))
+  assert.equal(
+    matchesSearchDocument('Finanzas', { publicText: '', workText: 'Administración y ventas' }, ['Administración', 'Finanzas'], expandedTerms),
+    true,
+  )
 })

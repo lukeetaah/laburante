@@ -12,6 +12,7 @@ import { resolveProfilePhotoUrl } from '@/lib/profile-assets'
 import {
   expandSearchTermVariants,
   isCatalogSearch,
+  matchesCategoryDocument,
   matchesSearchDocument,
   scoreSearchDocument,
 } from '@/lib/search-matching'
@@ -547,10 +548,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       if (filters.category) {
         const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
         const categoryTerms = [filters.category, ...(categoryDef?.subcategories || [])].map(normalizeSearchText)
-        realProfiles = realProfiles.filter((p) => {
-          const text = normalizeSearchText([p.name, p.bio || '', ...(p.skills || []), ...(p.services || []).map((s) => s.title)].join(' '))
-          return categoryTerms.some((term) => text.includes(term))
-        })
+        realProfiles = realProfiles.filter((profile) => matchesCategoryDocument(searchDocumentForProfile(profile), categoryTerms))
       }
 
       // Filter by text query if given
