@@ -499,6 +499,55 @@ async function hydratePublicProfiles(rows: any[]): Promise<ProfileWithDetails[]>
   })))
 }
 
+// Search cards only need public profile fields, skills, services and
+// reputation. Avoid loading contact channels, languages, recommendations and
+// the current auth user for every result; those details are hydrated on the
+// public profile page instead.
+async function hydrateSearchProfiles(rows: any[]): Promise<ProfileWithDetails[]> {
+  const profileIds = rows.map((row) => row.id).filter(Boolean)
+  if (!profileIds.length) return []
+
+  const [skillsResult, servicesResult, reputationResult] = await Promise.all([
+    (supabase.from('public_profile_skills') as any).select('profile_id, name').in('profile_id', profileIds),
+    (supabase.from('public_profile_services') as any).select('profile_id, title, description, precio_orientativo').in('profile_id', profileIds),
+    (supabase.from('public_profile_reputation') as any).select('profile_id, average_rating, review_count').in('profile_id', profileIds),
+  ])
+
+  const byProfile = <T extends { profile_id?: string }>(items: T[] | null | undefined) => {
+    const grouped = new Map<string, T[]>()
+    for (const item of items || []) {
+      if (!item.profile_id) continue
+      grouped.set(item.profile_id, [...(grouped.get(item.profile_id) || []), item])
+    }
+    return grouped
+  }
+
+  const skillsByProfile = byProfile(skillsResult.data)
+  const servicesByProfile = byProfile(servicesResult.data)
+  const reputationByProfile = new Map<string, any>((reputationResult.data || []).map((item: any) => [item.profile_id, item]))
+
+  return Promise.all(rows.map(async (row) => ({
+    ...row,
+    photo_url: await resolveProfilePhotoUrl(row.photo_url),
+    status: 'activo' as const,
+    company_plan: undefined,
+    resume_url: null,
+    resume_name: null,
+    has_resume: Boolean(row.has_resume),
+    whatsapp_verified: Boolean(row.whatsapp_verified),
+    whatsapp_verified_at: null,
+    created_at: '',
+    review_average: Number(reputationByProfile.get(row.id)?.average_rating || 0),
+    review_count: Number(reputationByProfile.get(row.id)?.review_count || 0),
+    skills: (skillsByProfile.get(row.id) || []).map((item: any) => item.name),
+    services: servicesByProfile.get(row.id) || [],
+    contact_methods: [],
+    languages: [],
+    recommendations: [],
+    categories: [],
+  })))
+}
+
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
   currentProfile: null,
@@ -541,7 +590,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return
       }
 
-      let realProfiles: ProfileWithDetails[] = await hydratePublicProfiles((data || []) as any[])
+      let realProfiles: ProfileWithDetails[] = hasTextSearch
+        ? await hydrateSearchProfiles((data || []) as any[])
+        : await hydratePublicProfiles((data || []) as any[])
 
       realProfiles = realProfiles.filter(isProviderProfile)
 

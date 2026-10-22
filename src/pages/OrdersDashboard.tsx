@@ -457,12 +457,12 @@ export default function OrdersDashboard() {
   }
 
   return (
-    <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">
+    <div className="container mx-auto min-w-0 max-w-4xl space-y-8 py-8 md:py-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
-            Control de Trabajos y Pedidos
+        <div className="min-w-0">
+          <h1 className="break-words font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
+            Control de trabajos y pedidos
           </h1>
           <p className="text-xs sm:text-sm text-[var(--color-laburante-text-secondary)] mt-1">
             Seguí el estado de tus presupuestos y gestioná tus trabajos en tiempo real estilo PedidosYa.
@@ -470,10 +470,10 @@ export default function OrdersDashboard() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex p-1 rounded-2xl bg-[var(--color-laburante-surface-alt)] border border-[var(--color-laburante-border)] self-start sm:self-auto">
+        <div className="grid w-full grid-cols-3 gap-1 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] p-1 sm:flex sm:w-auto sm:gap-0">
           <button
             onClick={() => setActiveTab('cliente')}
-            className={`px-4 py-2 rounded-xl text-xs font-heading font-bold transition-all flex items-center gap-1.5 ${
+            className={`min-w-0 justify-center rounded-xl px-2 py-2 text-center text-xs font-heading font-bold leading-tight transition-all flex items-center gap-1.5 sm:px-4 ${
               activeTab === 'cliente'
                 ? 'bg-white text-[var(--color-laburante-text)] shadow-xs'
                 : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
@@ -485,7 +485,7 @@ export default function OrdersDashboard() {
 
           <button
             onClick={() => setActiveTab('profesional')}
-            className={`px-4 py-2 rounded-xl text-xs font-heading font-bold transition-all flex items-center gap-1.5 ${
+            className={`min-w-0 justify-center rounded-xl px-2 py-2 text-center text-xs font-heading font-bold leading-tight transition-all flex items-center gap-1.5 sm:px-4 ${
               activeTab === 'profesional'
                 ? 'bg-white text-[var(--color-laburante-text)] shadow-xs'
                 : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
@@ -497,7 +497,7 @@ export default function OrdersDashboard() {
 
           <button
             onClick={() => setActiveTab('mensajes')}
-            className={`px-4 py-2 rounded-xl text-xs font-heading font-bold transition-all flex items-center gap-1.5 ${
+            className={`min-w-0 justify-center rounded-xl px-2 py-2 text-center text-xs font-heading font-bold leading-tight transition-all flex items-center gap-1.5 sm:px-4 ${
               activeTab === 'mensajes'
                 ? 'bg-white text-[var(--color-laburante-text)] shadow-xs'
                 : 'text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]'
@@ -722,7 +722,7 @@ export default function OrdersDashboard() {
       {activityFilter !== 'empresa' && <>
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[var(--color-laburante-border)]">
-        <div className="flex items-center gap-2">
+        <div className="grid min-w-0 grid-cols-2 gap-1 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
           {([
             { key: 'activos', label: 'Activos', count: activeCount },
             { key: 'completados', label: 'Completados', count: completedCount },
@@ -733,7 +733,7 @@ export default function OrdersDashboard() {
             <button
               key={key}
               onClick={() => setStatusFilter(key)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              className={`min-w-0 justify-center rounded-xl px-2 py-2 text-center text-xs font-medium leading-tight transition-colors flex items-center gap-1.5 sm:px-3 sm:py-1.5 ${
                 statusFilter === key
                   ? 'bg-[var(--color-laburante-text)] text-white font-semibold'
                   : 'text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)]'

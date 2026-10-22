@@ -189,13 +189,19 @@ export default function Admin() {
     setLoading(true)
     setActionMessage(null)
     try {
-      // 1. Fetch Reports
-      const reportsResult = await (supabase.from('reports') as any)
-        .select(`
-          id, reason, description, status, created_at, profile_id, reporter_id, job_request_id,
-          profiles ( name, slug, status, localidad, provincia )
-        `)
-        .order('created_at', { ascending: false })
+      // Reports and profiles are independent; load them together before
+      // enriching report rows with the profile map below.
+      const [reportsResult, profilesResult] = await Promise.all([
+        (supabase.from('reports') as any)
+          .select(`
+            id, reason, description, status, created_at, profile_id, reporter_id, job_request_id,
+            profiles ( name, slug, status, localidad, provincia )
+          `)
+          .order('created_at', { ascending: false }),
+        (supabase.from('profiles') as any)
+          .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, disponibilidad, account_type, company_plan, photo_url, resume_url, resume_name, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(name), services(title), contact_methods(type,value,is_public)')
+          .order('created_at', { ascending: false }),
+      ])
 
       let loadedReports = reportsResult.data || []
       if (reportsResult.error) {
@@ -208,19 +214,12 @@ export default function Admin() {
         loadedReports = (legacyReports.data || []).map((report: any) => ({ ...report, job_request_id: null }))
       }
 
-      // 2. Fetch all Profiles
-      let profilesData: any[] | null = null
-      const resProfiles = await (supabase.from('profiles') as any)
-        .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, disponibilidad, account_type, company_plan, photo_url, resume_url, resume_name, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(name), services(title), contact_methods(type,value,is_public)')
-        .order('created_at', { ascending: false })
-
-      if (resProfiles.error) {
+      let profilesData: any[] | null = profilesResult.data
+      if (profilesResult.error) {
         const resFallback = await (supabase.from('profiles') as any)
           .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, photo_url, resume_url, resume_name, created_at, skills(name), services(title), contact_methods(type,value,is_public)')
           .order('created_at', { ascending: false })
         profilesData = resFallback.data
-      } else {
-        profilesData = resProfiles.data
       }
 
       const profileById = new Map((profilesData || []).map((profile: any) => [profile.id, profile]))
@@ -229,18 +228,20 @@ export default function Admin() {
         reporter: report.reporter_id ? profileById.get(report.reporter_id) : null,
       })))
 
-      // 3. Fetch WhatsApp verification requests
-      await (supabase.rpc as any)('admin_cleanup_orphan_verifications')
-      const waReqs = await fetchPendingWhatsAppVerifications()
-      setWaRequests(waReqs)
-
       // Verification requests are audit records, never a source of profiles.
       // Recreating a profile from a stale local request made deleted accounts reappear.
       const allCombined = [...(profilesData || [])]
       const profileIds = allCombined.map((p: any) => p.id).filter(Boolean)
-      const emailsByProfileId = new Map<string, string>()
-
-      if (profileIds.length > 0) {
+      const reportsByJob = new Map<string, any[]>()
+      loadedReports.forEach((report: any) => {
+        if (!report.job_request_id) return
+        const linked = reportsByJob.get(report.job_request_id) || []
+        linked.push({ ...report, reporter: report.reporter_id ? profileById.get(report.reporter_id) : null })
+        reportsByJob.set(report.job_request_id, linked)
+      })
+      const emailsPromise = (async () => {
+        const emailsByProfileId = new Map<string, string>()
+        if (profileIds.length === 0) return emailsByProfileId
         try {
           const { data: emailsData, error: emailsError } = await (supabase.rpc as any)('admin_get_user_emails', {
             target_user_ids: profileIds,
@@ -249,16 +250,40 @@ export default function Admin() {
             console.warn('RPC admin_get_user_emails notice:', emailsError.message)
           } else if (emailsData && Array.isArray(emailsData)) {
             emailsData.forEach((row: any) => {
-              if (row.profile_id && row.email) {
-                emailsByProfileId.set(row.profile_id, row.email)
-              }
+              if (row.profile_id && row.email) emailsByProfileId.set(row.profile_id, row.email)
             })
           }
         } catch (emailErr) {
           console.warn('Error fetching user emails batch:', emailErr)
         }
-      }
+        return emailsByProfileId
+      })()
 
+      const [waReqs, emailsByProfileId, jobsResult, delList, recsResult, unconfirmed, , legalData] = await Promise.all([
+        (async () => {
+          await (supabase.rpc as any)('admin_cleanup_orphan_verifications')
+          return fetchPendingWhatsAppVerifications()
+        })(),
+        emailsPromise,
+        (supabase.from('job_requests') as any).select('*').order('created_at', { ascending: false }),
+        fetchAccountDeletions(),
+        (supabase.from('recommendations') as any).select('*').order('created_at', { ascending: false }),
+        fetchUnconfirmedRegistrations('esperando'),
+        loadCompanyOperations(),
+        (async () => {
+          try {
+            const { data: legalData, error: legalErr } = await (supabase.from('legal_acceptances') as any)
+              .select('id, user_id, terms_version, is_of_legal_age, accepted_at, created_at')
+              .order('accepted_at', { ascending: false })
+            return legalErr ? null : legalData
+          } catch (lErr) {
+            console.warn('Error loading legal acceptances:', lErr)
+            return null
+          }
+        })(),
+      ])
+
+      setWaRequests(waReqs)
       const hydrated = allCombined.map((p: any) => ({
         ...p,
         auth_email: emailsByProfileId.get(p.id) || null,
@@ -266,53 +291,16 @@ export default function Admin() {
         whatsapp_verified: Boolean(p.whatsapp_verified),
       }))
       setProfiles(hydrated)
-
-      const { data: jobsData } = await (supabase.from('job_requests') as any)
-        .select('*')
-        .order('created_at', { ascending: false })
-      const reportsByJob = new Map<string, any[]>()
-      loadedReports.forEach((report: any) => {
-        if (!report.job_request_id) return
-        const linked = reportsByJob.get(report.job_request_id) || []
-        linked.push({ ...report, reporter: report.reporter_id ? profileById.get(report.reporter_id) : null })
-        reportsByJob.set(report.job_request_id, linked)
-      })
-      setJobRequests((jobsData || []).map((job: any) => ({
+      setJobRequests((jobsResult.data || []).map((job: any) => ({
         ...job,
         client_profile: job.client_id ? profileById.get(job.client_id) : null,
         professional_profile: profileById.get(job.profile_id) || null,
         linked_reports: reportsByJob.get(job.id) || [],
       })))
-
-      // 4. Fetch Deletions
-      const delList = await fetchAccountDeletions()
       setDeletions(delList)
-
-      // 5. Fetch Recommendations
-      const { data: recsData } = await (supabase.from('recommendations') as any)
-        .select('*')
-        .order('created_at', { ascending: false })
-      setRecommendations(recsData || [])
-
-      // 6. Fetch Unconfirmed Registrations — solo usuarios con email_confirmed_at IS NULL
-      const unconfirmed = await fetchUnconfirmedRegistrations('esperando')
+      setRecommendations(recsResult.data || [])
       setUnconfirmedRegistrations(unconfirmed || [])
-
-      // 7. Fetch Company Operations (solicitudes y entrevistas)
-      await loadCompanyOperations()
-
-      // 8. Fetch Legal Acceptances (evidencia de mayoría de edad y términos)
-      try {
-        const { data: legalData, error: legalErr } = await (supabase.from('legal_acceptances') as any)
-          .select('id, user_id, terms_version, is_of_legal_age, accepted_at, created_at')
-          .order('accepted_at', { ascending: false })
-
-        if (!legalErr && legalData) {
-          setLegalAcceptances(legalData)
-        }
-      } catch (lErr) {
-        console.warn('Error loading legal acceptances:', lErr)
-      }
+      if (legalData) setLegalAcceptances(legalData)
     } catch (err) {
       captureAppError(err, 'admin_data_load')
       console.warn('Error loading admin data:', err)
