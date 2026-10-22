@@ -16,13 +16,30 @@ import { formatModality } from '@/lib/profile-format'
 import { isProviderProfile } from '@/lib/profile-publication'
 import { focusContextualElement } from '@/lib/contextual-navigation'
 import { getAuthorizedResumeUrl } from '@/lib/profile-assets'
+import { getPublicProfileContactHref, getPublicProfileContactLabel, getPublicProfileContacts } from '@/lib/contact-methods'
 
-const contactLabels: Record<string, string> = { linkedin: 'LinkedIn', portfolio: 'Portfolio' }
+function PublicContactIcon({ type }: { type: string }) {
+  if (type === 'linkedin') {
+    return (
+      <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-sky-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+        <rect width="4" height="12" x="2" y="9" />
+        <circle cx="4" cy="4" r="2" />
+      </svg>
+    )
+  }
 
-function getContactHref(type: string, value: string) {
-  const cleanValue = value.trim()
-  if (['linkedin', 'portfolio'].includes(type)) return cleanValue.startsWith('http') ? cleanValue : `https://${cleanValue}`
-  return null
+  if (type === 'instagram') {
+    return (
+      <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-pink-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="20" height="20" x="2" y="2" rx="5" />
+        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+        <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+      </svg>
+    )
+  }
+
+  return <Globe aria-hidden="true" size={15} className="shrink-0 text-[var(--color-laburante-indigo)]" />
 }
 
 function getFriendlyResumeName(name?: string | null) {
@@ -184,6 +201,13 @@ export default function ProfilePage() {
   const isOwnProfile = user?.id === profile.id
   const isCompanyViewer = isCompanyAccount(user, myProfile)
   const isPublicProvider = isProviderProfile(profile)
+  const publicContacts = getPublicProfileContacts(profile.contact_methods || [])
+    .map((method) => ({
+      ...method,
+      label: getPublicProfileContactLabel(method.type),
+      href: getPublicProfileContactHref(method.type, method.value),
+    }))
+    .filter((method) => method.href)
 
   return (
     <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">
@@ -343,19 +367,30 @@ export default function ProfilePage() {
 
         </div>
         {isPublicProvider && <CompanyProfileActions profileId={profile.id} profileName={profile.name} />}
-        {(profile.contact_methods || []).some((method) => ['linkedin', 'portfolio'].includes(method.type) && method.is_public && method.value) && (
-          <div className="mt-4 border-t border-[var(--color-laburante-border)] pt-4">
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]"><Link2 size={13} /> Portfolio y LinkedIn</p>
-            <div className="flex flex-wrap gap-2">
-            {(profile.contact_methods || []).filter((method) => ['linkedin', 'portfolio'].includes(method.type) && method.is_public && method.value).map((method) => {
-              const href = getContactHref(method.type, method.value)
-              const isPortfolio = method.type === 'portfolio'
-              return <div key={`${method.type}-${method.value}`} className="inline-flex min-w-0 items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3 py-2 text-xs">
-                <Globe size={14} className="shrink-0 text-[var(--color-laburante-indigo)]" /><a href={href || undefined} target={href?.startsWith('http') ? '_blank' : undefined} rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined} className="max-w-[min(60vw,280px)] truncate font-semibold text-[var(--color-laburante-indigo)]"><span className="mr-1 text-[var(--color-laburante-text-muted)]">{contactLabels[method.type]}:</span>{isPortfolio ? method.value : 'Ver LinkedIn'}</a><button type="button" onClick={() => copyContact(method.value, method.type)} aria-label={`Copiar ${method.type}`} className="rounded p-1 hover:bg-[var(--color-laburante-surface-alt)]">{copiedContact === method.type ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}</button>{href?.startsWith('http') && <ExternalLink size={12} className="shrink-0 text-[var(--color-laburante-text-muted)]" />}
+        {publicContacts.length > 0 && (
+            <div className="mt-4 min-w-0 border-t border-[var(--color-laburante-border)] pt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]"><Link2 size={13} /> Enlaces públicos</p>
+              <div className="grid min-w-0 gap-2 sm:flex sm:flex-wrap">
+                {publicContacts.map((method) => (
+                  <div key={`${method.type}-${method.value}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3 py-2 text-xs">
+                    <PublicContactIcon type={method.type} />
+                    <a
+                      href={method.href || undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Abrir ${method.label} de ${profile.name} en una nueva pestaña`}
+                      className="min-w-0 flex-1 truncate font-semibold text-[var(--color-laburante-indigo)] outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[var(--color-laburante-indigo)] focus-visible:ring-offset-2"
+                    >
+                      <span className="mr-1 text-[var(--color-laburante-text-muted)]">{method.label}:</span>{method.type === 'linkedin' ? 'Ver perfil' : method.value}
+                    </a>
+                    <button type="button" onClick={() => copyContact(method.value, method.type)} aria-label={`Copiar ${method.label}`} className="rounded p-1 outline-none hover:bg-[var(--color-laburante-surface-alt)] focus-visible:ring-2 focus-visible:ring-[var(--color-laburante-indigo)]">
+                      {copiedContact === method.type ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                    </button>
+                    <ExternalLink aria-hidden="true" size={12} className="shrink-0 text-[var(--color-laburante-text-muted)]" />
+                  </div>
+                ))}
               </div>
-            })}
             </div>
-          </div>
         )}
         <div className="pt-3 text-xs">
           {profile.has_resume || profile.resume_url ? (

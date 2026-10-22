@@ -1,5 +1,5 @@
 import { X, MessageCircle, Phone, Mail, Globe, ExternalLink, ShieldCheck } from 'lucide-react'
-import { dedupeContactMethods } from '@/lib/contact-methods'
+import { dedupeContactMethods, getPublicProfileContactHref } from '@/lib/contact-methods'
 
 interface ContactMethod {
   type: 'whatsapp' | 'telefono' | 'email' | 'instagram' | 'linkedin' | 'web' | 'portfolio' | string
@@ -64,20 +64,11 @@ export default function ContactModal({ isOpen, onClose, profileName, contactMeth
         return `tel:${val.replace(/\s+/g, '')}`
       case 'email':
         return `mailto:${val}?subject=Contacto%20desde%20LABURANTE`
-      case 'instagram': {
-        const handle = val.replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '')
-        return handle ? `https://instagram.com/${handle}` : null
-      }
+      case 'instagram':
       case 'linkedin':
       case 'web':
       case 'portfolio':
-        try {
-          const normalized = val.startsWith('http://') || val.startsWith('https://') ? val : `https://${val}`
-          const parsed = new URL(normalized)
-          return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null
-        } catch {
-          return null
-        }
+        return getPublicProfileContactHref(method.type, val)
       default:
         return '#'
     }

@@ -14,6 +14,7 @@ import AvatarCropModal from '@/components/profile/AvatarCropModal'
 import { captureAppError } from '@/lib/sentry'
 import { hasProviderContent, isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 import { loadEmailNotificationsEnabled, saveEmailNotificationsEnabled } from '@/lib/notification-preferences'
+import { toEditableContactMethod } from '@/lib/contact-methods'
 
 export default function CreateProfile() {
   const { user, loading: authLoading } = useAuthStore()
@@ -55,8 +56,8 @@ export default function CreateProfile() {
   const [services, setServices] = useState<{ title: string; description: string; precio_orientativo: string }[]>([
     { title: '', description: '', precio_orientativo: '' }
   ])
-  const [contactMethods, setContactMethods] = useState<{ type: string; value: string }[]>([
-    { type: 'whatsapp', value: '' }
+  const [contactMethods, setContactMethods] = useState<{ type: string; value: string; is_public: boolean }[]>([
+    { type: 'whatsapp', value: '', is_public: true }
   ])
   const [languages, setLanguages] = useState<{ language: string; level: 'basico' | 'intermedio' | 'avanzado' | 'bilingue' | 'nativo'; is_public: boolean }[]>([])
 
@@ -115,10 +116,7 @@ export default function CreateProfile() {
         }
         if (existing.contact_methods && existing.contact_methods.length > 0) {
           setContactMethods(
-            existing.contact_methods.map((c) => ({
-              type: c.type,
-              value: c.value,
-            }))
+            existing.contact_methods.map(toEditableContactMethod)
           )
         }
         if (existing.languages && existing.languages.length > 0) setLanguages(existing.languages)
@@ -128,7 +126,7 @@ export default function CreateProfile() {
         if (user.user_metadata.provincia) setProvincia(user.user_metadata.provincia)
         if (user.user_metadata.localidad) setLocalidad(user.user_metadata.localidad)
         if (user.user_metadata.phone) {
-          setContactMethods([{ type: 'whatsapp', value: user.user_metadata.phone }])
+          setContactMethods([{ type: 'whatsapp', value: user.user_metadata.phone, is_public: true }])
         }
         setIntent(normalizeProfileIntent(user.user_metadata.intent))
       }
@@ -237,7 +235,7 @@ export default function CreateProfile() {
       availableTypes.push('whatsapp')
     }
     const nextType = availableTypes.find((t) => !existingTypes.has(t)) || 'email'
-    setContactMethods([...contactMethods, { type: nextType, value: '' }])
+    setContactMethods([...contactMethods, { type: nextType, value: '', is_public: true }])
   }
 
   const handleRemoveContact = (idx: number) => {
