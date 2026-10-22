@@ -47,6 +47,22 @@ export default function Search() {
     return () => window.clearTimeout(timeout)
   }, [query, provincia, localidad, category, modalidad, searchParams, setSearchParams])
 
+  useEffect(() => {
+    if (!mobileFiltersOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileFiltersOpen(false)
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [mobileFiltersOpen])
+
   const handleApplyFilters = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     const params = new URLSearchParams()
@@ -68,10 +84,24 @@ export default function Search() {
     setSearchParams(new URLSearchParams())
   }
 
+  const activeFilterCount = [
+    provincia,
+    localidad.trim(),
+    category,
+    modalidad !== 'todas' ? modalidad : '',
+  ].filter(Boolean).length
+
+  const clearOneFilter = (filter: 'provincia' | 'localidad' | 'category' | 'modalidad') => {
+    if (filter === 'provincia') setProvincia('')
+    if (filter === 'localidad') setLocalidad('')
+    if (filter === 'category') setCategory('')
+    if (filter === 'modalidad') setModalidad('todas')
+  }
+
   return (
     <div className="container py-8 md:py-12">
       {/* Top Search Header */}
-      <div className="mb-8">
+      <div className="mb-6 md:mb-8">
         <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
           Encontrá a la persona indicada para lo que necesitás
         </h1>
@@ -89,6 +119,7 @@ export default function Search() {
               <div className="flex items-center gap-2 font-heading font-semibold text-sm text-[var(--color-laburante-text)]">
                 <Filter size={16} />
                 Filtros
+                {activeFilterCount > 0 && <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">{activeFilterCount}</span>}
               </div>
               <button
                 type="button"
@@ -202,9 +233,9 @@ export default function Search() {
         </aside>
 
         {/* Results Content */}
-        <main className="lg:col-span-3 space-y-6">
+        <section className="lg:col-span-3 space-y-6" aria-label="Resultados de búsqueda" aria-busy={loading}>
           {/* Quick Search Bar (Mobile + quick inline) */}
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <div className="flex-1 relative">
               <SearchIcon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-laburante-text-muted)]" />
               <input
@@ -217,35 +248,48 @@ export default function Search() {
               />
             </div>
             <button
+              type="button"
               onClick={() => setMobileFiltersOpen(true)}
-              className="lg:hidden p-3 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-[var(--color-laburante-text)]"
-              aria-label="Filtros"
+              className={`lg:hidden inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition-colors ${activeFilterCount > 0
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
+                : 'border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)]'
+              }`}
+              aria-label={activeFilterCount > 0 ? `Filtros, ${activeFilterCount} activos` : 'Abrir filtros'}
             >
-              <Filter size={18} />
+              <Filter size={18} aria-hidden="true" />
+              <span>Filtros</span>
+              {activeFilterCount > 0 && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold text-white">{activeFilterCount}</span>}
             </button>
             <button
+              type="button"
               onClick={() => handleApplyFilters()}
-              className="hidden sm:inline-flex px-5 py-3 rounded-2xl bg-[var(--color-laburante-accent)] text-black font-heading font-bold text-sm hover:bg-[var(--color-laburante-accent-hover)] transition-colors"
+              className="hidden min-h-12 px-5 py-3 rounded-2xl bg-[var(--color-laburante-accent)] text-black font-heading font-bold text-sm hover:bg-[var(--color-laburante-accent-hover)] transition-colors sm:inline-flex sm:items-center sm:justify-center"
             >
               Buscar
             </button>
           </div>
 
           {/* Results Counter / Active indicators */}
-          <div className="flex items-center justify-between text-xs text-[var(--color-laburante-text-muted)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-laburante-text-muted)]" aria-live="polite">
             <span>
               {loading ? 'Buscando...' : `${profiles.length} ${profiles.length === 1 ? 'perfil encontrado' : 'perfiles encontrados'}`}
             </span>
-            {(provincia || category || localidad || modalidad !== 'todas') && (
-              <span className="text-[var(--color-laburante-indigo)] font-medium">
-                Filtros activos
-              </span>
-            )}
+            {activeFilterCount > 0 && <span className="font-medium text-[var(--color-laburante-indigo)]">{activeFilterCount} {activeFilterCount === 1 ? 'filtro activo' : 'filtros activos'}</span>}
           </div>
+
+          {activeFilterCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2" aria-label="Filtros aplicados">
+              {provincia && <button type="button" onClick={() => clearOneFilter('provincia')} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 text-xs font-medium text-indigo-800 hover:bg-indigo-100">{provincia}<X size={13} aria-hidden="true" /></button>}
+              {localidad.trim() && <button type="button" onClick={() => clearOneFilter('localidad')} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 text-xs font-medium text-indigo-800 hover:bg-indigo-100">{localidad}<X size={13} aria-hidden="true" /></button>}
+              {category && <button type="button" onClick={() => clearOneFilter('category')} className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 text-xs font-medium text-indigo-800 hover:bg-indigo-100"><span className="truncate">{category}</span><X size={13} aria-hidden="true" /></button>}
+              {modalidad !== 'todas' && <button type="button" onClick={() => clearOneFilter('modalidad')} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 text-xs font-medium capitalize text-indigo-800 hover:bg-indigo-100">{modalidad === 'ambas' ? 'Híbrido' : modalidad}<X size={13} aria-hidden="true" /></button>}
+              <button type="button" onClick={handleClearFilters} className="min-h-9 px-2 text-xs font-semibold text-[var(--color-laburante-text-muted)] underline underline-offset-2 hover:text-[var(--color-laburante-text)]">Limpiar todo</button>
+            </div>
+          )}
 
           {/* Profiles Grid */}
           {loading ? (
-            <div className="py-16 text-center text-sm text-[var(--color-laburante-text-muted)]">
+            <div className="py-16 text-center text-sm text-[var(--color-laburante-text-muted)]" role="status" aria-live="polite">
               Cargando perfiles...
             </div>
           ) : profiles.length > 0 ? (
@@ -277,17 +321,26 @@ export default function Search() {
               </div>
             </div>
           )}
-        </main>
+        </section>
       </div>
 
       {/* Mobile Filters Drawer Modal */}
       {mobileFiltersOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-4"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setMobileFiltersOpen(false)
+          }}
+        >
+          <div className="w-full max-w-md rounded-t-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl sm:rounded-3xl max-h-[min(90dvh,680px)] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="mobile-filters-title">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--color-laburante-border)]">
-              <h3 className="font-heading font-bold text-base">Filtros de búsqueda</h3>
-              <button onClick={() => setMobileFiltersOpen(false)} className="p-1 text-[var(--color-laburante-text-muted)]">
-                <X size={20} />
+              <div>
+                <h3 id="mobile-filters-title" className="font-heading font-bold text-base">Filtros de búsqueda</h3>
+                <p className="mt-0.5 text-xs text-[var(--color-laburante-text-muted)]">Refiná los resultados según lo que necesitás.</p>
+              </div>
+              <button type="button" onClick={() => setMobileFiltersOpen(false)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)] hover:text-[var(--color-laburante-text)]" aria-label="Cerrar filtros">
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
 
@@ -296,7 +349,7 @@ export default function Search() {
               <select
                 value={provincia}
                 onChange={(e) => setProvincia(e.target.value)}
-                className="w-full p-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
+                className="min-h-11 w-full rounded-xl border border-[var(--color-laburante-border)] bg-transparent px-3 text-sm"
               >
                 <option value="">Todas las provincias</option>
                 {PROVINCES.map((p) => (
@@ -312,8 +365,22 @@ export default function Search() {
                 value={localidad}
                 onChange={(e) => setLocalidad(e.target.value)}
                 placeholder="ej: Tigre, San Martín..."
-                className="w-full p-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
+                className="min-h-11 w-full rounded-xl border border-[var(--color-laburante-border)] bg-transparent px-3 text-sm"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">Rubro principal</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="min-h-11 w-full rounded-xl border border-[var(--color-laburante-border)] bg-transparent px-3 text-sm"
+              >
+                <option value="">Todos los rubros</option>
+                {CATEGORIES.filter((c) => !c.hidden).map((c) => (
+                  <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -321,7 +388,7 @@ export default function Search() {
               <select
                 value={modalidad}
                 onChange={(e) => setModalidad(e.target.value)}
-                className="w-full p-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
+                className="min-h-11 w-full rounded-xl border border-[var(--color-laburante-border)] bg-transparent px-3 text-sm"
               >
                 <option value="todas">Cualquiera</option>
                 <option value="presencial">Presencial</option>
@@ -334,16 +401,16 @@ export default function Search() {
               <button
                 type="button"
                 onClick={handleClearFilters}
-                className="flex-1 py-3 rounded-xl border border-[var(--color-laburante-border)] text-sm font-medium"
+                className="min-h-12 flex-1 rounded-xl border border-[var(--color-laburante-border)] text-sm font-medium"
               >
                 Limpiar
               </button>
               <button
                 type="button"
                 onClick={() => handleApplyFilters()}
-                className="btn-dark flex-1 py-3 rounded-xl text-sm font-semibold shadow-xs"
+                className="btn-dark min-h-12 flex-1 rounded-xl text-sm font-semibold shadow-xs"
               >
-                Aplicar
+                Aplicar filtros
               </button>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
-import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2 } from 'lucide-react'
+import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2, LayoutGrid, CircleHelp } from 'lucide-react'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { hasProviderContent, normalizeProfileIntent } from '@/lib/profile-publication'
 import { useNotificationStore } from '@/stores/notification-store'
@@ -48,6 +48,34 @@ export default function Header() {
     })
     return () => { active = false }
   }, [user, fetchMyProfile])
+
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location.pathname, location.search])
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
+
+  const closeMenu = () => setMenuOpen(false)
+
+  const mobileLinkClass = (path: string) => `flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-medium transition-colors ${
+    isActive(path) || (path === '/mis-trabajos' && (isActive('/pedidos') || isActive('/mis-trabajos')))
+      ? 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)]'
+      : 'text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)] hover:text-[var(--color-laburante-text)]'
+  }`
 
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]/95 backdrop-blur-md">
@@ -142,6 +170,14 @@ export default function Header() {
 
         {/* Auth + Admin + Notifications + Mobile Toggle */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            to="/buscar"
+            className="md:hidden inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-2.5 text-xs font-semibold text-[var(--color-laburante-text)] shadow-xs transition-colors hover:bg-[var(--color-laburante-surface-alt)]"
+            aria-label="Buscar personas"
+          >
+            <Search size={16} aria-hidden="true" />
+            <span className="hidden min-[380px]:inline">Buscar</span>
+          </Link>
           <NotificationBell />
 
           {isAdmin && (
@@ -192,77 +228,108 @@ export default function Header() {
           )}
 
           <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-[var(--color-laburante-surface-alt)]"
-            aria-label="Menú"
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="md:hidden inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] shadow-xs transition-colors hover:border-[var(--color-laburante-border-hover)] hover:bg-[var(--color-laburante-border)]"
+            aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-navigation"
           >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            {menuOpen ? <X size={21} aria-hidden="true" /> : <Menu size={21} aria-hidden="true" />}
           </button>
         </div>
       </div>
 
       {/* Mobile Menu */}
       {menuOpen && (
-        <div className="md:hidden border-t border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4 space-y-1">
-          <Link to="/buscar" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
-            <Search size={16} /> Buscar
-          </Link>
-          <Link to="/categorias" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
-            Categorías
-          </Link>
-          {companyAccount ? (
-            <Link to="/empresa" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
-              <Building2 size={16} /> Espacio Empresa
-              {unreadCount > 0 && (
-                <span className="ml-auto h-2 w-2 rounded-full bg-rose-500" aria-label="Hay novedades" />
-              )}
-            </Link>
-          ) : (
-            <Link to="/mis-trabajos" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
-              <Briefcase size={16} /> Mis Trabajos
-              {unreadCount > 0 && (
-                <span className="ml-auto h-2 w-2 rounded-full bg-rose-500" aria-label="Hay novedades" />
-              )}
-            </Link>
-          )}
-          <Link to="/como-funciona" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
-            Cómo funciona
-          </Link>
-          {!companyAccount && <Link to="/empresas" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm hover:bg-[var(--color-laburante-surface-alt)]">
-            <Building2 size={16} /> Empresas
-          </Link>}
-          {showOfferLink && <Link to="/crear-perfil" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-[var(--color-laburante-accent)] font-medium">
-            <UserPlus size={16} /> {offerLabel}
-          </Link>}
-          {isAdmin && (
-            <Link to="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-indigo-700 font-bold bg-indigo-50/70">
-              <ShieldAlert size={16} /> Panel de Administración
-            </Link>
-          )}
-          <hr className="border-[var(--color-laburante-border)]" />
-          {user ? (
-            <>
-              <div className="px-4 py-2 text-xs font-semibold text-[var(--color-laburante-text-muted)]">
-                Conectado como: <span className="text-[var(--color-laburante-text)]">{displayName}</span>
+        <>
+          <button
+            type="button"
+            aria-label="Cerrar menú"
+            className="fixed inset-0 top-16 z-40 bg-slate-950/25 md:hidden"
+            onClick={closeMenu}
+          />
+          <div
+            id="mobile-navigation"
+            className="absolute inset-x-0 top-full z-50 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-xl md:hidden"
+            role="dialog"
+            aria-label="Navegación principal"
+          >
+            <nav className="space-y-4">
+              <div>
+                <p className="px-3.5 pb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-laburante-text-muted)]">Explorar</p>
+                <div className="space-y-0.5">
+                  <Link to="/buscar" onClick={closeMenu} className={mobileLinkClass('/buscar')}>
+                    <Search size={17} aria-hidden="true" /> Buscar personas
+                  </Link>
+                  <Link to="/categorias" onClick={closeMenu} className={mobileLinkClass('/categorias')}>
+                    <LayoutGrid size={17} aria-hidden="true" /> Categorías
+                  </Link>
+                  <Link to="/como-funciona" onClick={closeMenu} className={mobileLinkClass('/como-funciona')}>
+                    <CircleHelp size={17} aria-hidden="true" /> Cómo funciona
+                  </Link>
+                  {!companyAccount && (
+                    <Link to="/empresas" onClick={closeMenu} className={mobileLinkClass('/empresas')}>
+                      <Building2 size={17} aria-hidden="true" /> Empresas
+                    </Link>
+                  )}
+                </div>
               </div>
-              <Link to={accountPath} onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                <User size={16} /> {companyAccount ? 'Espacio Empresa' : 'Mi perfil profesional'}
-              </Link>
-              <button onClick={handleSignOut} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-rose-600 hover:bg-rose-50 w-full text-left font-medium">
-                <LogOut size={16} /> Cerrar sesión
-              </button>
-            </>
-          ) : (
-            <div className="pt-2 space-y-2">
-              <Link to="/ingresar" onClick={() => setMenuOpen(false)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--color-laburante-border)] text-sm font-semibold">
-                <LogIn size={16} /> Ingresar
-              </Link>
-              <Link to="/registrar" onClick={() => setMenuOpen(false)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl btn-dark text-sm font-semibold">
-                Registrarme gratis
-              </Link>
-            </div>
-          )}
-        </div>
+
+              <div>
+                <p className="px-3.5 pb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-laburante-text-muted)]">Tu espacio</p>
+                <div className="space-y-0.5">
+                  {companyAccount ? (
+                    <Link to="/empresa" onClick={closeMenu} className={mobileLinkClass('/empresa')}>
+                      <Building2 size={17} aria-hidden="true" /> Espacio Empresa
+                      {unreadCount > 0 && <span className="ml-auto rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">Novedades</span>}
+                    </Link>
+                  ) : (
+                    <Link to="/mis-trabajos" onClick={closeMenu} className={mobileLinkClass('/mis-trabajos')}>
+                      <Briefcase size={17} aria-hidden="true" /> Mis trabajos
+                      {unreadCount > 0 && <span className="ml-auto rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">Novedades</span>}
+                    </Link>
+                  )}
+                  {showOfferLink && (
+                    <Link to={accountPath} onClick={closeMenu} className={`${mobileLinkClass(accountPath)} text-[var(--color-laburante-accent)]`}>
+                      <UserPlus size={17} aria-hidden="true" /> {offerLabel}
+                    </Link>
+                  )}
+                  {isAdmin && (
+                    <Link to="/admin" onClick={closeMenu} className="flex min-h-11 items-center gap-3 rounded-xl bg-indigo-50 px-3.5 py-3 text-sm font-bold text-indigo-700 transition-colors hover:bg-indigo-100">
+                      <ShieldAlert size={17} aria-hidden="true" /> Panel de administración
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--color-laburante-border)] pt-3">
+                {user ? (
+                  <div className="space-y-1">
+                    <p className="px-3.5 pb-1 text-xs text-[var(--color-laburante-text-muted)]">
+                      Conectado como <span className="font-semibold text-[var(--color-laburante-text)]">{displayName}</span>
+                    </p>
+                    <Link to={accountPath} onClick={closeMenu} className={mobileLinkClass(accountPath)}>
+                      <User size={17} aria-hidden="true" /> {companyAccount ? 'Espacio Empresa' : 'Mi perfil profesional'}
+                    </Link>
+                    <button type="button" onClick={handleSignOut} className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50">
+                      <LogOut size={17} aria-hidden="true" /> Cerrar sesión
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 px-1">
+                    <Link to="/ingresar" onClick={closeMenu} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--color-laburante-border)] px-3 text-sm font-semibold text-[var(--color-laburante-text)] transition-colors hover:bg-[var(--color-laburante-surface-alt)]">
+                      <LogIn size={16} aria-hidden="true" /> Ingresar
+                    </Link>
+                    <Link to="/registrar" onClick={closeMenu} className="btn-dark flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold">
+                      Registrarme
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </nav>
+          </div>
+        </>
       )}
     </header>
   )
