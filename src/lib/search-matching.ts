@@ -52,6 +52,13 @@ export interface SearchDocument {
   workText: string
 }
 
+/** Category membership is based on declared work evidence only. */
+export function categoryWorkTerms(category: { subcategories?: string[] }) {
+  return (category.subcategories || [])
+    .map(normalizeSearchText)
+    .filter(Boolean)
+}
+
 export function expandCategorySearchTerms(
   input: string,
   categories: Array<{ name: string; subcategories?: string[] }>,
@@ -88,7 +95,7 @@ function containsWholeTerm(text: string, term: string) {
 
 export function matchesCategoryDocument(document: SearchDocument, categoryTerms: string[]) {
   const terms = categoryTerms.flatMap((term) => [term, ...expandSearchTermVariants(term)])
-  return terms.some((term) => containsWholeTerm(document.publicText, term) || containsWholeTerm(document.workText, term))
+  return terms.some((term) => containsWholeTerm(document.workText, term))
 }
 
 function normalizedTerms(terms: string[]) {

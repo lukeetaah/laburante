@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  categoryWorkTerms,
   expandCategorySearchTerms,
   matchesCategoryDocument,
   matchesSearchDocument,
@@ -37,10 +38,34 @@ test('specific searches score matching profiles and ignore empty input', () => {
 })
 
 test('category matching uses declared taxonomy terms as whole words', () => {
-  const constructionTerms = ['Construcción', 'Arquitectura', 'Techado']
+  const constructionTerms = categoryWorkTerms({ subcategories: ['Albañil', 'Albañilería', 'Arquitectura', 'Techado', 'Refacciones'] })
   assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Arquitectura y techado' }, constructionTerms), true)
-  assert.equal(matchesCategoryDocument({ publicText: 'Construcción de viviendas', workText: '' }, constructionTerms), true)
+  assert.equal(matchesCategoryDocument({ publicText: 'Construcción de viviendas', workText: '' }, constructionTerms), false)
   assert.equal(matchesCategoryDocument({ publicText: 'Gestión administrativa', workText: '' }, constructionTerms), false)
+})
+
+test('Construcción requires work evidence and rejects descriptive false positives', () => {
+  const constructionTerms = categoryWorkTerms({
+    subcategories: ['Albañil', 'Albañilería', 'Arquitectura', 'Techado', 'Refacciones'],
+  })
+
+  assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Albañilería y refacción de viviendas' }, constructionTerms), true)
+  assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Arquitectura y dirección de obra' }, constructionTerms), true)
+  assert.equal(matchesCategoryDocument({ publicText: 'Acompañante terapéutica en Construcción', workText: '' }, constructionTerms), false)
+  assert.equal(matchesCategoryDocument({ publicText: 'Desarrollador de software e infraestructura', workText: '' }, constructionTerms), false)
+  assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Construcción de software e infraestructura' }, constructionTerms), false)
+  assert.equal(matchesCategoryDocument({ publicText: 'Busco construir un proyecto', workText: '' }, constructionTerms), false)
+})
+
+test('shared specialties remain valid across categories', () => {
+  const architecture = { publicText: '', workText: 'Arquitectura y diseño de planos' }
+  const care = { publicText: '', workText: 'Enfermería y cuidado domiciliario' }
+  const technology = { publicText: '', workText: 'Desarrollo de software e infraestructura' }
+
+  assert.equal(matchesCategoryDocument(architecture, categoryWorkTerms({ subcategories: ['Arquitectura'] })), true)
+  assert.equal(matchesCategoryDocument(care, categoryWorkTerms({ subcategories: ['Enfermería', 'Cuidado de personas'] })), true)
+  assert.equal(matchesCategoryDocument(technology, categoryWorkTerms({ subcategories: ['Desarrollo de software', 'Infraestructura'] })), true)
+  assert.equal(matchesCategoryDocument(technology, categoryWorkTerms({ subcategories: ['Albañil', 'Techado'] })), false)
 })
 
 test('Cuidado accepts declared care work and rejects unrelated construction work', () => {

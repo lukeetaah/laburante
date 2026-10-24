@@ -10,6 +10,7 @@ import { getOperationalSettings } from '@/lib/operational-settings'
 import { isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 import { resolveProfilePhotoUrl } from '@/lib/profile-assets'
 import {
+  categoryWorkTerms,
   expandSearchTermVariants,
   isCatalogSearch,
   matchesCategoryDocument,
@@ -370,9 +371,7 @@ function normalizedSearchTerms(filters: { query?: string; category?: string }) {
 
   if (filters.category) {
     const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
-    ;[filters.category, ...(categoryDef?.subcategories || [])]
-      .map(normalizeSearchText)
-      .forEach((term) => terms.add(term))
+    categoryWorkTerms(categoryDef || {}).forEach((term) => terms.add(term))
   }
 
   return Array.from(terms)
@@ -396,22 +395,29 @@ async function fetchSearchCandidateIds(filters: {
   localidad?: string
   modalidad?: string
 }) {
-  const terms = normalizedSearchTerms(filters)
+  const queryTerms = filters.query?.trim() ? normalizedSearchTerms({ query: filters.query }) : []
+  const categoryTerms = filters.category ? normalizedSearchTerms({ category: filters.category }) : []
+  const terms = Array.from(new Set([...queryTerms, ...categoryTerms]))
   if (!terms.length) return []
 
-  const profileQuery = (supabase.from('public_profiles') as any)
-    .select('id')
-    .or(postgrestLikeFilters(PUBLIC_PROFILE_SEARCH_FIELDS, terms))
-    .eq('account_type', 'persona')
-    .in('intent', ['ofrecer', 'ambas'])
-    .limit(SEARCH_CANDIDATE_LIMIT)
+  // A category-only search starts from declared work fields. Descriptive
+  // profile fields remain available to the general free-text search.
+  let profileQuery: any = null
+  if (queryTerms.length) {
+    profileQuery = (supabase.from('public_profiles') as any)
+      .select('id')
+      .or(postgrestLikeFilters(PUBLIC_PROFILE_SEARCH_FIELDS, queryTerms))
+      .eq('account_type', 'persona')
+      .in('intent', ['ofrecer', 'ambas'])
+      .limit(SEARCH_CANDIDATE_LIMIT)
 
-  if (filters.provincia) profileQuery.eq('provincia', filters.provincia)
-  if (filters.localidad) profileQuery.ilike('localidad', `%${filters.localidad}%`)
-  if (filters.modalidad && filters.modalidad !== 'todas') profileQuery.eq('modalidad', filters.modalidad)
+    if (filters.provincia) profileQuery.eq('provincia', filters.provincia)
+    if (filters.localidad) profileQuery.ilike('localidad', `%${filters.localidad}%`)
+    if (filters.modalidad && filters.modalidad !== 'todas') profileQuery.eq('modalidad', filters.modalidad)
+  }
 
   const [profilesResult, skillsResult, servicesResult] = await Promise.all([
-    profileQuery,
+    profileQuery || Promise.resolve({ data: [], error: null }),
     (supabase.from('public_profile_skills') as any)
       .select('profile_id')
       .or(postgrestLikeFilters(['name'], terms))
@@ -426,9 +432,9 @@ async function fetchSearchCandidateIds(filters: {
   if (firstError) throw firstError
 
   return Array.from(new Set([
-    ...(profilesResult.data || []).map((row: any) => row.id),
     ...(skillsResult.data || []).map((row: any) => row.profile_id),
     ...(servicesResult.data || []).map((row: any) => row.profile_id),
+    ...(profilesResult.data || []).map((row: any) => row.id),
   ].filter(Boolean))).slice(0, SEARCH_CANDIDATE_LIMIT)
 }
 
@@ -548,17 +554,22 @@ async function hydrateSearchProfiles(rows: any[]): Promise<ProfileWithDetails[]>
   })))
 }
 
+let latestProfileSearchRequest = 0
+
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
   currentProfile: null,
   myProfile: null,
   loading: false,
   fetchProfiles: async (filters = {}) => {
+    const requestId = ++latestProfileSearchRequest
     addAppBreadcrumb('profile_search_started')
     set({ loading: true })
     try {
       const hasTextSearch = Boolean(filters.query?.trim() || filters.category)
       const searchCandidateIds = hasTextSearch ? await fetchSearchCandidateIds(filters) : null
+
+      if (requestId !== latestProfileSearchRequest) return
 
       if (searchCandidateIds && !searchCandidateIds.length) {
         set({ profiles: [], loading: false })
@@ -594,11 +605,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         ? await hydrateSearchProfiles((data || []) as any[])
         : await hydratePublicProfiles((data || []) as any[])
 
+      if (requestId !== latestProfileSearchRequest) return
+
       realProfiles = realProfiles.filter(isProviderProfile)
 
       if (filters.category) {
         const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
-        const categoryTerms = [filters.category, ...(categoryDef?.subcategories || [])].map(normalizeSearchText)
+        const categoryTerms = categoryWorkTerms(categoryDef || {})
         realProfiles = realProfiles.filter((profile) => matchesCategoryDocument(searchDocumentForProfile(profile), categoryTerms))
       }
 
@@ -631,8 +644,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       )
       if (!hasRefinement) realProfiles = shuffleProfiles(realProfiles)
 
-      set({ profiles: realProfiles, loading: false })
+      if (requestId === latestProfileSearchRequest) set({ profiles: realProfiles, loading: false })
     } catch (err) {
+      if (requestId !== latestProfileSearchRequest) return
       captureAppError(err, 'profile_search')
       console.warn('Error fetching profiles from Supabase:', err)
       set({ profiles: [], loading: false })
