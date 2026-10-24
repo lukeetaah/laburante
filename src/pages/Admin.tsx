@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 58219)
-Total output lines: 4073
-
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
@@ -2021,7 +2018,493 @@ export default function Admin() {
                     Anterior
                   </button>
                   <span className="px-2 font-bold text-slate-700">
-              …8219 tokens truncated…       ) : (
+                    Página {legalPage} de {Math.ceil(filteredLegalUsers.length / 20)}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={legalPage >= Math.ceil(filteredLegalUsers.length / 20)}
+                    onClick={() => setLegalPage((p) => p + 1)}
+                    className="px-3 py-1 rounded-lg border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] disabled:opacity-40 cursor-pointer"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'analytics' && (
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
+            <div className="flex items-center gap-2 text-indigo-800"><TrendingUp size={18} /><h2 className="font-heading text-lg font-bold">Vista operativa de LABURANTE</h2></div>
+            <p className="mt-1 text-xs leading-relaxed text-indigo-950/75">Indicadores reales para entender dónde se generan pedidos, presupuestos y casos sin cierre. Se actualiza junto con “Refrescar datos”.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[['Pedidos de presupuesto', jobRequests.length, 'bg-white'], ['Con presupuesto', budgetedJobs, 'bg-amber-50'], ['Casos cerrados', closedJobs, 'bg-emerald-50'], ['Cierres pendientes', unresolvedCases, 'bg-rose-50']].map(([label, value, tone]) => <article key={String(label)} className={`rounded-2xl border border-[var(--color-laburante-border)] ${tone} p-5`}><p className="text-xs font-semibold text-[var(--color-laburante-text-muted)]">{label}</p><p className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">{value}</p></article>)}
+          </div>
+          <div className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
+            <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-heading font-bold">Embudo de solicitudes</h3><span className="text-xs font-bold text-indigo-700">{completionRate}% cerradas</span></div>
+              <div className="mt-5 space-y-3">{[['solicitado', 'Solicitadas', 'bg-indigo-500'], ['presupuestado', 'Presupuestadas', 'bg-amber-500'], ['aceptado', 'Aceptadas', 'bg-cyan-500'], ['en_progreso', 'En progreso', 'bg-violet-500'], ['completado', 'Completadas', 'bg-emerald-500'], ['cancelado', 'Canceladas', 'bg-rose-500']].map(([key, label, color]) => { const count = jobStatusCounts[key] || 0; const width = jobRequests.length ? Math.max(4, Math.round((count / jobRequests.length) * 100)) : 4; return <div key={key}><div className="mb-1 flex justify-between text-xs"><span className="font-semibold">{label}</span><span className="text-[var(--color-laburante-text-muted)]">{count}</span></div><div className="h-2 rounded-full bg-slate-100"><div className={`h-2 rounded-full ${color}`} style={{ width: `${width}%` }} /></div></div> })}</div>
+            </section>
+            <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5"><h3 className="font-heading font-bold">Lectura rápida</h3><div className="mt-4 space-y-3 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]"><p><strong className="text-[var(--color-laburante-text)]">Presupuestos:</strong> {budgetedJobs} de {jobRequests.length} pedidos recibieron una propuesta.</p><p><strong className="text-[var(--color-laburante-text)]">Cierre:</strong> {unresolvedCases} casos completados todavía necesitan respuesta de una de las partes.</p><p><strong className="text-[var(--color-laburante-text)]">Empresas:</strong> {profiles.filter((p) => p.account_type === 'empresa').length} cuentas registradas para búsquedas y proyectos.</p></div></section>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'jobs' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-xs text-indigo-950">
+            <p className="font-bold">Pedidos administrables</p>
+            <p className="mt-1 leading-relaxed">Consultá el contexto completo del pedido y aplicá únicamente acciones administrativas registradas.</p>
+          </div>
+          {jobRequests.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">No hay pedidos disponibles.</div>
+          ) : (
+            <div className="space-y-3">
+              {jobRequests.map((job) => (
+                <article key={job.id} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-heading font-bold text-sm">{job.title}</h3>
+                        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase text-indigo-800">{job.status}</span>
+                        {job.archived_at && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-700">Archivado</span>}
+                      </div>
+                      <p className="truncate text-[11px] text-[var(--color-laburante-text-muted)]">ID: {job.id}</p>
+                      <p className="text-xs text-[var(--color-laburante-text-secondary)]">Cliente: {job.client_profile?.name || job.client_name || 'Sin perfil'} · Profesional: {job.professional_profile?.name || 'Sin perfil'}</p>
+                      <p className="text-[11px] text-[var(--color-laburante-text-muted)]">{new Date(job.created_at).toLocaleDateString()} · Reportes vinculados: {job.linked_reports?.length || 0}</p>
+                    </div>
+                    <button type="button" onClick={() => openJobDetails(job)} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-700 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-800"><Eye size={14} /> Ver pedido</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: WhatsApp Verification Requests */}
+      {activeTab === 'verifications' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-indigo-900">
+              <ShieldCheck size={15} className="text-indigo-600" />
+              Solicitudes de verificación de WhatsApp
+            </p>
+            <p className="text-[11px] text-indigo-800 leading-relaxed">
+              Los profesionales envían un mensaje con su código único a la Línea Oficial de WhatsApp. Comprobá que el remitente coincida con el número declarado y aprobá.
+            </p>
+          </div>
+
+          {waRequests.length === 0 ? (
+            <div className="p-10 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
+              No hay solicitudes de verificación por el momento.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {waRequests.map((req) => {
+                const requestsForProfile = waRequests.filter((r) => r.profile_id === req.profile_id)
+                const hasDuplicates = requestsForProfile.length > 1
+
+                return (
+                  <div
+                    key={req.id}
+                    className={`p-5 rounded-2xl border bg-[var(--color-laburante-surface)] space-y-3 ${
+                      req.status === 'pendiente' ? 'border-indigo-300' : 'border-[var(--color-laburante-border)]'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                            req.status === 'pendiente'
+                              ? 'bg-amber-100 text-amber-800'
+                              : req.status === 'aprobado'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {req.status === 'pendiente' ? '⏳ Pendiente' : req.status === 'aprobado' ? '✅ Aprobada' : '❌ Rechazada'}
+                        </span>
+                        {hasDuplicates && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200" title="Historial de solicitudes registradas para este perfil">
+                            Total solicitudes: {requestsForProfile.length}
+                          </span>
+                        )}
+                        <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                          {req.profile_name}
+                        </h4>
+                        {req.profile_slug && (
+                          <Link to={`/p/${req.profile_slug}`} target="_blank" className="text-[11px] text-[var(--color-laburante-indigo)] hover:underline">
+                            @{req.profile_slug}
+                          </Link>
+                        )}
+                      </div>
+                      <span className="text-xs text-[var(--color-laburante-text-muted)]">
+                        {new Date(req.created_at).toLocaleDateString()} {new Date(req.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs">
+                      <div>
+                        <span className="text-[var(--color-laburante-text-muted)]">Número declarado:</span>
+                        <p className="font-bold text-[var(--color-laburante-text)]">{req.phone_declared}</p>
+                      </div>
+                      <div>
+                        <span className="text-[var(--color-laburante-text-muted)]">Código:</span>
+                        <p className="font-mono font-bold text-indigo-800">{req.code}</p>
+                      </div>
+                      {req.reviewed_at && (
+                        <div>
+                          <span className="text-[var(--color-laburante-text-muted)]">Fecha de resolución:</span>
+                          <p className="font-medium text-[var(--color-laburante-text)]">
+                            {new Date(req.reviewed_at).toLocaleDateString()} {new Date(req.reviewed_at).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      )}
+                      <div className="flex items-end">
+                        <a
+                          href={`https://wa.me/${req.phone_declared.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 transition-colors"
+                        >
+                          <MessageCircle size={13} />
+                          Abrir chat con el profesional
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                    </div>
+
+                    {req.status === 'pendiente' && (
+                      <div className="flex flex-wrap items-center gap-2 pt-2">
+                        <button
+                          onClick={() => handleApproveWA(req)}
+                          className="py-1.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Check size={14} />
+                          Aprobar y Certificar ✓
+                        </button>
+                        <button
+                          onClick={() => handleRejectWA(req)}
+                          className="py-1.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <XCircle size={14} />
+                          Rechazar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Confirmaciones y Registros Pendientes */}
+      {activeTab === 'confirmations' && (
+        <div className="space-y-4">
+          <div className="p-5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-indigo-950 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+              <div>
+                <p className="font-heading font-bold flex items-center gap-1.5 text-indigo-900"><RefreshCw size={15} /> Campaña de reactivación (vista previa)</p>
+                <p className="text-[11px] text-indigo-800 mt-1 leading-relaxed">Incluye cuentas confirmadas, no administrativas, con perfil elegible y más de 30 días sin ingreso ni actividad. La vista previa no envía mensajes.</p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button type="button" onClick={handlePreviewReactivationCampaign} disabled={reactivationCampaignLoading || reactivationCampaignSending} className="py-2 px-3 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold disabled:opacity-50">{reactivationCampaignLoading ? 'Calculando…' : 'Calcular elegibles'}</button>
+                <button type="button" onClick={handleSendReactivationCampaign} disabled={!reactivationCampaign || reactivationCampaignSending || reactivationCampaignLoading} className="py-2 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold disabled:opacity-50">{reactivationCampaignSending ? 'Enviando…' : 'Enviar campaña'}</button>
+              </div>
+            </div>
+            {reactivationCampaign && <div className="rounded-xl bg-white/80 border border-indigo-200 p-3 space-y-2 text-[11px]">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                <div><strong className="block text-lg">{reactivationCampaign.eligible}</strong>Elegibles</div>
+                <div><strong className="block text-lg">{reactivationCampaign.channels?.in_app || 0}</strong>Internas</div>
+                <div><strong className="block text-lg">{reactivationCampaign.channels?.email || 0}</strong>Email</div>
+                <div><strong className="block text-lg">{reactivationCampaign.channels?.email_excluded_by_preference || 0}</strong>Sin email</div>
+                <div><strong className="block text-lg">{reactivationCampaign.channels?.push || 0}</strong>Push</div>
+              </div>
+              <p><strong>Campaña:</strong> <span className="font-mono">{reactivationCampaign.campaign_id}</span></p>
+              <p><strong>Mensaje:</strong> {reactivationCampaign.title} — {reactivationCampaign.message}</p>
+              <p><strong>Destino:</strong> {reactivationCampaign.link}</p>
+              {reactivationCampaign.result && <p><strong>Resultado:</strong> {reactivationCampaign.result.created} creadas, {reactivationCampaign.result.already_processed} ya procesadas, {reactivationCampaign.result.email_failed_or_skipped} emails fallidos u omitidos.</p>}
+            </div>}
+          </div>
+          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-amber-900">
+                <Mail size={15} className="text-amber-700" />
+                Registros pendientes de confirmación de correo
+              </p>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Supervisión del ciclo de vida de cuentas registradas: Día 0 (Registro), Día 7 (Recordatorio 1), Día 14 (Recordatorio 2), Día 21+ (Candidato a limpieza solo si no presenta ninguna actividad ni rol protegido).
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleSimulateCleanup}
+                disabled={cleanupSimulating}
+                className="py-2 px-3.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white font-heading font-semibold text-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                title="Ejecutar simulación server-side de cuentas abandonadas sin borrar datos reales"
+              >
+                <RefreshCw size={13} className={cleanupSimulating ? 'animate-spin' : ''} />
+                <span>{cleanupSimulating ? 'Evaluando...' : 'Simular Limpieza (dry_run)'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleTriggerRemindersBatch}
+                disabled={remindersBatchLoading}
+                className="py-2 px-3.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-heading font-semibold text-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                title="Ejecutar pipeline real de recordatorios automáticos (mismo código que el scheduler diario)"
+              >
+                <Mail size={13} className={remindersBatchLoading ? 'animate-pulse' : ''} />
+                <span>{remindersBatchLoading ? 'Ejecutando...' : 'Ejecutar ronda de recordatorios'}</span>
+              </button>
+            </div>
+          </div>
+
+          {cleanupResults && (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 space-y-2">
+              <div className="flex items-center justify-between font-bold">
+                <span>Resultado de Simulación (dry_run): {cleanupResults.length} cuentas califican como abandonadas</span>
+                <button
+                  type="button"
+                  onClick={() => setCleanupResults(null)}
+                  className="text-[11px] text-slate-500 hover:underline cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
+              {cleanupResults.length === 0 ? (
+                <p className="text-[11px] text-slate-600">No hay cuentas que cumplan estrictamente los criterios de registro abandonado (21+ días sin confirmar y sin ninguna actividad).</p>
+              ) : (
+                <ul className="space-y-1 list-disc list-inside text-[11px] text-slate-700">
+                  {cleanupResults.map((r) => (
+                    <li key={r.user_id}>
+                      <strong>{r.name}</strong> ({r.email}) — Antigüedad: {r.days_elapsed} días — Estado: {r.action_taken}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {remindersBatchResult && (
+            <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 space-y-1">
+              <div className="flex items-center justify-between font-bold">
+                <span>Resultado del lote de recordatorios</span>
+                <button type="button" onClick={() => setRemindersBatchResult(null)} className="text-[11px] text-indigo-600 hover:underline cursor-pointer">Cerrar</button>
+              </div>
+              <div className="grid grid-cols-3 gap-3 mt-2 text-center">
+                <div className="p-2 rounded-xl bg-white border border-indigo-200">
+                  <p className="font-heading text-xl font-bold text-indigo-700">{remindersBatchResult.sent}</p>
+                  <p className="text-[11px] text-indigo-600">Enviados</p>
+                </div>
+                <div className="p-2 rounded-xl bg-white border border-indigo-200">
+                  <p className="font-heading text-xl font-bold text-slate-600">{remindersBatchResult.skipped}</p>
+                  <p className="text-[11px] text-slate-500">Omitidos</p>
+                </div>
+                <div className="p-2 rounded-xl bg-white border border-indigo-200">
+                  <p className="font-heading text-xl font-bold text-slate-700">{remindersBatchResult.total_candidates}</p>
+                  <p className="text-[11px] text-slate-500">Candidatos</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+          {/* Filtros de confirmaciones */}
+          <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] flex flex-col lg:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-1.5 flex-wrap w-full lg:w-auto">
+              <span className="font-semibold text-[var(--color-laburante-text-muted)] mr-1">Filtrar:</span>
+              {(['todos', 'pendiente', 'recordatorio_1', 'recordatorio_2', 'limpieza_programada', 'excluido_actividad'] as const).map((filterKey) => (
+                <button
+                  key={filterKey}
+                  type="button"
+                  onClick={() => setUnconfirmedFilter(filterKey)}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer text-[11px] ${
+                    unconfirmedFilter === filterKey
+                      ? 'bg-amber-600 text-white font-bold'
+                      : 'border border-[var(--color-laburante-border)] text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)]'
+                  }`}
+                >
+                  {filterKey === 'todos' ? 'Todos' :
+                   filterKey === 'pendiente' ? 'Pendientes (0-6d)' :
+                   filterKey === 'recordatorio_1' ? 'Recordatorio 1 (7-13d)' :
+                   filterKey === 'recordatorio_2' ? 'Recordatorio 2 (14-20d)' :
+                   filterKey === 'limpieza_programada' ? 'Candidatos Limpieza (21d+)' :
+                   'Excluidos con Actividad'}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
+              <input
+                type="text"
+                value={unconfirmedSearch}
+                onChange={(e) => setUnconfirmedSearch(e.target.value)}
+                placeholder="Buscar por nombre o email..."
+                className="px-3 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs w-full sm:w-56"
+              />
+              <select
+                value={unconfirmedSort}
+                onChange={(e) => setUnconfirmedSort(e.target.value as any)}
+                className="px-2.5 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs text-[var(--color-laburante-text-secondary)]"
+              >
+                <option value="antiguedad_desc">Más antiguos primero</option>
+                <option value="antiguedad_asc">Más recientes primero</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Listado de cuentas */}
+          {filteredUnconfirmed.length === 0 ? (
+            <div className="p-10 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
+              No se encontraron cuentas sin confirmar para los filtros seleccionados.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredUnconfirmed.map((reg: any) => (
+                <div
+                  key={reg.user_id}
+                  className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] space-y-3"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          reg.status === 'excluido_actividad'
+                            ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                            : reg.status === 'limpieza_programada'
+                            ? 'bg-rose-100 text-rose-900 border border-rose-200'
+                            : reg.status === 'recordatorio_2'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                            : reg.status === 'recordatorio_1'
+                            ? 'bg-yellow-100 text-yellow-900 border border-yellow-200'
+                            : 'bg-slate-100 text-slate-800 border border-slate-200'
+                        }`}
+                      >
+                        {reg.status === 'excluido_actividad' ? '🛡️ Excluido por actividad' :
+                         reg.status === 'limpieza_programada' ? '⚠️ Programado para limpieza' :
+                         reg.status === 'recordatorio_2' ? '📬 Recordatorio 2' :
+                         reg.status === 'recordatorio_1' ? '📧 Recordatorio 1' :
+                         '⏳ Pendiente inicial'}
+                      </span>
+                      <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                        {reg.name}
+                      </h4>
+                      <span className="text-xs text-[var(--color-laburante-text-muted)] font-mono">
+                        {reg.email}
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold text-[var(--color-laburante-text-secondary)]">
+                      {reg.days_elapsed} día{reg.days_elapsed === 1 ? '' : 's'} transcurrido{reg.days_elapsed === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <span className="text-[var(--color-laburante-text-muted)]">Fecha de registro:</span>
+                      <p className="font-medium text-[var(--color-laburante-text)]">
+                        {new Date(reg.created_at).toLocaleDateString()} {new Date(reg.created_at).toLocaleTimeString()}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-laburante-text-muted)]">Reenvíos solicitados:</span>
+                      <p className="font-medium text-[var(--color-laburante-text)]">
+                        {reg.resend_count || 0} reenvío{reg.resend_count === 1 ? '' : 's'}
+                        {reg.last_resend_at ? ` (último: ${new Date(reg.last_resend_at).toLocaleDateString()})` : ''}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-laburante-text-muted)]">Próxima acción / Fecha prevista:</span>
+                      <p className="font-medium text-[var(--color-laburante-text)]">
+                        {reg.status === 'excluido_actividad'
+                          ? 'Conservación protegida'
+                          : reg.scheduled_cleanup_at
+                          ? new Date(reg.scheduled_cleanup_at).toLocaleDateString()
+                          : 'Día 21 posterior al alta'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-laburante-text-muted)]">Actividad asociada:</span>
+                      <p className={`font-semibold ${reg.has_activity ? 'text-indigo-700' : 'text-slate-500'}`}>
+                        {reg.activity_details || (reg.has_activity ? 'Actividad detectada' : 'Sin actividad')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Acción: Reenviar verificación (solo para cuentas pendientes sin actividad) */}
+                  {reg.status !== 'excluido_actividad' && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleAdminResend(reg.user_id)}
+                        disabled={!!resendLoading[reg.user_id] || !!resendCooldowns[reg.user_id]}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                          resendCooldowns[reg.user_id]
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200'
+                            : resendLoading[reg.user_id]
+                            ? 'bg-indigo-50 text-indigo-400 border border-indigo-200'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        }`}
+                      >
+                        <Mail size={13} />
+                        {resendCooldowns[reg.user_id]
+                          ? `Esperar ${resendCooldowns[reg.user_id]}s`
+                          : resendLoading[reg.user_id]
+                          ? 'Enviando...'
+                          : 'Reenviar verificación'}
+                      </button>
+                      {(reg.manual_resend_count || 0) > 0 && (
+                        <span className="text-[11px] text-[var(--color-laburante-text-muted)]">
+                          {reg.manual_resend_count} reenvío{reg.manual_resend_count === 1 ? '' : 's'} manual{reg.manual_resend_count === 1 ? '' : 'es'}
+                          {reg.last_manual_resend_at ? ` · último: ${new Date(reg.last_manual_resend_at).toLocaleDateString()}` : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Mensajería Admin */}
+      {activeTab === 'messages' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs text-indigo-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-indigo-900">
+              <MessageCircle size={15} className="text-indigo-600" />
+              Mensajería con usuarios
+            </p>
+            <p className="text-[11px] text-indigo-800 leading-relaxed">
+              Conversaciones directas con usuarios de la plataforma. Los mensajes se envían vía RPC segura — el rol de admin se deriva server-side.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+            {/* Lista de conversaciones */}
+            <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden">
+              <div className="p-3 border-b border-[var(--color-laburante-border)] flex items-center justify-between">
+                <span className="font-heading font-bold text-xs text-[var(--color-laburante-text)]">Conversaciones</span>
+                <button type="button" onClick={loadAdminConversations} className="text-[11px] text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] flex items-center gap-1 cursor-pointer">
+                  <RefreshCw size={12} /> Actualizar
+                </button>
+              </div>
+              {adminConversations.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">
+                  No hay conversaciones activas.
+                </div>
+              ) : (
                 <div className="divide-y divide-[var(--color-laburante-border)]">
                   {adminConversations.map((conv) => {
                     const convProfile = profiles.find((p) => p.id === conv.user_id)
@@ -3587,4 +4070,3 @@ export default function Admin() {
     </div>
   )
 }
-
