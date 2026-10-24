@@ -18,6 +18,7 @@ import Privacy from '@/pages/Privacy'
 import HowItWorks from '@/pages/HowItWorks'
 import OrdersDashboard from '@/pages/OrdersDashboard'
 import NotFound from '@/pages/NotFound'
+import Support from '@/pages/Support'
 import Companies from '@/pages/Companies'
 import CompanyWorkspace from '@/pages/CompanyWorkspace'
 import { Analytics } from '@vercel/analytics/react'
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="recuperar-contrasena" element={<ForgotPassword />} />
           <Route path="restablecer-contrasena" element={<ResetPassword />} />
           <Route path="crear-perfil" element={<CreateProfile />} />
+          <Route path="soporte" element={<Support />} />
           <Route path="admin" element={<Admin />} />
           <Route path="como-funciona" element={<HowItWorks />} />
           <Route path="terminos" element={<Terms />} />

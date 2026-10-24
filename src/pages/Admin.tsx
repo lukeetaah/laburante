@@ -52,8 +52,12 @@ import {
   ArrowLeft,
   Search,
   AlertCircle,
+  LifeBuoy,
+  Paperclip,
+  Send,
 } from 'lucide-react'
 import { CURRENT_TERMS_VERSION } from '@/lib/constants'
+import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS } from '@/lib/support'
 
 function isValidPhotoUrl(photo: string): boolean {
   if (typeof photo !== 'string') return false
@@ -98,7 +102,7 @@ export default function Admin() {
 
   const [searchParams] = useSearchParams()
   const initialUrlTab = searchParams.get('tab')
-  const validTabs = ['analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'legal', 'settings'] as const
+  const validTabs = ['analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'legal', 'settings'] as const
   type AdminTab = typeof validTabs[number]
   const [activeTab, setActiveTab] = useState<AdminTab | null>(
     validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : null
@@ -156,6 +160,19 @@ export default function Admin() {
   const [conversationMessages, setConversationMessages] = useState<any[]>([])
   const [adminMessageInput, setAdminMessageInput] = useState('')
   const [adminMessageSending, setAdminMessageSending] = useState(false)
+  const [supportTickets, setSupportTickets] = useState<any[]>([])
+  const [selectedSupportTicket, setSelectedSupportTicket] = useState<any | null>(null)
+  const [supportMessages, setSupportMessages] = useState<any[]>([])
+  const [supportAttachment, setSupportAttachment] = useState<any | null>(null)
+  const [supportAttachmentUrl, setSupportAttachmentUrl] = useState<string | null>(null)
+  const [supportSearch, setSupportSearch] = useState('')
+  const [supportStatusFilter, setSupportStatusFilter] = useState('activos')
+  const [supportCategoryFilter, setSupportCategoryFilter] = useState('todas')
+  const [supportPage, setSupportPage] = useState(1)
+  const [supportTotal, setSupportTotal] = useState(0)
+  const [supportReply, setSupportReply] = useState('')
+  const [supportRequestCapture, setSupportRequestCapture] = useState(false)
+  const [supportSaving, setSupportSaving] = useState(false)
   // Company Operations (solicitudes y entrevistas)
   const [companyOps, setCompanyOps] = useState<{
     inquiries: any[]
@@ -381,6 +398,69 @@ export default function Admin() {
     await loadConversationMessages(conv.id)
   }
 
+  const loadSupportDetail = async (ticket: any) => {
+    setSelectedSupportTicket(ticket)
+    setSupportAttachmentUrl(null)
+    const [{ data: messages }, { data: attachments }] = await Promise.all([
+      (supabase.from('support_messages') as any).select('id,content,created_at,read_at').eq('ticket_id', ticket.id).order('created_at', { ascending: true }),
+      (supabase.from('support_attachments') as any).select('id,storage_path,original_name,mime_type,size_bytes,created_at').eq('ticket_id', ticket.id).order('created_at', { ascending: false }).limit(1),
+    ])
+    setSupportMessages(messages || [])
+    const attachment = attachments?.[0] || null
+    setSupportAttachment(attachment)
+    if (attachment) {
+      const signed = await supabase.storage.from('support-attachments').createSignedUrl(attachment.storage_path, 300)
+      if (!signed.error) setSupportAttachmentUrl(signed.data.signedUrl)
+    }
+    if (ticket.admin_unread) {
+      await supabase.rpc('admin_update_support_ticket', { p_ticket_id: ticket.id, p_status: null, p_category: null, p_priority: null })
+      setSupportTickets((current) => current.map((row) => row.id === ticket.id ? { ...row, admin_unread: false } : row))
+    }
+  }
+
+  const loadSupportTickets = async () => {
+    if (!isAdmin) return []
+    let query = (supabase.from('support_tickets') as any)
+      .select('id,case_number,user_id,title,initial_message,status,category,priority,admin_unread,user_unread,created_at,updated_at,last_activity_at', { count: 'exact' })
+      .order('last_activity_at', { ascending: false })
+      .range((supportPage - 1) * 25, supportPage * 25 - 1)
+    if (supportStatusFilter === 'activos') query = query.in('status', ['nuevo', 'en_revision', 'esperando_usuario'])
+    else if (supportStatusFilter !== 'todos') query = query.eq('status', supportStatusFilter)
+    if (supportCategoryFilter !== 'todas') query = query.eq('category', supportCategoryFilter)
+    if (supportSearch.trim()) {
+      const term = supportSearch.trim().replace(/[,()]/g, ' ')
+      query = query.or(`case_number.ilike.%${term}%,title.ilike.%${term}%`)
+    }
+    const { data, error, count } = await query
+    if (error) { setActionMessage('No se pudieron cargar los casos de soporte.'); return [] }
+    const rows = data || []
+    setSupportTickets(rows)
+    setSupportTotal(count || 0)
+    const targetId = searchParams.get('caso') || selectedSupportTicket?.id
+    const target = rows.find((row: any) => row.id === targetId) || (selectedSupportTicket && rows.some((row: any) => row.id === selectedSupportTicket.id) ? selectedSupportTicket : null)
+    if (target) await loadSupportDetail(target)
+    return rows
+  }
+
+  const handleSupportReply = async () => {
+    if (!selectedSupportTicket || !supportReply.trim()) return
+    setSupportSaving(true); setActionMessage(null)
+    const { error } = await supabase.rpc('admin_reply_support_ticket', { p_ticket_id: selectedSupportTicket.id, p_content: supportReply.trim(), p_request_capture: supportRequestCapture })
+    setSupportSaving(false)
+    if (error) { setActionMessage(`No se pudo responder: ${error.message}`); return }
+    setSupportReply(''); setSupportRequestCapture(false); setActionMessage('Respuesta enviada.'); await loadSupportTickets()
+  }
+
+  const handleSupportStatus = async (status: string) => {
+    if (!selectedSupportTicket) return
+    setSupportSaving(true)
+    const { error } = await supabase.rpc('admin_update_support_ticket', { p_ticket_id: selectedSupportTicket.id, p_status: status, p_category: selectedSupportTicket.category, p_priority: selectedSupportTicket.priority })
+    setSupportSaving(false)
+    if (error) { setActionMessage(`No se pudo actualizar el caso: ${error.message}`); return }
+    await loadSupportTickets()
+  }
+
+
   useEffect(() => {
     if (activeTab !== 'messages' || !isAdmin) return
     let mounted = true
@@ -397,6 +477,13 @@ export default function Admin() {
     })
     return () => { mounted = false }
   }, [activeTab, isAdmin])
+
+  useEffect(() => {
+    if (activeTab !== 'support' || !isAdmin) return
+    void loadSupportTickets()
+    const timer = window.setInterval(() => { void loadSupportTickets() }, 60000)
+    return () => window.clearInterval(timer)
+  }, [activeTab, isAdmin, supportStatusFilter, supportCategoryFilter, supportSearch, supportPage])
 
   if (authLoading) {
     return <div className="container py-20 text-center text-sm">Verificando credenciales...</div>
@@ -1556,6 +1643,21 @@ export default function Admin() {
               </div>
             </button>
 
+            <button
+              type="button"
+              onClick={() => { setActiveTab('support'); void loadSupportTickets() }}
+              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-3 rounded-xl bg-amber-600 text-white shadow-xs group-hover:scale-105 transition-transform"><LifeBuoy size={22} /></div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900">Casos</span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">Soporte</h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">Casos con historial, clasificación, estados y adjuntos autorizados.</p>
+              </div>
+            </button>
+
             {/* 7. Empresas y planes */}
             <button
               type="button"
@@ -1757,6 +1859,7 @@ export default function Admin() {
                 {activeTab === 'verifications' && 'Verificaciones WhatsApp'}
                 {activeTab === 'confirmations' && 'Confirmaciones de correo'}
                 {activeTab === 'messages' && 'Mensajes y soporte'}
+                {activeTab === 'support' && 'Casos de soporte'}
                 {activeTab === 'companies' && 'Cuentas Empresa'}
                 {activeTab === 'company_ops' && 'Operaciones Empresa'}
                 {activeTab === 'reports' && 'Reportes y moderación'}
@@ -2475,6 +2578,34 @@ export default function Admin() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab: Casos de soporte */}
+      {activeTab === 'support' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-950">
+            <p className="flex items-center gap-1.5 font-bold"><LifeBuoy size={15} className="text-amber-700" /> Soporte estructurado</p>
+            <p className="mt-1 leading-relaxed">Cada caso conserva el mensaje inicial. Los administradores pueden responder, clasificar, cerrar o solicitar una única imagen privada.</p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[330px_1fr]">
+            <div className="overflow-hidden rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+              <div className="space-y-2 border-b border-[var(--color-laburante-border)] p-3">
+                <div className="flex items-center justify-between"><span className="font-heading text-xs font-bold">Bandeja de casos</span><button type="button" onClick={() => void loadSupportTickets()} className="text-[11px] text-indigo-700 hover:underline"><RefreshCw size={12} className="inline" /> Actualizar</button></div>
+                <input value={supportSearch} onChange={(event) => { setSupportPage(1); setSupportSearch(event.target.value) }} placeholder="Buscar número o título" className="w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs" />
+                <div className="grid grid-cols-2 gap-2"><select value={supportStatusFilter} onChange={(event) => { setSupportPage(1); setSupportStatusFilter(event.target.value) }} className="rounded-xl border border-[var(--color-laburante-border)] px-2 py-2 text-xs"><option value="activos">Activos</option><option value="todos">Todos</option><option value="resuelto">Resueltos</option><option value="cancelado">Cancelados</option><option value="suspendido">Suspendidos</option></select><select value={supportCategoryFilter} onChange={(event) => { setSupportPage(1); setSupportCategoryFilter(event.target.value) }} className="rounded-xl border border-[var(--color-laburante-border)] px-2 py-2 text-xs"><option value="todas">Todas</option>{Object.entries(SUPPORT_CATEGORY_LABELS).filter(([key]) => key !== 'sin_clasificar').map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+              </div>
+              {supportTickets.length === 0 ? <p className="p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">No hay casos en este filtro.</p> : <div className="max-h-[620px] divide-y divide-[var(--color-laburante-border)] overflow-y-auto">{supportTickets.map((ticket) => <button key={ticket.id} type="button" onClick={() => void loadSupportDetail(ticket)} className={`w-full p-4 text-left hover:bg-[var(--color-laburante-surface-alt)] ${selectedSupportTicket?.id === ticket.id ? 'bg-amber-50' : ''}`}><div className="flex items-center justify-between gap-2"><span className="text-[11px] font-bold text-indigo-700">{ticket.case_number}</span>{ticket.admin_unread && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">Nuevo</span>}</div><p className="mt-1 truncate text-xs font-semibold">{ticket.title}</p><p className="mt-1 text-[10px] text-[var(--color-laburante-text-muted)]">{SUPPORT_STATUS_LABELS[ticket.status as keyof typeof SUPPORT_STATUS_LABELS]} · {new Date(ticket.last_activity_at).toLocaleString()}</p></button>)}</div>}
+              <div className="flex items-center justify-between border-t border-[var(--color-laburante-border)] p-3 text-[11px] text-[var(--color-laburante-text-muted)]"><span>{supportTotal} casos</span><div className="flex gap-1"><button type="button" disabled={supportPage <= 1} onClick={() => setSupportPage((page) => page - 1)} className="rounded-lg border px-2 py-1 disabled:opacity-40">Anterior</button><button type="button" disabled={supportPage * 25 >= supportTotal} onClick={() => setSupportPage((page) => page + 1)} className="rounded-lg border px-2 py-1 disabled:opacity-40">Siguiente</button></div></div>
+            </div>
+            <div className="flex min-h-[500px] flex-col rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+              {!selectedSupportTicket ? <div className="flex flex-1 items-center justify-center p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">Seleccioná un caso para revisar su historial.</div> : <>
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-laburante-border)] p-4"><div><p className="text-[11px] font-bold text-indigo-700">{selectedSupportTicket.case_number}</p><h3 className="mt-1 font-heading font-bold">{selectedSupportTicket.title}</h3><p className="mt-1 text-[11px] text-[var(--color-laburante-text-muted)]">{selectedSupportTicket.user_id}</p></div><div className="flex items-center gap-2"><select value={selectedSupportTicket.status} disabled={supportSaving} onChange={(event) => void handleSupportStatus(event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] px-2 py-2 text-xs">{Object.entries(SUPPORT_STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><select value={selectedSupportTicket.category} disabled={supportSaving} onChange={async (event) => { setSupportSaving(true); await supabase.rpc('admin_update_support_ticket', { p_ticket_id: selectedSupportTicket.id, p_status: selectedSupportTicket.status, p_category: event.target.value, p_priority: selectedSupportTicket.priority }); setSupportSaving(false); await loadSupportTickets() }} className="max-w-[150px] rounded-xl border border-[var(--color-laburante-border)] px-2 py-2 text-xs">{Object.entries(SUPPORT_CATEGORY_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div></div>
+                <div className="flex-1 space-y-3 overflow-y-auto p-4"><div className="rounded-2xl bg-[var(--color-laburante-surface-alt)] p-4"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-laburante-text-muted)]">Mensaje inicial</p><p className="whitespace-pre-wrap text-sm leading-relaxed">{selectedSupportTicket.initial_message}</p></div>{supportMessages.map((item) => <div key={item.id} className="rounded-2xl bg-indigo-50 p-4"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-indigo-700">Respuesta administrativa · {new Date(item.created_at).toLocaleString()}</p><p className="whitespace-pre-wrap text-sm leading-relaxed">{item.content}</p></div>)}{supportAttachment && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs"><p className="flex items-center gap-2 font-semibold text-emerald-900"><Paperclip size={14} />{supportAttachment.original_name} · {Math.round(supportAttachment.size_bytes / 1024)} KB</p>{supportAttachmentUrl && <a href={supportAttachmentUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold text-emerald-800 underline">Abrir imagen privada</a>}</div>}</div>
+                <div className="border-t border-[var(--color-laburante-border)] p-4"><textarea value={supportReply} onChange={(event) => setSupportReply(event.target.value)} maxLength={5000} rows={3} placeholder="Responder al usuario…" className="w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><label className="inline-flex items-center gap-2 text-xs text-[var(--color-laburante-text-secondary)]"><input type="checkbox" checked={supportRequestCapture} onChange={(event) => setSupportRequestCapture(event.target.checked)} />Solicitar una imagen (un uso)</label><button type="button" disabled={supportSaving || !supportReply.trim()} onClick={() => void handleSupportReply()} className="inline-flex items-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"><Send size={14} />Enviar respuesta</button></div></div>
+              </>}
+            </div>
+          </div>
         </div>
       )}
 

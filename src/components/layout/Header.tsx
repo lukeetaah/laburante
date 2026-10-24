@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
-import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2, LayoutGrid, CircleHelp } from 'lucide-react'
+import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2, LayoutGrid, CircleHelp, LifeBuoy } from 'lucide-react'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { hasProviderContent, normalizeProfileIntent } from '@/lib/profile-publication'
 import { useNotificationStore } from '@/stores/notification-store'
@@ -180,6 +180,17 @@ export default function Header() {
           </Link>
           <NotificationBell />
 
+          {user && (
+            <Link
+              to="/soporte"
+              className="hidden md:inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-[var(--color-laburante-text-secondary)] hover:bg-[var(--color-laburante-surface-alt)] hover:text-[var(--color-laburante-text)]"
+              aria-label="Solicitar soporte"
+            >
+              <LifeBuoy size={15} />
+              Soporte
+            </Link>
+          )}
+
           {isAdmin && (
             <Link
               to="/admin"
@@ -273,6 +284,7 @@ export default function Header() {
                       <Building2 size={17} aria-hidden="true" /> Empresas
                     </Link>
                   )}
+                  {user && <Link to="/soporte" onClick={closeMenu} className={mobileLinkClass('/soporte')}><LifeBuoy size={17} aria-hidden="true" /> Solicitar soporte</Link>}
                 </div>
               </div>
 
