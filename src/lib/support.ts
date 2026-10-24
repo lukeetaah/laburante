@@ -61,4 +61,41 @@ export function supportStoragePath(ticketId: string, requestId: string, mimeType
   return extension ? `${ticketId}/${requestId}.${extension}` : null
 }
 
+export type SupportUploadErrorCode =
+  | 'unauthorized'
+  | 'upload_not_authorized'
+  | 'unsupported_image'
+  | 'invalid_image_content'
+  | 'attachment_storage_failed'
+  | 'attachment_registration_failed'
+  | 'server_configuration_error'
+  | 'invalid_form'
+  | 'invalid_upload'
+
+export function supportUploadErrorMessage(code: string | null | undefined, status?: number) {
+  switch (code) {
+    case 'unauthorized':
+      return 'Tu sesión no es válida o venció. Iniciá sesión nuevamente e intentá otra vez.'
+    case 'upload_not_authorized':
+      return 'La autorización para adjuntar la imagen no existe, venció o ya fue utilizada.'
+    case 'unsupported_image':
+      return 'Elegí una imagen PNG, JPEG o WebP de hasta 5 MB.'
+    case 'invalid_image_content':
+      return 'El contenido del archivo no coincide con su tipo de imagen.'
+    case 'attachment_storage_failed':
+      return 'La imagen fue validada, pero no se pudo guardar. Intentá nuevamente más tarde.'
+    case 'attachment_registration_failed':
+      return 'No se pudo registrar la imagen en el caso. La autorización no se confirmó como utilizada.'
+    case 'server_configuration_error':
+      return 'El servicio de adjuntos no está disponible en este momento.'
+    case 'invalid_form':
+    case 'invalid_upload':
+      return 'No se pudo interpretar el archivo seleccionado. Elegí la imagen nuevamente.'
+    default:
+      return status === 401 || status === 403
+        ? 'No tenés una autorización válida para adjuntar esta imagen.'
+        : 'No se pudo completar la carga de la imagen. Intentá nuevamente más tarde.'
+  }
+}
+
 

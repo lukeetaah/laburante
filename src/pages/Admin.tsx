@@ -1421,48 +1421,48 @@ export default function Admin() {
       )}
 
       {/* Metrics Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+        <div className="p-3 sm:p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Perfiles registrados</p>
-          <p className="font-heading text-2xl font-bold text-[var(--color-laburante-text)] mt-1">
+          <p className="font-heading text-xl sm:text-2xl font-bold text-[var(--color-laburante-text)] mt-1">
             {profiles.length}
           </p>
         </div>
-        <div className="p-4 rounded-2xl border border-indigo-200 bg-indigo-50/60">
+        <div className="p-3 sm:p-4 rounded-2xl border border-indigo-200 bg-indigo-50/60">
           <p className="text-xs text-indigo-700 font-medium">Cuentas Empresa</p>
-          <p className="font-heading text-2xl font-bold text-indigo-900 mt-1">{profiles.filter((p) => p.account_type === 'empresa').length}</p>
+          <p className="font-heading text-xl sm:text-2xl font-bold text-indigo-900 mt-1">{profiles.filter((p) => p.account_type === 'empresa').length}</p>
         </div>
-        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+        <div className="p-3 sm:p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Perfiles activos</p>
-          <p className="font-heading text-2xl font-bold text-emerald-600 mt-1">
+          <p className="font-heading text-xl sm:text-2xl font-bold text-emerald-600 mt-1">
             {profiles.filter((p) => p.status === 'activo').length}
           </p>
         </div>
-        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+        <div className="p-3 sm:p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Privados / Pausados</p>
-          <p className="font-heading text-2xl font-bold text-amber-600 mt-1">
+          <p className="font-heading text-xl sm:text-2xl font-bold text-amber-600 mt-1">
             {profiles.filter((p) => p.status === 'oculto').length}
           </p>
         </div>
-        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+        <div className="p-3 sm:p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">WhatsApp Verificados</p>
-          <p className="font-heading text-2xl font-bold text-emerald-700 mt-1">
+          <p className="font-heading text-xl sm:text-2xl font-bold text-emerald-700 mt-1">
             {profiles.filter((p) => p.whatsapp_verified).length}
           </p>
         </div>
-        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+        <div className="p-3 sm:p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Verificaciones pendientes</p>
-          <p className="font-heading text-2xl font-bold text-indigo-600 mt-1">
+          <p className="font-heading text-xl sm:text-2xl font-bold text-indigo-600 mt-1">
             {pendingWaCount}
           </p>
         </div>
-        <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/60">
+        <div className="p-3 sm:p-4 rounded-2xl border border-amber-200 bg-amber-50/60">
           <p className="text-xs text-amber-800 font-medium">Completitud promedio</p>
-          <p className="font-heading text-2xl font-bold text-amber-900 mt-1">{averageProfileCompletion}%</p>
+          <p className="font-heading text-xl sm:text-2xl font-bold text-amber-900 mt-1">{averageProfileCompletion}%</p>
         </div>
-        <div className="p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+        <div className="p-3 sm:p-4 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
           <p className="text-xs text-[var(--color-laburante-text-muted)] font-medium">Bajas registradas</p>
-          <p className="font-heading text-2xl font-bold text-rose-600 mt-1">
+          <p className="font-heading text-xl sm:text-2xl font-bold text-rose-600 mt-1">
             {deletions.length}
           </p>
         </div>
@@ -1470,7 +1470,7 @@ export default function Admin() {
 
       {/* Dashboard Grid (when no module is selected) */}
       {!activeTab && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-5">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
@@ -1482,16 +1482,16 @@ export default function Admin() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 [&>button>div:last-child>p]:hidden sm:[&>button>div:last-child>p]:block">
             {/* 1. Edad y aceptación legal */}
             <button
               type="button"
               onClick={() => setActiveTab('legal')}
-              className="group p-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-indigo-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Scale size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Scale size={18} />
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-200">
@@ -1518,11 +1518,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('analytics')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-slate-900 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <BarChart3 size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <BarChart3 size={18} />
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
                   {completionRate}% completados
@@ -1542,11 +1542,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('jobs')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <ClipboardList size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <ClipboardList size={18} />
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800">
                   {jobRequests.length} pedidos
@@ -1566,11 +1566,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('verifications')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-emerald-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-emerald-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-emerald-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <ShieldCheck size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <ShieldCheck size={18} />
                 </div>
                 {pendingWaCount > 0 ? (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
@@ -1596,11 +1596,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('confirmations')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-amber-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Mail size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-amber-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Mail size={18} />
                 </div>
                 {unconfirmedRegistrations.length > 0 ? (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
@@ -1622,20 +1622,20 @@ export default function Admin() {
               </div>
             </button>
 
-            {/* 6. Mensajes directos */}
+            {/* 6. Mensajes y soporte */}
             <button
               type="button"
               onClick={() => { setActiveTab('messages'); loadAdminConversations() }}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-indigo-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <MessageCircle size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <MessageCircle size={18} />
                 </div>
               </div>
               <div>
                 <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
-                  Mensajes directos
+                  Mensajes y soporte
                 </h3>
                 <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
                   Canal directo de comunicación administrativa con usuarios y profesionales.
@@ -1645,15 +1645,15 @@ export default function Admin() {
 
             <button
               type="button"
-              onClick={() => setActiveTab('support')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              onClick={() => { setActiveTab('support'); void loadSupportTickets() }}
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-amber-600 text-white shadow-xs group-hover:scale-105 transition-transform"><LifeBuoy size={22} /></div>
+                <div className="p-2 sm:p-2.5 rounded-xl bg-amber-600 text-white shadow-xs group-hover:scale-105 transition-transform"><LifeBuoy size={18} /></div>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900">Casos</span>
               </div>
               <div>
-                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">Casos de soporte</h3>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">Soporte</h3>
                 <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">Casos con historial, clasificación, estados y adjuntos autorizados.</p>
               </div>
             </button>
@@ -1662,11 +1662,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('companies')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Building2 size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Building2 size={18} />
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-900">
                   {profiles.filter((p) => p.account_type === 'empresa').length} empresas
@@ -1686,11 +1686,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => { setActiveTab('company_ops'); loadCompanyOperations() }}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Briefcase size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-800 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Briefcase size={18} />
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800">
                   {companyOps.inquiries.length + companyOps.interviews.length} registros
@@ -1710,11 +1710,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('reports')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-rose-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-rose-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-rose-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <AlertTriangle size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-rose-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <AlertTriangle size={18} />
                 </div>
                 {pendingReportsCount > 0 ? (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
@@ -1740,11 +1740,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('profiles')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-slate-900 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Users size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Users size={18} />
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800">
                   {profiles.length} perfiles
@@ -1764,11 +1764,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('deletions')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-rose-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-rose-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-rose-700 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Trash2 size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-rose-700 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Trash2 size={18} />
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800">
                   {deletions.length} bajas
@@ -1788,11 +1788,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('reviews')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-amber-500 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Star size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <Star size={18} />
                 </div>
                 {pendingReviewsCount > 0 ? (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
@@ -1818,11 +1818,11 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setActiveTab('settings')}
-              className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-slate-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="p-3 rounded-xl bg-slate-700 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <KeyRound size={22} />
+                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-700 text-white shadow-xs group-hover:scale-105 transition-transform">
+                  <KeyRound size={18} />
                 </div>
               </div>
               <div>
@@ -1858,7 +1858,7 @@ export default function Admin() {
                 {activeTab === 'jobs' && 'Pedidos de trabajo'}
                 {activeTab === 'verifications' && 'Verificaciones WhatsApp'}
                 {activeTab === 'confirmations' && 'Confirmaciones de correo'}
-                {activeTab === 'messages' && 'Mensajes directos'}
+                {activeTab === 'messages' && 'Mensajes y soporte'}
                 {activeTab === 'support' && 'Casos de soporte'}
                 {activeTab === 'companies' && 'Cuentas Empresa'}
                 {activeTab === 'company_ops' && 'Operaciones Empresa'}
@@ -2615,27 +2615,11 @@ export default function Admin() {
           <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs text-indigo-950 space-y-1">
             <p className="font-bold flex items-center gap-1.5 text-indigo-900">
               <MessageCircle size={15} className="text-indigo-600" />
-              Mensajes directos
+              Mensajería con usuarios
             </p>
             <p className="text-[11px] text-indigo-800 leading-relaxed">
-              Conversaciones directas con usuarios de la plataforma. Los mensajes se envían vía RPC segura; el rol de administrador se valida en el servidor.
+              Conversaciones directas con usuarios de la plataforma. Los mensajes se envían vía RPC segura — el rol de admin se deriva server-side.
             </p>
-          </div>
-          <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-2.5">
-              <LifeBuoy size={18} className="mt-0.5 shrink-0 text-amber-700" />
-              <div>
-                <p className="text-xs font-bold text-amber-950">¿Necesitás gestionar una solicitud de soporte?</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-900">Los casos con número, estados, respuestas y capturas tienen una bandeja independiente.</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab('support')}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-amber-800"
-            >
-              <LifeBuoy size={14} /> Abrir casos de soporte
-            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">

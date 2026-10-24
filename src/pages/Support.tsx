@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { AlertCircle, CheckCircle2, Clock3, FileImage, LifeBuoy, Loader2, LockKeyhole, Send, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
-import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS, hasSupportedImageSignature, isSupportedImageMime, validateSupportTicketInput, SUPPORT_MAX_ATTACHMENT_BYTES } from '@/lib/support'
+import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS, hasSupportedImageSignature, isSupportedImageMime, validateSupportTicketInput, SUPPORT_MAX_ATTACHMENT_BYTES, supportUploadErrorMessage } from '@/lib/support'
 
 type Ticket = Record<string, any>
 
@@ -97,7 +97,21 @@ export default function Support() {
     form.append('file', file)
     const { error: invokeError } = await supabase.functions.invoke('support-upload-attachment', { body: form })
     setUploading(false)
-    if (invokeError) { setError('No se pudo guardar el adjunto. La autorización puede haber vencido.'); return }
+    if (invokeError) {
+      let code: string | null = null
+      const context = (invokeError as any)?.context
+      if (context && typeof context.json === 'function') {
+        try {
+          const body = await context.json()
+          code = typeof body?.error === 'string' ? body.error : null
+        } catch {
+          // La respuesta puede no contener JSON; se conserva un mensaje seguro.
+        }
+      }
+      const status = typeof context?.status === 'number' ? context.status : undefined
+      setError(supportUploadErrorMessage(code, status))
+      return
+    }
     setFile(null); setUploadRequest(null); setNotice('La imagen fue adjuntada de forma privada al caso.')
     await loadTickets(selected.id)
   }
