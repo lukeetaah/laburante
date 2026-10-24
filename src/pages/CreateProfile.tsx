@@ -12,6 +12,7 @@ import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerification
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 import AvatarCropModal from '@/components/profile/AvatarCropModal'
 import { captureAppError } from '@/lib/sentry'
+import { uploadProfileAsset } from '@/lib/profile-asset-upload'
 import { hasProviderContent, isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 import { loadEmailNotificationsEnabled, saveEmailNotificationsEnabled } from '@/lib/notification-preferences'
 import { toEditableContactMethod } from '@/lib/contact-methods'
@@ -296,85 +297,26 @@ export default function CreateProfile() {
     setSubmitting(true)
     setError(null)
 
-    const uploadAsset = async (file: File | null, kind: 'photo' | 'resume') => {
-      if (!file || !user) return kind === 'photo' ? existingPhotoUrl : existingResumeUrl
-      const extension = (file.name.split('.').pop() || '').toLowerCase()
-      const mime = (file.type || '').toLowerCase()
-
-      if (kind === 'photo') {
-        const validPhotoMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/pjpeg']
-        const validPhotoExts = ['jpg', 'jpeg', 'png', 'webp']
-        const isPhotoValid = validPhotoMimes.includes(mime) || validPhotoExts.includes(extension)
-        if (!isPhotoValid) {
-          const err = new Error('La foto debe ser formato JPG, PNG o WebP.') as any
-          err._stage = 'validation'
-          err._resource = 'avatar'
-          err._code = 'invalid_format'
-          throw err
-        }
-        if (file.size > 5 * 1024 * 1024) {
-          const err = new Error('La foto no puede superar los 5 MB.') as any
-          err._stage = 'validation'
-          err._resource = 'avatar'
-          err._code = 'size_exceeded'
-          throw err
-        }
-      } else {
-        const validDocMimes = [
-          'application/pdf',
-          'text/plain',
-          'text/csv',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/x-pdf',
-          'application/octet-stream',
-        ]
-        const validDocExts = ['pdf', 'doc', 'docx', 'csv', 'txt']
-        const isDocValid = validDocMimes.includes(mime) || validDocExts.includes(extension)
-        if (!isDocValid) {
-          const err = new Error('El CV debe ser PDF, DOC, DOCX, CSV o TXT.') as any
-          err._stage = 'validation'
-          err._resource = 'resume'
-          err._code = 'invalid_format'
-          throw err
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          const err = new Error('El archivo de CV no puede superar los 10 MB.') as any
-          err._stage = 'validation'
-          err._resource = 'resume'
-          err._code = 'size_exceeded'
-          throw err
-        }
-      }
-
-      const safeExt = extension || (kind === 'photo' ? 'jpg' : 'pdf')
-      const bucket = kind === 'photo' ? 'profile-photos' : 'profile-documents'
-      const path = `${user.id}/${kind}-${Date.now()}.${safeExt}`
-      const contentType = mime || (kind === 'photo' ? 'image/jpeg' : 'application/pdf')
-
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
-        upsert: true,
-        contentType,
-      })
-      if (uploadError) {
-        const err = new Error(uploadError.message || 'No se pudo subir el archivo a Supabase Storage.') as any
-        err._stage = 'storage_upload'
-        err._resource = kind === 'photo' ? 'avatar' : 'resume'
-        err._bucket = bucket
-        err.name = uploadError.name || 'StorageApiError'
-        err._code = (uploadError as any).code || (uploadError as any).error
-        err.status = (uploadError as any).status || (uploadError as any).statusCode
-        err.statusCode = (uploadError as any).statusCode || (uploadError as any).status
-        throw err
-      }
-      if (kind === 'resume') return `profile-documents:${path}`
-      const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(path)
-      return publicUrlResult?.data?.publicUrl || null
-    }
+    let currentStage = 'storage_upload'
+    let currentResource = 'asset'
 
     try {
-      const photoUrl = await uploadAsset(photoFile, 'photo')
-      const resumeUrl = await uploadAsset(resumeFile, 'resume')
+      const photoUrl = await uploadProfileAsset({
+        file: photoFile,
+        kind: 'photo',
+        userId: user?.id,
+        existingUrl: existingPhotoUrl,
+        storage: supabase.storage,
+      })
+      const resumeUrl = await uploadProfileAsset({
+        file: resumeFile,
+        kind: 'resume',
+        userId: user?.id,
+        existingUrl: existingResumeUrl,
+        storage: supabase.storage,
+      })
+      currentStage = 'profile_save'
+      currentResource = 'profile'
       const shouldPersistHybridPercentages = modalidad === 'ambas' && (!isEditing || hybridPercentagesEdited || initialModalidad !== 'ambas')
 
       const sanitizedSkills = (skills || [])
@@ -439,6 +381,7 @@ export default function CreateProfile() {
         })
         setError(res.error)
       } else if (res.slug) {
+        currentStage = 'post_save'
         // Registrar habilidades personalizadas en proposed_skills para revisión de admin
         const customSkills = sanitizedSkills.filter((s) => !isKnownWorkOption(s))
         if (customSkills.length > 0 && user?.id) {
@@ -480,8 +423,8 @@ export default function CreateProfile() {
       }
     } catch (uploadError: any) {
       captureAppError(uploadError, 'profile_asset_upload_or_save', {
-        stage: uploadError._stage || 'storage_upload',
-        resource: uploadError._resource || 'asset',
+        stage: uploadError._stage || currentStage,
+        resource: uploadError._resource || currentResource,
         bucket: uploadError._bucket,
         errorType: uploadError.name || 'StorageError',
         errorCode: uploadError.code || uploadError._code,
