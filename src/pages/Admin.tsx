@@ -1622,7 +1622,7 @@ export default function Admin() {
               </div>
             </button>
 
-            {/* 6. Mensajes y soporte */}
+            {/* 6. Mensajes directos */}
             <button
               type="button"
               onClick={() => { setActiveTab('messages'); loadAdminConversations() }}
@@ -1635,7 +1635,7 @@ export default function Admin() {
               </div>
               <div>
                 <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
-                  Mensajes y soporte
+                  Mensajes directos
                 </h3>
                 <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
                   Canal directo de comunicación administrativa con usuarios y profesionales.
@@ -1645,7 +1645,7 @@ export default function Admin() {
 
             <button
               type="button"
-              onClick={() => { setActiveTab('support'); void loadSupportTickets() }}
+              onClick={() => setActiveTab('support')}
               className="group p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-amber-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-4"
             >
               <div className="flex items-start justify-between gap-3">
@@ -1653,7 +1653,7 @@ export default function Admin() {
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900">Casos</span>
               </div>
               <div>
-                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">Soporte</h3>
+                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">Casos de soporte</h3>
                 <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">Casos con historial, clasificación, estados y adjuntos autorizados.</p>
               </div>
             </button>
@@ -1858,7 +1858,7 @@ export default function Admin() {
                 {activeTab === 'jobs' && 'Pedidos de trabajo'}
                 {activeTab === 'verifications' && 'Verificaciones WhatsApp'}
                 {activeTab === 'confirmations' && 'Confirmaciones de correo'}
-                {activeTab === 'messages' && 'Mensajes y soporte'}
+                {activeTab === 'messages' && 'Mensajes directos'}
                 {activeTab === 'support' && 'Casos de soporte'}
                 {activeTab === 'companies' && 'Cuentas Empresa'}
                 {activeTab === 'company_ops' && 'Operaciones Empresa'}
@@ -2615,11 +2615,27 @@ export default function Admin() {
           <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs text-indigo-950 space-y-1">
             <p className="font-bold flex items-center gap-1.5 text-indigo-900">
               <MessageCircle size={15} className="text-indigo-600" />
-              Mensajería con usuarios
+              Mensajes directos
             </p>
             <p className="text-[11px] text-indigo-800 leading-relaxed">
-              Conversaciones directas con usuarios de la plataforma. Los mensajes se envían vía RPC segura — el rol de admin se deriva server-side.
+              Conversaciones directas con usuarios de la plataforma. Los mensajes se envían vía RPC segura; el rol de administrador se valida en el servidor.
             </p>
+          </div>
+          <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2.5">
+              <LifeBuoy size={18} className="mt-0.5 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-xs font-bold text-amber-950">¿Necesitás gestionar una solicitud de soporte?</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-amber-900">Los casos con número, estados, respuestas y capturas tienen una bandeja independiente.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('support')}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-amber-800"
+            >
+              <LifeBuoy size={14} /> Abrir casos de soporte
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
