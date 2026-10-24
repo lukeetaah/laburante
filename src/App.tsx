@@ -9,6 +9,8 @@ import Categories from '@/pages/Categories'
 import CategoryPage from '@/pages/CategoryPage'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
+import ForgotPassword from '@/pages/ForgotPassword'
+import ResetPassword from '@/pages/ResetPassword'
 import CreateProfile from '@/pages/CreateProfile'
 import Admin from '@/pages/Admin'
 import Terms from '@/pages/Terms'
@@ -60,6 +62,8 @@ export default function App() {
           <Route path="pedidos" element={<OrdersDashboard />} />
           <Route path="ingresar" element={<Login />} />
           <Route path="registrar" element={<Register />} />
+          <Route path="recuperar-contrasena" element={<ForgotPassword />} />
+          <Route path="restablecer-contrasena" element={<ResetPassword />} />
           <Route path="crear-perfil" element={<CreateProfile />} />
           <Route path="admin" element={<Admin />} />
           <Route path="como-funciona" element={<HowItWorks />} />
@@ -72,3 +76,4 @@ export default function App() {
     </BrowserRouter>
   )
 }
+

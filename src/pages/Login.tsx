@@ -233,6 +233,12 @@ export default function Login() {
             />
           </div>
 
+          <div className="flex justify-end -mt-2">
+            <Link to="/recuperar-contrasena" className="text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-[var(--color-laburante-text)] mb-1">
               Contraseña
@@ -266,3 +272,4 @@ export default function Login() {
     </div>
   )
 }
+

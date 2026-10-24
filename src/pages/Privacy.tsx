@@ -63,6 +63,14 @@ export default function Privacy() {
         </section>
 
         <section className="space-y-3">
+          <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">Ubicación y analítica</h2>
+          <p>
+            LABURANTE no obtiene ni almacena coordenadas del dispositivo. La provincia y localidad se cargan manualmente y no se impone CABA como valor predeterminado. La aplicación usa Vercel Web Analytics para métricas agregadas de navegación; según su documentación, identifica visitantes con datos anonimizados y no usa cookies.
+          </p>
+          <p>LABURANTE no incorpora Google Analytics, píxeles publicitarios ni scripts opcionales de seguimiento.</p>
+        </section>
+
+        <section className="space-y-3">
           <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)]">
             3. Solicitudes y datos de contacto en presupuestos
           </h2>
@@ -147,3 +155,4 @@ export default function Privacy() {
     </div>
   )
 }
+

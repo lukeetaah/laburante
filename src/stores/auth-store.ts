@@ -58,6 +58,25 @@ export function setResendCooldown(email: string, seconds = RESEND_COOLDOWN_SECON
   }
 }
 
+/**
+ * Keeps authentication errors useful without revealing whether an email is
+ * registered. In particular, Google-created accounts should be guided to the
+ * provider or the password recovery flow instead of seeing a raw GoTrue error.
+ */
+export function getUserFacingAuthError(message: string): string {
+  const normalized = message.toLowerCase()
+  if (normalized.includes('email not confirmed') || normalized.includes('not confirmed') || normalized.includes('email_not_confirmed')) {
+    return 'Tu correo todavía no está confirmado. Revisá tu bandeja y SPAM, o reenviá el correo de confirmación.'
+  }
+  if (normalized.includes('invalid login credentials') || normalized.includes('invalid credentials') || normalized.includes('invalid password')) {
+    return 'No pudimos ingresar con esos datos. Si creaste la cuenta con Google, usá “Continuar con Google”; si querés ingresar con contraseña, podés establecerla o recuperarla desde el enlace de abajo.'
+  }
+  if (normalized.includes('rate limit') || normalized.includes('too many') || normalized.includes('security purposes')) {
+    return 'Hay un límite temporal de seguridad activo. Esperá unos minutos y volvé a intentar.'
+  }
+  return 'No pudimos completar el ingreso. Revisá los datos o intentá recuperar tu contraseña.'
+}
+
 interface AuthState {
   user: User | null
   session: Session | null
@@ -67,6 +86,8 @@ interface AuthState {
   signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: string | null; needsSignIn?: boolean }>
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signInWithGoogle: () => Promise<{ error: string | null }>
+  resetPasswordForEmail: (email: string) => Promise<{ error: string | null }>
+  updatePassword: (password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   resendConfirmationEmail: (email: string) => Promise<{ error: string | null; blockedByCooldown?: boolean; remainingSeconds?: number }>
   initialize: () => Promise<void>
@@ -102,8 +123,8 @@ async function ensureUserProfile(user: User | null) {
         id: user.id,
         name,
         slug,
-        provincia: meta.provincia || 'CABA',
-        localidad: meta.localidad || 'Buenos Aires',
+        provincia: meta.provincia || '',
+        localidad: meta.localidad || '',
         disponibilidad: 'disponible',
         modalidad: 'presencial',
         account_type: meta.account_type === 'empresa' ? 'empresa' : 'persona',
@@ -286,8 +307,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signIn: async (email, password) => {
     addAppBreadcrumb('signin_started')
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) return { error: error.message }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
+    if (error) {
+      return { error: getUserFacingAuthError(error.message) }
+    }
     if (data.session) {
       set({
         session: data.session,
@@ -318,6 +341,39 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (err: any) {
       captureAppError(err, 'oauth_google')
       return { error: err.message || 'Error al iniciar sesión con Google.' }
+    }
+  },
+
+  resetPasswordForEmail: async (email) => {
+    addAppBreadcrumb('password_recovery_requested')
+    try {
+      const redirectTo = typeof window !== 'undefined'
+        ? `${window.location.origin}/restablecer-contrasena`
+        : undefined
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo })
+      if (error) {
+        captureAppError(error, 'password_recovery_failed')
+        return { error: 'No pudimos iniciar la recuperación. Revisá el correo e intentá nuevamente.' }
+      }
+      return { error: null }
+    } catch (err) {
+      captureAppError(err, 'password_recovery_failed')
+      return { error: 'No pudimos iniciar la recuperación. Revisá el correo e intentá nuevamente.' }
+    }
+  },
+
+  updatePassword: async (password) => {
+    addAppBreadcrumb('password_update_started')
+    try {
+      const { error } = await supabase.auth.updateUser({ password })
+      if (error) {
+        captureAppError(error, 'password_update_failed')
+        return { error: 'No pudimos actualizar la contraseña. Volvé a abrir el enlace de recuperación e intentá nuevamente.' }
+      }
+      return { error: null }
+    } catch (err) {
+      captureAppError(err, 'password_update_failed')
+      return { error: 'No pudimos actualizar la contraseña. Volvé a abrir el enlace de recuperación e intentá nuevamente.' }
     }
   },
 
@@ -362,3 +418,4 @@ export const useAuthStore = create<AuthState>((set) => ({
     _authSubscription = subscription
   },
 }))
+

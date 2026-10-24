@@ -13,7 +13,7 @@ export default function Register() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  const [provincia, setProvincia] = useState('CABA')
+  const [provincia, setProvincia] = useState('')
   const [localidad, setLocalidad] = useState('')
   const [companySector, setCompanySector] = useState('')
   const [teamSize, setTeamSize] = useState('1-5')
@@ -470,6 +470,7 @@ export default function Register() {
                 onChange={(e) => setProvincia(e.target.value)}
                 className="w-full px-3 py-2.5 text-xs rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
               >
+                <option value="">Elegí tu provincia</option>
                 {PROVINCES.map((p) => (
                   <option key={p.slug} value={p.name}>{p.name}</option>
                 ))}
@@ -657,3 +658,4 @@ export default function Register() {
     </div>
   )
 }
+

@@ -24,7 +24,7 @@ export default function CreateProfile() {
 
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
-  const [provincia, setProvincia] = useState('CABA')
+  const [provincia, setProvincia] = useState('')
   const [localidad, setLocalidad] = useState('')
   const [zonaTrabajo, setZonaTrabajo] = useState('')
   const [modalidad, setModalidad] = useState<WorkModality>('presencial')
@@ -83,7 +83,7 @@ export default function CreateProfile() {
         setIsEditing(true)
         setName(existing.name || '')
         setBio(existing.bio || '')
-        setProvincia(existing.provincia || 'CABA')
+        setProvincia(existing.provincia || '')
         setLocalidad(existing.localidad || '')
         setZonaTrabajo(existing.zona_trabajo || '')
         const existingModalidad = existing.modalidad || 'presencial'
@@ -351,7 +351,7 @@ export default function CreateProfile() {
       const payload = {
         name: (name || '').trim(),
         bio: (bio || '').trim(),
-        provincia: provincia || 'CABA',
+        provincia: provincia.trim(),
         localidad: (localidad || '').trim(),
         zona_trabajo: (zonaTrabajo || '').trim(),
         modalidad,
@@ -567,6 +567,7 @@ export default function CreateProfile() {
                 onChange={(e) => setProvincia(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent focus:ring-2 focus:ring-[var(--color-laburante-indigo)]"
               >
+                <option value="">Elegí tu provincia</option>
                 {PROVINCES.map((p) => (
                   <option key={p.slug} value={p.name}>{p.name}</option>
                 ))}
@@ -1212,3 +1213,4 @@ export default function CreateProfile() {
     </div>
   )
 }
+
