@@ -30,15 +30,24 @@ END;
 $$;
 
 DO $$
+DECLARE
+  existing_trigger_function oid;
+  existing_trigger_enabled "char";
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger
-    WHERE tgrelid = 'public.profiles'::regclass
-      AND tgname = 'profiles_require_location_on_write'
-  ) THEN
+  SELECT tgfoid, tgenabled
+    INTO existing_trigger_function, existing_trigger_enabled
+  FROM pg_trigger
+  WHERE tgrelid = 'public.profiles'::regclass
+    AND tgname = 'profiles_require_location_on_write'
+    AND NOT tgisinternal;
+
+  IF existing_trigger_function IS NULL THEN
     CREATE TRIGGER profiles_require_location_on_write
     BEFORE INSERT OR UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION public.validate_profile_location_fields();
+  ELSIF existing_trigger_function <> 'public.validate_profile_location_fields()'::regprocedure
+     OR existing_trigger_enabled <> 'O' THEN
+    RAISE EXCEPTION 'profiles_require_location_on_write_conflict';
   END IF;
 END;
 $$;
