@@ -1,6 +1,6 @@
 -- Non-destructive guard for profile location.
 -- Existing incomplete historical rows remain untouched and can be completed by
--- their owners; new rows and public/active rows require both fields.
+-- their owners; new rows, location changes and activations require both fields.
 CREATE OR REPLACE FUNCTION public.validate_profile_location_fields()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -8,9 +8,17 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   IF TG_OP = 'INSERT'
-     OR NEW.status = 'activo'
-     OR NEW.provincia IS DISTINCT FROM OLD.provincia
-     OR NEW.localidad IS DISTINCT FROM OLD.localidad THEN
+     OR (
+       TG_OP = 'UPDATE'
+       AND (
+         NEW.provincia IS DISTINCT FROM OLD.provincia
+         OR NEW.localidad IS DISTINCT FROM OLD.localidad
+         OR (
+           NEW.status IS DISTINCT FROM OLD.status
+           AND NEW.status = 'activo'
+         )
+       )
+     ) THEN
     IF NULLIF(trim(COALESCE(NEW.provincia, '')), '') IS NULL
        OR NULLIF(trim(COALESCE(NEW.localidad, '')), '') IS NULL THEN
       RAISE EXCEPTION 'profile_location_required'
