@@ -12,7 +12,7 @@ import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerification
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 import AvatarCropModal from '@/components/profile/AvatarCropModal'
 import { captureAppError } from '@/lib/sentry'
-import { uploadProfileAsset } from '@/lib/profile-asset-upload'
+import { removeOwnedProfileAsset, uploadProfileAsset } from '@/lib/profile-asset-upload'
 import { hasProviderContent, isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 import { loadEmailNotificationsEnabled, saveEmailNotificationsEnabled } from '@/lib/notification-preferences'
 import { toEditableContactMethod } from '@/lib/contact-methods'
@@ -304,6 +304,31 @@ export default function CreateProfile() {
 
     let currentStage = 'storage_upload'
     let currentResource = 'asset'
+    let uploadedPhotoUrl: string | null = null
+    let uploadedResumeUrl: string | null = null
+
+    const cleanupUnreferencedUploads = async () => {
+      if (!user?.id || (!uploadedPhotoUrl && !uploadedResumeUrl)) return
+      const { data: persistedProfile, error: persistedProfileError } = await (supabase.from('profiles') as any)
+        .select('photo_url, resume_url')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (persistedProfileError) {
+        console.warn('No se limpiaron archivos nuevos porque no se pudo confirmar su referencia:', persistedProfileError)
+        return
+      }
+
+      if (uploadedPhotoUrl && persistedProfile?.photo_url !== uploadedPhotoUrl) {
+        await removeOwnedProfileAsset({ storage: supabase.storage, kind: 'photo', userId: user.id, storedUrl: uploadedPhotoUrl }).catch((cleanupError) => {
+          console.warn('No se pudo limpiar la foto nueva sin referencia:', cleanupError)
+        })
+      }
+      if (uploadedResumeUrl && persistedProfile?.resume_url !== uploadedResumeUrl) {
+        await removeOwnedProfileAsset({ storage: supabase.storage, kind: 'resume', userId: user.id, storedUrl: uploadedResumeUrl }).catch((cleanupError) => {
+          console.warn('No se pudo limpiar el CV nuevo sin referencia:', cleanupError)
+        })
+      }
+    }
 
     try {
       const photoUrl = await uploadProfileAsset({
@@ -313,6 +338,7 @@ export default function CreateProfile() {
         existingUrl: existingPhotoUrl,
         storage: supabase.storage,
       })
+      if (photoFile && photoUrl && photoUrl !== existingPhotoUrl) uploadedPhotoUrl = photoUrl
       const resumeUrl = await uploadProfileAsset({
         file: resumeFile,
         kind: 'resume',
@@ -320,6 +346,7 @@ export default function CreateProfile() {
         existingUrl: existingResumeUrl,
         storage: supabase.storage,
       })
+      if (resumeFile && resumeUrl && resumeUrl !== existingResumeUrl) uploadedResumeUrl = resumeUrl
       currentStage = 'profile_save'
       currentResource = 'profile'
       const shouldPersistHybridPercentages = modalidad === 'ambas' && (!isEditing || hybridPercentagesEdited || initialModalidad !== 'ambas')
@@ -378,6 +405,7 @@ export default function CreateProfile() {
       setSubmitting(false)
 
       if (res.error) {
+        await cleanupUnreferencedUploads()
         captureAppError(new Error(res.error), 'profile_asset_upload_or_save', {
           stage: 'profile_save',
           resource: 'profile',
@@ -408,16 +436,15 @@ export default function CreateProfile() {
             return
           }
 
-          // Limpieza segura del Storage: si se subió una nueva foto y existía una foto previa en profile-photos
+          // Sólo se elimina la foto anterior después de confirmar que el perfil ya referencia la nueva.
           if (photoFile && existingPhotoUrl && existingPhotoUrl !== photoUrl) {
             try {
-              const marker = '/storage/v1/object/public/profile-photos/'
-              const idx = existingPhotoUrl.indexOf(marker)
-              if (idx >= 0) {
-                const oldPath = existingPhotoUrl.slice(idx + marker.length).split('?')[0]
-                if (oldPath && oldPath.startsWith(`${user.id}/`)) {
-                  await supabase.storage.from('profile-photos').remove([oldPath])
-                }
+              const { data: persistedProfile, error: persistedProfileError } = await (supabase.from('profiles') as any)
+                .select('photo_url')
+                .eq('id', user.id)
+                .maybeSingle()
+              if (!persistedProfileError && persistedProfile?.photo_url !== existingPhotoUrl) {
+                await removeOwnedProfileAsset({ storage: supabase.storage, kind: 'photo', userId: user.id, storedUrl: existingPhotoUrl })
               }
             } catch (cleanupErr) {
               console.warn('Advertencia no crítica al limpiar foto anterior en Storage:', cleanupErr)
@@ -427,6 +454,7 @@ export default function CreateProfile() {
         navigate(`/p/${res.slug}`)
       }
     } catch (uploadError: any) {
+      await cleanupUnreferencedUploads()
       captureAppError(uploadError, 'profile_asset_upload_or_save', {
         stage: uploadError._stage || currentStage,
         resource: uploadError._resource || currentResource,

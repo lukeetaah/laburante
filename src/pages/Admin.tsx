@@ -49,6 +49,7 @@ import {
   Calendar,
   Video,
   Scale,
+  MapPinned,
   ArrowLeft,
   Search,
   AlertCircle,
@@ -59,6 +60,8 @@ import {
 import { CURRENT_TERMS_VERSION } from '@/lib/constants'
 import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS } from '@/lib/support'
 import { formatProfileLocation } from '@/lib/profile-location'
+import { describeLastSignIn, type AdminAuthActivityStatus } from '@/lib/auth-activity'
+import ProvincePresenceMap from '@/components/admin/ProvincePresenceMap'
 
 function isValidPhotoUrl(photo: string): boolean {
   if (typeof photo !== 'string') return false
@@ -103,7 +106,7 @@ export default function Admin() {
 
   const [searchParams] = useSearchParams()
   const initialUrlTab = searchParams.get('tab')
-  const validTabs = ['analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'legal', 'settings'] as const
+  const validTabs = ['analytics', 'presence', 'jobs', 'verifications', 'confirmations', 'messages', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'legal', 'settings'] as const
   type AdminTab = typeof validTabs[number]
   const [activeTab, setActiveTab] = useState<AdminTab | null>(
     validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : null
@@ -284,9 +287,9 @@ export default function Admin() {
       })()
       const authActivityPromise = (async () => {
         try {
-          const { data, error } = await supabase.functions.invoke('admin-user-activity', { body: { page: 1, per_page: 1000 } })
-          if (error || !Array.isArray(data?.users)) return { available: false, users: {} }
-          return { available: true, users: Object.fromEntries(data.users.map((entry: any) => [entry.id, { last_sign_in_at: entry.last_sign_in_at || null }])) }
+          const { data, error } = await supabase.functions.invoke('admin-user-activity', { body: { profile_ids: profileIds } })
+          if (error || data?.status !== 'ok' || !Array.isArray(data?.users)) return { available: false, users: {} }
+          return { available: true, users: Object.fromEntries(data.users.map((entry: any) => [entry.id, { last_sign_in_at: entry.last_sign_in_at || null, last_sign_in_status: entry.last_sign_in_status || 'invalid_response' }])) }
         } catch {
           return { available: false, users: {} }
         }
@@ -322,6 +325,9 @@ export default function Admin() {
         ...p,
         auth_activity_available: Boolean((authActivity as any).available),
         last_sign_in_at: ((authActivity as any).users as Record<string, { last_sign_in_at: string | null }>)[p.id]?.last_sign_in_at || null,
+        last_sign_in_status: (authActivity as any).available
+          ? (((authActivity as any).users as Record<string, { last_sign_in_status?: AdminAuthActivityStatus }>)[p.id]?.last_sign_in_status || 'user_not_found')
+          : 'service_unavailable',
         auth_email: emailsByProfileId.get(p.id) || null,
         completion_percent: getProfileCompletion({ ...p, skills: p.skills || [], services: p.services || [], contact_methods: p.contact_methods || [], intent: p.intent }),
         whatsapp_verified: Boolean(p.whatsapp_verified),
@@ -766,14 +772,16 @@ export default function Admin() {
       return
     }
     setCredentialsSaving(true)
-    const { error } = await (supabase.rpc as any)('admin_update_user_credentials', {
-      target_user_id: editingProfile.id,
-      new_email: editForm.email.trim() || null,
-      new_password: editForm.password || null,
+    const { data, error } = await supabase.functions.invoke('admin-update-user-credentials', {
+      body: {
+        target_user_id: editingProfile.id,
+        new_email: editForm.email.trim() || null,
+        new_password: editForm.password || null,
+      },
     })
     setCredentialsSaving(false)
-    if (error) {
-      setActionMessage(`No se pudo actualizar el acceso: ${error.message}. Aplicá migration_admin_account_access.sql en Supabase.`)
+    if (error || data?.error) {
+      setActionMessage(`No se pudo actualizar el acceso: ${data?.error || error?.message || 'Error de autenticación'}.`)
       return
     }
     const updatedEmail = editForm.email.trim()
@@ -871,9 +879,10 @@ export default function Admin() {
     if (profileFilter === 'suspendidos' && p.status !== 'suspendido') return false
     if (profileFilter === 'incompletos' && p.completion_percent >= 100) return false
     const lastSignInAt = p.last_sign_in_at ? new Date(p.last_sign_in_at).getTime() : 0
-    const olderThanThirtyDays = !lastSignInAt || Date.now() - lastSignInAt >= 30 * 24 * 60 * 60 * 1000
+    const authStatus = p.last_sign_in_status as AdminAuthActivityStatus
+    const olderThanThirtyDays = authStatus === 'never' || (authStatus === 'available' && Boolean(lastSignInAt) && Date.now() - lastSignInAt >= 30 * 24 * 60 * 60 * 1000)
     if (lastLoginFilter === 'mas_30_dias' && !olderThanThirtyDays) return false
-    if (lastLoginFilter === 'nunca' && (p.auth_activity_available === false || lastSignInAt)) return false
+    if (lastLoginFilter === 'nunca' && authStatus !== 'never') return false
     const filters = adminFilters
     const searchable = normalizeSearchText([p.name, p.slug, p.bio, p.provincia, p.localidad, p.auth_email, ...(p.skills || []).map((skill: any) => skill.name), ...(p.services || []).map((service: any) => service.title)].filter(Boolean).join(' '))
     if (filters.query && !searchable.includes(normalizeSearchText(filters.query))) return false
@@ -1546,6 +1555,22 @@ export default function Admin() {
               </div>
             </button>
 
+            {/* Mapa de presencia */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('presence')}
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-orange-200 bg-orange-50/40 hover:bg-orange-50 hover:border-orange-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-2 sm:p-2.5 rounded-xl bg-orange-500 text-white shadow-xs group-hover:scale-105 transition-transform"><MapPinned size={18} /></div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 text-orange-900">24 jurisdicciones</span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-orange-950">Mapa de presencia</h3>
+                <p className="text-xs text-orange-950/70 mt-1 leading-relaxed">Visualizá dónde hay profesionales activos publicados, sin exponer perfiles individuales.</p>
+              </div>
+            </button>
+
             {/* 3. Pedidos */}
             <button
               type="button"
@@ -1863,6 +1888,7 @@ export default function Admin() {
               Módulo activo: <strong className="text-[var(--color-laburante-text)] capitalize">
                 {activeTab === 'legal' && 'Edad y aceptación legal'}
                 {activeTab === 'analytics' && 'Métricas y Operatoria'}
+                {activeTab === 'presence' && 'Mapa de presencia'}
                 {activeTab === 'jobs' && 'Pedidos de trabajo'}
                 {activeTab === 'verifications' && 'Verificaciones WhatsApp'}
                 {activeTab === 'confirmations' && 'Confirmaciones de correo'}
@@ -2164,6 +2190,8 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {activeTab === 'presence' && <ProvincePresenceMap />}
 
       {activeTab === 'jobs' && (
         <div className="space-y-4">
@@ -2966,7 +2994,7 @@ export default function Admin() {
                       {formatProfileLocation(p)} · Registrado el {new Date(p.created_at).toLocaleDateString()}
                     </p>
                     <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
-                      Último ingreso: {p.auth_activity_available === false ? 'No disponible (servicio de Auth temporalmente no accesible)' : p.last_sign_in_at ? `${new Date(p.last_sign_in_at).toLocaleString()} · hace ${Math.max(0, Math.floor((Date.now() - new Date(p.last_sign_in_at).getTime()) / (1000 * 60 * 60 * 24)))} días` : 'Nunca ingresó'}
+                      Último ingreso: {describeLastSignIn((p.last_sign_in_status || 'service_unavailable') as AdminAuthActivityStatus, p.last_sign_in_at)}
                     </p>
                     {p.auth_email && (
                       <p className="text-[11px] font-medium text-indigo-900 flex items-center gap-1.5" title="Email de acceso a la cuenta">

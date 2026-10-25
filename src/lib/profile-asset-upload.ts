@@ -13,6 +13,7 @@ type StorageUploadOptions = {
 
 type StorageBucket = {
   upload: (path: string, file: UploadableProfileAsset, options: StorageUploadOptions) => Promise<{ error: any | null }>
+  remove?: (paths: string[]) => Promise<{ error: any | null }>
   getPublicUrl?: (path: string) => { data?: { publicUrl?: string | null } } | null | undefined
 }
 
@@ -95,9 +96,12 @@ function getUploadDetails(file: unknown, kind: ProfileAssetKind, bucket: string)
 
   const extension = candidate.name.split('.').pop()?.toLowerCase() || ''
   const mime = candidate.type.toLowerCase()
-  const isValid = kind === 'photo'
-    ? PHOTO_MIMES.includes(mime) || PHOTO_EXTENSIONS.includes(extension)
-    : DOCUMENT_MIMES.includes(mime) || DOCUMENT_EXTENSIONS.includes(extension)
+  const allowedMimes = kind === 'photo' ? PHOTO_MIMES : DOCUMENT_MIMES
+  const allowedExtensions = kind === 'photo' ? PHOTO_EXTENSIONS : DOCUMENT_EXTENSIONS
+  const hasAllowedMime = allowedMimes.includes(mime)
+  const hasAllowedExtension = allowedExtensions.includes(extension)
+  const mimeIsGeneric = !mime || mime === 'application/octet-stream'
+  const isValid = mimeIsGeneric ? hasAllowedExtension : hasAllowedMime && hasAllowedExtension
 
   if (!isValid) {
     throw createProfileAssetError(
@@ -129,6 +133,52 @@ function getUploadDetails(file: unknown, kind: ProfileAssetKind, bucket: string)
   }
 }
 
+export function getOwnedProfileAssetPath({
+  kind,
+  userId,
+  storedUrl,
+}: {
+  kind: ProfileAssetKind
+  userId: string | undefined
+  storedUrl: string | null | undefined
+}) {
+  if (!userId || typeof storedUrl !== 'string' || !storedUrl) return null
+
+  let path = ''
+  if (kind === 'resume' && storedUrl.startsWith('profile-documents:')) {
+    path = storedUrl.slice('profile-documents:'.length).split('?')[0]
+  } else if (kind === 'photo') {
+    const marker = '/storage/v1/object/public/profile-photos/'
+    const markerIndex = storedUrl.indexOf(marker)
+    if (markerIndex >= 0) path = storedUrl.slice(markerIndex + marker.length).split('?')[0]
+  }
+
+  const expectedPrefix = `${userId}/${kind}-`
+  if (!path.startsWith(expectedPrefix) || path.split('/').length !== 2 || path.includes('..')) return null
+  return path
+}
+
+export async function removeOwnedProfileAsset({
+  storage,
+  kind,
+  userId,
+  storedUrl,
+}: {
+  storage: StorageClient
+  kind: ProfileAssetKind
+  userId: string | undefined
+  storedUrl: string | null | undefined
+}) {
+  const path = getOwnedProfileAssetPath({ kind, userId, storedUrl })
+  if (!path) return { removed: false, error: null }
+  const bucket = kind === 'photo' ? 'profile-photos' : 'profile-documents'
+  const bucketClient = storage.from(bucket)
+  const remover = bucketClient.remove
+  if (!remover) return { removed: false, error: new Error('Storage no admite eliminación de objetos.') }
+  const { error } = await bucketClient.remove?.([path]) as { error: any | null }
+  return { removed: !error, error }
+}
+
 export async function uploadProfileAsset({
   file,
   kind,
@@ -146,12 +196,15 @@ export async function uploadProfileAsset({
 
   const bucket = kind === 'photo' ? 'profile-photos' : 'profile-documents'
   const { file: uploadFile, extension, contentType } = getUploadDetails(file, kind, bucket)
-  const path = `${userId}/${kind}-${Date.now()}.${extension}`
+  const objectId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const path = `${userId}/${kind}-${objectId}.${extension}`
 
   try {
     const bucketClient = storage.from(bucket)
     const { error: uploadError } = await bucketClient.upload(path, uploadFile, {
-      upsert: true,
+      upsert: false,
       contentType,
     })
     if (uploadError) {
@@ -165,7 +218,16 @@ export async function uploadProfileAsset({
 
     if (kind === 'resume') return `profile-documents:${path}`
     const publicUrlResult = bucketClient.getPublicUrl?.(path)
-    return publicUrlResult?.data?.publicUrl || null
+    const publicUrl = publicUrlResult?.data?.publicUrl || null
+    if (!publicUrl) {
+      try {
+        await bucketClient.remove?.([path])
+      } catch (cleanupError) {
+        console.warn('No se pudo limpiar una foto sin URL pública después de subirla:', cleanupError)
+      }
+      throw createProfileAssetError('Storage no devolvió la URL pública de la foto.', 'storage_upload', 'avatar', 'public_url_missing', bucket)
+    }
+    return publicUrl
   } catch (error) {
     throw annotateStorageError(error, kind, bucket)
   }

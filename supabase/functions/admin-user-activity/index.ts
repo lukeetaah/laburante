@@ -10,9 +10,11 @@ function cors(request: Request) {
   const allowed = origin === SITE_URL || origin === 'https://laburante.ar' || origin === 'https://www.laburante.ar' || origin.endsWith('.vercel.app')
   return {
     'Access-Control-Allow-Origin': allowed ? origin : SITE_URL,
+    'Vary': 'Origin',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-store, max-age=0',
   }
 }
 
@@ -35,17 +37,38 @@ Deno.serve(async (request) => {
   if (authError || !authData.user) return response(request, { error: 'unauthorized' }, 401)
   if ((authData.user.app_metadata as Record<string, unknown>)?.role !== 'admin') return response(request, { error: 'unauthorized_admin_access' }, 403)
 
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
-  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (error) return response(request, { error: 'auth_users_unavailable' }, 502)
+  let body: { profile_ids?: unknown } = {}
+  try {
+    body = await request.json()
+  } catch {
+    return response(request, { error: 'invalid_json' }, 400)
+  }
+  const profileIds = Array.isArray(body.profile_ids) ? body.profile_ids : []
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (profileIds.length > 10000 || profileIds.some((value) => typeof value !== 'string' || !uuidPattern.test(value))) {
+    return response(request, { error: 'invalid_profile_ids' }, 400)
+  }
+  if (profileIds.length === 0) return response(request, { status: 'ok', users: [], total: 0 })
 
-  // Deliberately return no email, metadata or provider details. The admin UI
-  // already obtains display email through its existing protected RPC.
-  const users = (data.users || []).map((user) => ({
-    id: user.id,
-    created_at: user.created_at,
-    last_sign_in_at: user.last_sign_in_at || null,
-  }))
-  return response(request, { users, total: users.length })
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
+  const { data: activityRows, error: activityError } = await admin.rpc('admin_get_last_sign_in_at', { target_user_ids: profileIds })
+  if (activityError || !Array.isArray(activityRows)) return response(request, { error: 'auth_users_unavailable' }, 502)
+  const activityById = new Map(activityRows.map((row: any) => [row.user_id, row.last_sign_in_at]))
+  const users = profileIds.map((id) => {
+    const rawLastSignIn = activityById.get(id) ?? null
+    const validLastSignIn = typeof rawLastSignIn === 'string' && Number.isFinite(Date.parse(rawLastSignIn))
+    return {
+      id,
+      last_sign_in_at: validLastSignIn ? rawLastSignIn : null,
+      last_sign_in_status: !activityById.has(id)
+        ? 'user_not_found'
+        : rawLastSignIn === null
+          ? 'never'
+          : validLastSignIn
+            ? 'available'
+            : 'invalid_response',
+    }
+  })
+  return response(request, { status: 'ok', users, total: users.length })
 })
 
