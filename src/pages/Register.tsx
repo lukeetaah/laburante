@@ -188,6 +188,11 @@ export default function Register() {
       return
     }
 
+    if (!provincia.trim() || !localidad.trim()) {
+      setError('Ingresá una provincia y una localidad válidas para crear tu perfil.')
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -208,7 +213,7 @@ export default function Register() {
       res = await signUp(email.trim(), password, {
         name: name.trim(),
         phone: phone.trim(),
-        provincia,
+        provincia: provincia.trim(),
         localidad: localidad.trim(),
         intent: isCompany ? 'buscar' : (intent || 'ofrecer'),
         accountType: isCompany ? 'empresa' : 'persona',
@@ -467,6 +472,7 @@ export default function Register() {
               </label>
               <select
                 value={provincia}
+                required
                 onChange={(e) => setProvincia(e.target.value)}
                 className="w-full px-3 py-2.5 text-xs rounded-xl border border-[var(--color-laburante-border)] bg-transparent"
               >
@@ -484,6 +490,7 @@ export default function Register() {
               <input
                 type="text"
                 value={localidad}
+                required
                 onChange={(e) => setLocalidad(e.target.value)}
                 placeholder="ej: Belgrano, Rosario, Tandil..."
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-[var(--color-laburante-border)] bg-transparent"

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { MapPin, Briefcase } from 'lucide-react'
 import type { ProfileWithDetails } from '@/stores/profile-store'
 import { formatModality } from '@/lib/profile-format'
+import { formatProfileLocation } from '@/lib/profile-location'
 import ReviewStars from './ReviewStars'
 
 interface ProfileCardProps {
@@ -33,7 +34,7 @@ export default function ProfileCard({ profile }: ProfileCardProps) {
             </div>
             <div className="flex items-center gap-1.5 text-xs text-[var(--color-laburante-text-secondary)] mt-0.5">
               <MapPin size={13} className="text-[var(--color-laburante-accent)] flex-shrink-0" />
-              <span className="truncate">{profile.localidad}, {profile.provincia}</span>
+              <span className="truncate">{formatProfileLocation(profile)}</span>
             </div>
           </div>
         </div>

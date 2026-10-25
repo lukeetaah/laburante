@@ -58,6 +58,7 @@ import {
 } from 'lucide-react'
 import { CURRENT_TERMS_VERSION } from '@/lib/constants'
 import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS } from '@/lib/support'
+import { formatProfileLocation } from '@/lib/profile-location'
 
 function isValidPhotoUrl(photo: string): boolean {
   if (typeof photo !== 'string') return false
@@ -2779,7 +2780,7 @@ export default function Admin() {
                     <strong>Perfil reportado:</strong>{' '}
                     {rep.profiles?.name ? (
                       <Link to={`/p/${rep.profiles.slug}`} target="_blank" className="text-[var(--color-laburante-indigo)] underline font-semibold">
-                        {rep.profiles.name} ({rep.profiles.localidad}, {rep.profiles.provincia})
+                        {rep.profiles.name} ({formatProfileLocation(rep.profiles)})
                       </Link>
                     ) : (
                       <span>ID: {rep.profile_id}</span>
@@ -2955,7 +2956,7 @@ export default function Admin() {
                     </div>
 
                     <p className="text-xs text-[var(--color-laburante-text-secondary)]">
-                      {p.localidad}, {p.provincia} · Registrado el {new Date(p.created_at).toLocaleDateString()}
+                      {formatProfileLocation(p)} · Registrado el {new Date(p.created_at).toLocaleDateString()}
                     </p>
                     <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
                       Último ingreso: {p.auth_activity_available === false ? 'No disponible (servicio de Auth temporalmente no accesible)' : p.last_sign_in_at ? `${new Date(p.last_sign_in_at).toLocaleString()} · hace ${Math.max(0, Math.floor((Date.now() - new Date(p.last_sign_in_at).getTime()) / (1000 * 60 * 60 * 24)))} días` : 'Nunca ingresó'}
@@ -3435,7 +3436,7 @@ export default function Admin() {
             <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">Todavía no hay cuentas Empresa sincronizadas. Verificá la migración de Supabase y refrescá los datos.</div>
           ) : profiles.filter((p) => p.account_type === 'empresa').map((company) => (
             <div key={company.id} className="flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-[var(--color-laburante-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div><div className="flex flex-wrap items-center gap-2"><Building2 size={17} className="text-indigo-600" /><h3 className="font-heading font-bold text-sm">{company.name}</h3><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">EMPRESA</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${company.company_plan === 'pago' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{company.company_plan === 'pago' ? 'ACTIVACIÓN COORDINADA' : 'CUENTA GRATUITA'}</span></div><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{company.localidad}, {company.provincia} · Alta {new Date(company.created_at).toLocaleDateString()}</p>{company.auth_email && (<p className="mt-0.5 text-[11px] font-medium text-indigo-900 flex items-center gap-1.5" title="Email de acceso a la cuenta"><Mail size={12} className="text-indigo-600 shrink-0" /><span className="text-[10px] uppercase font-semibold text-indigo-600 tracking-wider">Acceso:</span><span className="font-mono">{company.auth_email}</span></p>)}</div>
+              <div><div className="flex flex-wrap items-center gap-2"><Building2 size={17} className="text-indigo-600" /><h3 className="font-heading font-bold text-sm">{company.name}</h3><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">EMPRESA</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${company.company_plan === 'pago' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{company.company_plan === 'pago' ? 'ACTIVACIÓN COORDINADA' : 'CUENTA GRATUITA'}</span></div><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{formatProfileLocation(company)} · Alta {new Date(company.created_at).toLocaleDateString()}</p>{company.auth_email && (<p className="mt-0.5 text-[11px] font-medium text-indigo-900 flex items-center gap-1.5" title="Email de acceso a la cuenta"><Mail size={12} className="text-indigo-600 shrink-0" /><span className="text-[10px] uppercase font-semibold text-indigo-600 tracking-wider">Acceso:</span><span className="font-mono">{company.auth_email}</span></p>)}</div>
               <div className="flex flex-wrap gap-2">
                 <label className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">Plan<select value={company.company_plan || 'gratis'} onChange={(event) => handleSetCompanyPlan(company, event.target.value as 'gratis' | 'pago')} className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs font-bold text-amber-900"><option value="gratis">Gratis</option><option value="pago">Pago</option></select></label>
                 <button onClick={() => openProfileEditor(company)} className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800"><Pencil size={13} /> Editar</button>

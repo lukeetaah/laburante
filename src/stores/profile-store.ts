@@ -9,6 +9,7 @@ import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 import { getOperationalSettings } from '@/lib/operational-settings'
 import { isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 import { resolveProfilePhotoUrl } from '@/lib/profile-assets'
+import { hasValidProfileLocation, normalizeProfileLocation } from '@/lib/profile-location'
 import {
   categoryWorkTerms,
   expandSearchTermVariants,
@@ -607,7 +608,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       if (requestId !== latestProfileSearchRequest) return
 
-      realProfiles = realProfiles.filter(isProviderProfile)
+      realProfiles = realProfiles.filter((profile) => hasValidProfileLocation(profile) && isProviderProfile(profile))
 
       if (filters.category) {
         const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
@@ -668,7 +669,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         return null
       }
 
-      if (!error && data) {
+      if (!error && data && hasValidProfileLocation(data)) {
         const [fullProfile] = await hydratePublicProfiles([data as any])
         set({ currentProfile: fullProfile, loading: false })
         return fullProfile
@@ -769,6 +770,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   createProfile: async (profileData) => {
     addAppBreadcrumb('profile_save_started')
     try {
+      const provincia = normalizeProfileLocation(profileData.provincia)
+      const localidad = normalizeProfileLocation(profileData.localidad)
+      if (!provincia || !localidad) {
+        return { error: 'La provincia y la localidad son obligatorias para publicar un perfil.' }
+      }
       const { data: userData, error: userError } = await supabase.auth.getUser()
       if (userError || !userData?.user) {
         return { error: 'Debes iniciar sesión para publicar un perfil.' }
@@ -817,8 +823,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         const updatePayload: any = {
           name: profileData.name,
           bio: profileData.bio || null,
-          provincia: profileData.provincia,
-          localidad: profileData.localidad,
+          provincia,
+          localidad,
           zona_trabajo: profileData.zona_trabajo || null,
           disponibilidad: profileData.disponibilidad || 'disponible',
           modalidad: profileData.modalidad || 'presencial',
@@ -865,8 +871,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           name: profileData.name,
           slug: slug,
           bio: profileData.bio || null,
-          provincia: profileData.provincia,
-          localidad: profileData.localidad,
+          provincia,
+          localidad,
           zona_trabajo: profileData.zona_trabajo || null,
           disponibilidad: profileData.disponibilidad || 'disponible',
           modalidad: profileData.modalidad || 'presencial',

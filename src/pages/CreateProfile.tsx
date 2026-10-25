@@ -294,6 +294,11 @@ export default function CreateProfile() {
       return
     }
 
+    if (!provincia.trim()) {
+      setError('Elegí tu provincia.')
+      return
+    }
+
     setSubmitting(true)
     setError(null)
 
@@ -564,6 +569,7 @@ export default function CreateProfile() {
               </label>
               <select
                 value={provincia}
+                required
                 onChange={(e) => setProvincia(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-[var(--color-laburante-border)] bg-transparent focus:ring-2 focus:ring-[var(--color-laburante-indigo)]"
               >

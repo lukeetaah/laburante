@@ -4,6 +4,7 @@ import type { User, Session } from '@supabase/supabase-js'
 import { dedupeContactMethods } from '@/lib/contact-methods'
 import { addAppBreadcrumb, captureAppError } from '@/lib/sentry'
 import { normalizeProfileIntent } from '@/lib/profile-publication'
+import { normalizeProfileLocation } from '@/lib/profile-location'
 
 const PROFILE_INTENT_COLUMN_MISSING_RE = /column .*intent.*does not exist|Could not find .*intent.*column|schema cache.*intent/i
 
@@ -112,6 +113,9 @@ async function ensureUserProfile(user: User | null) {
       const name = meta.full_name || meta.name || user.email?.split('@')[0] || 'Profesional'
       const photoUrl = meta.avatar_url || meta.picture || undefined
       const intent = normalizeProfileIntent(meta.intent)
+      const provincia = normalizeProfileLocation(meta.provincia)
+      const localidad = normalizeProfileLocation(meta.localidad)
+      if (!provincia || !localidad) return
       const slug = name
         .toLowerCase()
         .normalize('NFD')
@@ -123,8 +127,8 @@ async function ensureUserProfile(user: User | null) {
         id: user.id,
         name,
         slug,
-        provincia: meta.provincia || '',
-        localidad: meta.localidad || '',
+        provincia,
+        localidad,
         disponibilidad: 'disponible',
         modalidad: 'presencial',
         account_type: meta.account_type === 'empresa' ? 'empresa' : 'persona',

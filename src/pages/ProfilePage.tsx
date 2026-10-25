@@ -13,6 +13,7 @@ import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerification
 import ReviewStars from '@/components/profile/ReviewStars'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
+import { formatProfileLocation } from '@/lib/profile-location'
 import { isProviderProfile } from '@/lib/profile-publication'
 import { focusContextualElement } from '@/lib/contextual-navigation'
 import { getAuthorizedResumeUrl } from '@/lib/profile-assets'
@@ -284,7 +285,7 @@ export default function ProfilePage() {
             <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs sm:text-sm text-[var(--color-laburante-text-secondary)]">
               <span className="flex items-center gap-1">
                 <MapPin size={14} className="text-[var(--color-laburante-accent)]" />
-                {profile.localidad}, {profile.provincia}
+                {formatProfileLocation(profile)}
               </span>
               <span className="flex items-center gap-1">
                 <Briefcase size={14} className="text-[var(--color-laburante-text-muted)]" />
