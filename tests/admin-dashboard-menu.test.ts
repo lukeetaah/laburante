@@ -18,3 +18,11 @@ test('el dashboard usa una cuadrícula responsive compacta con badges visibles',
   assert.match(source, /\[&>button>div:last-child>p\]:hidden sm:\[&>button>div:last-child>p\]:block/)
 })
 
+test('el soporte identifica al solicitante y el autor de cada mensaje', () => {
+  assert.match(source, /from\('profiles'\).*select\('id,name,account_type'\)/)
+  assert.match(source, /author_id,author_role/)
+  assert.match(source, /Solicitante:/)
+  assert.match(source, /Respuesta del equipo LABURANTE/)
+  assert.match(source, /Mensaje inicial · \{supportUserProfile\?\.name/)
+})
+
