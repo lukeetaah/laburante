@@ -19,6 +19,13 @@ test('el recurso geográfico local contiene las mismas 24 jurisdicciones', () =>
   )
 })
 
+test('el mapa dibuja CABA por encima de Buenos Aires y mantiene un tamaño contenido', () => {
+  const mapSource = fs.readFileSync(new URL('../src/components/admin/ProvincePresenceMap.tsx', import.meta.url), 'utf8')
+  assert.ok(mapSource.includes("featureCode(left) === 'AR-C'"))
+  assert.ok(mapSource.includes('orderedFeatures.map('))
+  assert.ok(mapSource.includes('max-w-2xl'))
+})
+
 test('normaliza solo nombres provinciales canónicos', () => {
   assert.equal(canonicalProvinceCode('Córdoba'), 'AR-X')
   assert.equal(canonicalProvinceCode('CIUDAD AUTÓNOMA DE BUENOS AIRES'), 'AR-C')
