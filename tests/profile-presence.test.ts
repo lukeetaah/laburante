@@ -23,7 +23,7 @@ test('el mapa dibuja CABA por encima de Buenos Aires y mantiene un tamaño conte
   const mapSource = fs.readFileSync(new URL('../src/components/admin/ProvincePresenceMap.tsx', import.meta.url), 'utf8')
   assert.ok(mapSource.includes("featureCode(left) === 'AR-C'"))
   assert.ok(mapSource.includes('orderedFeatures.map('))
-  assert.ok(mapSource.includes('max-w-2xl'))
+  assert.ok(mapSource.includes('max-w-[38rem]'))
 })
 
 test('normaliza solo nombres provinciales canónicos', () => {

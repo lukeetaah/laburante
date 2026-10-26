@@ -118,7 +118,7 @@ export default function ProvincePresenceMap() {
                 <span><span className="mr-2 inline-block h-3 w-3 rounded-sm bg-orange-500 align-[-1px]" />Con presencia</span>
                 <span><span className="mr-2 inline-block h-3 w-3 rounded-sm bg-slate-200 align-[-1px]" />Sin presencia</span>
               </div>
-              <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl bg-sky-50/60">
+              <div className="relative mx-auto w-full max-w-[38rem] overflow-hidden rounded-xl bg-sky-50/60">
                 <svg viewBox={`0 0 ${VIEW_BOX.width} ${VIEW_BOX.height}`} className="h-auto w-full" role="img" aria-labelledby="province-map-title province-map-description">
                   <title id="province-map-title">Mapa de presencia por jurisdicción</title>
                   <desc id="province-map-description">Las jurisdicciones naranjas tienen al menos un perfil profesional contabilizado.</desc>

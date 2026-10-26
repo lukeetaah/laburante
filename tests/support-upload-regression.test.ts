@@ -26,6 +26,12 @@ test('la Edge Function valida bytes, evita la subida directa y limpia Storage si
   assert.match(edgeFunction, /support-attachments'\)\.remove\(\[path\]\)/)
 })
 
+test('la respuesta CORS permite la instrumentación del navegador sin abrir los orígenes', () => {
+  assert.match(edgeFunction, /Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, baggage, sentry-trace'/)
+  assert.match(edgeFunction, /allowedOrigin = origin === site \|\| origin === 'https:\/\/laburante\.ar'/)
+  assert.doesNotMatch(edgeFunction, /Access-Control-Allow-Origin': '\*'/)
+})
+
 test('los errores de la Edge Function se traducen a mensajes seguros y no a éxito', () => {
   assert.match(supportUploadErrorMessage('upload_not_authorized'), /no existe, venció o ya fue utilizada/)
   assert.match(supportUploadErrorMessage('invalid_image_content'), /no coincide/)
