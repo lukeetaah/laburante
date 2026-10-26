@@ -106,7 +106,7 @@ export default function Admin() {
 
   const [searchParams] = useSearchParams()
   const initialUrlTab = searchParams.get('tab')
-  const validTabs = ['analytics', 'presence', 'jobs', 'verifications', 'confirmations', 'messages', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'legal', 'settings'] as const
+  const validTabs = ['analytics', 'presence', 'jobs', 'verifications', 'confirmations', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'legal', 'settings'] as const
   type AdminTab = typeof validTabs[number]
   const [activeTab, setActiveTab] = useState<AdminTab | null>(
     validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : null
@@ -158,12 +158,6 @@ export default function Admin() {
   const [reactivationCampaign, setReactivationCampaign] = useState<any | null>(null)
   const [reactivationCampaignLoading, setReactivationCampaignLoading] = useState(false)
   const [reactivationCampaignSending, setReactivationCampaignSending] = useState(false)
-  // Admin messages tab
-  const [adminConversations, setAdminConversations] = useState<any[]>([])
-  const [selectedConversation, setSelectedConversation] = useState<any | null>(null)
-  const [conversationMessages, setConversationMessages] = useState<any[]>([])
-  const [adminMessageInput, setAdminMessageInput] = useState('')
-  const [adminMessageSending, setAdminMessageSending] = useState(false)
   const [supportTickets, setSupportTickets] = useState<any[]>([])
   const [selectedSupportTicket, setSelectedSupportTicket] = useState<any | null>(null)
   const [supportUserProfile, setSupportUserProfile] = useState<{ name?: string; account_type?: string } | null>(null)
@@ -372,40 +366,6 @@ export default function Admin() {
     }
   }, [isAdmin])
 
-  const loadAdminConversations = async () => {
-    try {
-      const { data, error } = await (supabase.from('conversations') as any)
-        .select('id, user_id, subject, status, created_at, updated_at')
-        .order('updated_at', { ascending: false })
-      if (error) {
-        console.warn('Error loading admin conversations:', error)
-        return []
-      }
-      setAdminConversations(data || [])
-      return data || []
-    } catch (err) {
-      console.warn('Error loading admin conversations:', err)
-      return []
-    }
-  }
-
-  const loadConversationMessages = async (conversationId: string) => {
-    try {
-      const { data } = await (supabase.from('messages') as any)
-        .select('id, conversation_id, sender_id, sender_role, content, created_at, read_at')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-      setConversationMessages(data || [])
-    } catch (err) {
-      console.warn('Error loading conversation messages:', err)
-    }
-  }
-
-  const handleSelectConversation = async (conv: any) => {
-    setSelectedConversation(conv)
-    await loadConversationMessages(conv.id)
-  }
-
   const loadSupportDetail = async (ticket: any) => {
     setSelectedSupportTicket(ticket)
     setSupportUserProfile(null)
@@ -473,24 +433,6 @@ export default function Admin() {
     if (error) { setActionMessage(`No se pudo actualizar el caso: ${error.message}`); return }
     await loadSupportTickets()
   }
-
-
-  useEffect(() => {
-    if (activeTab !== 'messages' || !isAdmin) return
-    let mounted = true
-    const targetConv = searchParams.get('conversacion')
-    loadAdminConversations().then((convs) => {
-      if (!mounted) return
-      if (targetConv && convs && convs.length > 0) {
-        const found = convs.find((c: any) => c.id === targetConv)
-        if (found && mounted) {
-          setSelectedConversation(found)
-          loadConversationMessages(found.id)
-        }
-      }
-    })
-    return () => { mounted = false }
-  }, [activeTab, isAdmin])
 
   useEffect(() => {
     if (activeTab !== 'support' || !isAdmin) return
@@ -1080,27 +1022,6 @@ export default function Admin() {
     }
   }
 
-  const handleAdminSendMessage = async () => {
-    if (!selectedConversation || !adminMessageInput.trim() || adminMessageSending) return
-    setAdminMessageSending(true)
-    try {
-      const { error } = await (supabase.rpc as any)('send_conversation_message', {
-        p_conversation_id: selectedConversation.id,
-        p_content: adminMessageInput.trim(),
-      })
-      if (error) {
-        setActionMessage(`Error al enviar mensaje: ${error.message}`)
-      } else {
-        setAdminMessageInput('')
-        await loadConversationMessages(selectedConversation.id)
-        await loadAdminConversations()
-      }
-    } catch (err: any) {
-      setActionMessage(`Error al enviar mensaje: ${err.message}`)
-    }
-    setAdminMessageSending(false)
-  }
-
   const handleAdminModerateRec = async (id: string, newStatus: string) => {
     try {
       const { error } = await (supabase.from('recommendations') as any)
@@ -1655,27 +1576,6 @@ export default function Admin() {
               </div>
             </button>
 
-            {/* 6. Mensajes y soporte */}
-            <button
-              type="button"
-              onClick={() => { setActiveTab('messages'); loadAdminConversations() }}
-              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <MessageCircle size={18} />
-                </div>
-              </div>
-              <div>
-                <h3 className="font-heading font-bold text-base text-[var(--color-laburante-text)]">
-                  Mensajes y soporte
-                </h3>
-                <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
-                  Canal directo de comunicación administrativa con usuarios y profesionales.
-                </p>
-              </div>
-            </button>
-
             <button
               type="button"
               onClick={() => { setActiveTab('support'); void loadSupportTickets() }}
@@ -1892,7 +1792,6 @@ export default function Admin() {
                 {activeTab === 'jobs' && 'Pedidos de trabajo'}
                 {activeTab === 'verifications' && 'Verificaciones WhatsApp'}
                 {activeTab === 'confirmations' && 'Confirmaciones de correo'}
-                {activeTab === 'messages' && 'Mensajes y soporte'}
                 {activeTab === 'support' && 'Casos de soporte'}
                 {activeTab === 'companies' && 'Cuentas Empresa'}
                 {activeTab === 'company_ops' && 'Operaciones Empresa'}
@@ -2640,136 +2539,6 @@ export default function Admin() {
                 <div className="flex-1 space-y-3 overflow-y-auto p-4"><div className="rounded-2xl bg-[var(--color-laburante-surface-alt)] p-4"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-laburante-text-muted)]">Mensaje inicial · {supportUserProfile?.name || 'Usuario'}</p><p className="whitespace-pre-wrap text-sm leading-relaxed">{selectedSupportTicket.initial_message}</p></div>{supportMessages.map((item) => <div key={item.id} className="rounded-2xl bg-indigo-50 p-4"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-indigo-700">{item.author_role === 'admin' ? 'Respuesta del equipo LABURANTE' : 'Mensaje del usuario'} · {new Date(item.created_at).toLocaleString()}</p><p className="whitespace-pre-wrap text-sm leading-relaxed">{item.content}</p></div>)}{supportAttachment && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs"><p className="flex items-center gap-2 font-semibold text-emerald-900"><Paperclip size={14} />{supportAttachment.original_name} · {Math.round(supportAttachment.size_bytes / 1024)} KB</p>{supportAttachmentUrl && <a href={supportAttachmentUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold text-emerald-800 underline">Abrir imagen privada</a>}</div>}</div>
                 <div className="border-t border-[var(--color-laburante-border)] p-4"><textarea value={supportReply} onChange={(event) => setSupportReply(event.target.value)} maxLength={5000} rows={3} placeholder="Responder al usuario…" className="w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><label className="inline-flex items-center gap-2 text-xs text-[var(--color-laburante-text-secondary)]"><input type="checkbox" checked={supportRequestCapture} onChange={(event) => setSupportRequestCapture(event.target.checked)} />Solicitar una imagen (un uso)</label><button type="button" disabled={supportSaving || !supportReply.trim()} onClick={() => void handleSupportReply()} className="inline-flex items-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"><Send size={14} />Enviar respuesta</button></div></div>
               </>}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab: Mensajería Admin */}
-      {activeTab === 'messages' && (
-        <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs text-indigo-950 space-y-1">
-            <p className="font-bold flex items-center gap-1.5 text-indigo-900">
-              <MessageCircle size={15} className="text-indigo-600" />
-              Mensajería con usuarios
-            </p>
-            <p className="text-[11px] text-indigo-800 leading-relaxed">
-              Conversaciones directas con usuarios de la plataforma. Los mensajes se envían vía RPC segura — el rol de admin se deriva server-side.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
-            {/* Lista de conversaciones */}
-            <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] overflow-hidden">
-              <div className="p-3 border-b border-[var(--color-laburante-border)] flex items-center justify-between">
-                <span className="font-heading font-bold text-xs text-[var(--color-laburante-text)]">Conversaciones</span>
-                <button type="button" onClick={loadAdminConversations} className="text-[11px] text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] flex items-center gap-1 cursor-pointer">
-                  <RefreshCw size={12} /> Actualizar
-                </button>
-              </div>
-              {adminConversations.length === 0 ? (
-                <div className="p-8 text-center text-xs text-[var(--color-laburante-text-secondary)]">
-                  No hay conversaciones activas.
-                </div>
-              ) : (
-                <div className="divide-y divide-[var(--color-laburante-border)]">
-                  {adminConversations.map((conv) => {
-                    const convProfile = profiles.find((p) => p.id === conv.user_id)
-                    return (
-                      <button
-                        key={conv.id}
-                        type="button"
-                        onClick={() => handleSelectConversation(conv)}
-                        className={`w-full text-left px-4 py-3 text-xs transition-colors cursor-pointer hover:bg-[var(--color-laburante-surface-alt)] ${selectedConversation?.id === conv.id ? 'bg-indigo-50/80' : ''}`}
-                      >
-                        <p className="font-semibold text-[var(--color-laburante-text)] truncate">
-                          {convProfile?.name || conv.user_id}
-                        </p>
-                        <p className="text-[11px] text-[var(--color-laburante-text-muted)] mt-0.5">
-                          {new Date(conv.updated_at).toLocaleDateString()} {new Date(conv.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Hilo de mensajes */}
-            <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] flex flex-col min-h-[400px]">
-              {!selectedConversation ? (
-                <div className="flex-1 flex items-center justify-center text-xs text-[var(--color-laburante-text-secondary)]">
-                  Seleccioná una conversación para ver el hilo.
-                </div>
-              ) : (
-                <>
-                  <div className="p-3 border-b border-[var(--color-laburante-border)] flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <MessageCircle size={14} className="text-indigo-600" />
-                      <span className="font-heading font-bold text-xs text-[var(--color-laburante-text)]">
-                        {profiles.find((p) => p.id === selectedConversation.user_id)?.name || selectedConversation.user_id}
-                      </span>
-                    </div>
-                    {profiles.find((p) => p.id === selectedConversation.user_id)?.slug && (
-                      <a
-                        href={`/p/${profiles.find((p) => p.id === selectedConversation.user_id)?.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[11px] font-semibold text-indigo-600 hover:underline"
-                      >
-                        Ver perfil
-                      </a>
-                    )}
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[420px]">
-                    {conversationMessages.length === 0 ? (
-                      <p className="text-center text-xs text-[var(--color-laburante-text-secondary)]">
-                        Sin mensajes todavía.
-                      </p>
-                    ) : (
-                      conversationMessages.map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.sender_role === 'admin' ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
-                            msg.sender_role === 'admin'
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] border border-[var(--color-laburante-border)]'
-                          }`}>
-                            <p>{msg.content}</p>
-                            <p className={`text-[10px] mt-1 ${msg.sender_role === 'admin' ? 'text-indigo-200' : 'text-[var(--color-laburante-text-muted)]'}`}>
-                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              {msg.read_at && msg.sender_role === 'admin' && ' · Leído'}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="p-3 border-t border-[var(--color-laburante-border)] flex gap-2">
-                    <input
-                      type="text"
-                      value={adminMessageInput}
-                      onChange={(e) => setAdminMessageInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAdminSendMessage()}
-                      placeholder="Escribí un mensaje..."
-                      className="flex-1 px-3 py-2 rounded-xl border border-[var(--color-laburante-border)] bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                      disabled={adminMessageSending}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAdminSendMessage}
-                      disabled={!adminMessageInput.trim() || adminMessageSending}
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer transition-colors"
-                    >
-                      {adminMessageSending ? '...' : 'Enviar'}
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>

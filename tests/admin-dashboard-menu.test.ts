@@ -4,12 +4,16 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('../src/pages/Admin.tsx', import.meta.url), 'utf8')
 
-test('el menú compacto conserva el acceso a todos los módulos administrativos', () => {
-  for (const tab of ['legal', 'analytics', 'jobs', 'verifications', 'confirmations', 'messages', 'support', 'companies', 'company_ops', 'reports', 'profiles', 'deletions', 'reviews', 'settings']) {
+test('el menú compacto conserva el acceso a todos los módulos administrativos vigentes', () => {
+  for (const tab of ['legal', 'analytics', 'jobs', 'verifications', 'confirmations', 'support', 'companies', 'company_ops', 'reports', 'profiles', 'deletions', 'reviews', 'settings']) {
     assert.match(source, new RegExp(`setActiveTab\\('${tab}'\\)`), `falta el módulo ${tab}`)
   }
-  assert.match(source, /setActiveTab\('messages'\)/)
   assert.match(source, /setActiveTab\('support'\)/)
+})
+
+test('el módulo Mensajes privado fue retirado y no acepta navegación directa', () => {
+  assert.doesNotMatch(source, /['"]messages['"]|Mensajería con usuarios|Mensajes y soporte/)
+  assert.doesNotMatch(source, /from\('conversations'\)|from\('messages'\)|send_conversation_message|conversacion/)
 })
 
 test('el dashboard usa una cuadrícula responsive compacta con badges visibles', () => {
