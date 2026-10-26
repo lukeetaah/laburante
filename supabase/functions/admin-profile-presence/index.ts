@@ -37,7 +37,7 @@ function headers(request: Request) {
   const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
   const isPreviewOrigin = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)
   const allowedOrigin = [SITE_URL, 'https://laburante.ar', 'https://www.laburante.ar'].includes(origin) || isLocalOrigin || isPreviewOrigin ? origin : SITE_URL
-  return { 'Access-Control-Allow-Origin': allowedOrigin, 'Vary': 'Origin', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Content-Type': 'application/json', 'Cache-Control': 'no-store, max-age=0' }
+  return { 'Access-Control-Allow-Origin': allowedOrigin, 'Vary': 'Origin', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, baggage, sentry-trace', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Content-Type': 'application/json', 'Cache-Control': 'no-store, max-age=0' }
 }
 
 function json(request: Request, body: Record<string, unknown>, status = 200) {
