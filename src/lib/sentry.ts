@@ -66,7 +66,7 @@ Sentry.init({
     if (event.exception?.values) {
       event.exception.values = event.exception.values.map((exception) => {
         const val = exception.value || ''
-        const isAlreadyFormatted = val.includes('LABURANTE SENTRY TEST') || /^\[[\w_-]+\]/.test(val)
+        const isAlreadyFormatted = val.includes('LABURANTE SENTRY TEST')
         if (isAlreadyFormatted) {
           return exception
         }
@@ -147,22 +147,20 @@ export function captureAppError(error: unknown, operation: string, context?: Tec
       route: context?.route || null,
     })
 
-    const details = [
-      `stage=${stage || 'unknown'}`,
-      resource ? `resource=${resource}` : null,
-      `type=${errorType}`,
-      errorCode ? `code=${errorCode}` : null,
-      statusCode ? `status=${statusCode}` : null,
-      bucket ? `bucket=${bucket}` : null,
-    ].filter(Boolean).join(' ')
+    // Keep the original exception so Sentry can group and display its real
+    // message. The operation/stage/resource details above are already stored
+    // as tags and context; replacing the exception with a synthetic message
+    // hides the actual cause (for example, the original TypeError message).
+    const capturedError = err instanceof Error
+      ? err
+      : new Error(
+        typeof err?.message === 'string'
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Technical application error',
+      )
 
-    const safeMessage = `[${operation}] ${details}`
-    const safeError = new Error(safeMessage)
-    safeError.name = errorType || 'AppError'
-    if (err instanceof Error && err.stack) {
-      safeError.stack = err.stack
-    }
-
-    Sentry.captureException(safeError)
+    Sentry.captureException(capturedError)
   })
 }
