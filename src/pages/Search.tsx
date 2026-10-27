@@ -7,6 +7,7 @@ import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
 import { Link } from 'react-router-dom'
 import { interpretSearch, inferCategory } from '@/lib/search-intent'
+import { trackProductEvent } from '@/lib/product-analytics'
 
 export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -65,6 +66,13 @@ export default function Search() {
 
   const handleApplyFilters = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+    trackProductEvent('search_submitted', {
+      has_query: Boolean(query.trim()),
+      has_province: Boolean(provincia),
+      has_locality: Boolean(localidad.trim()),
+      has_category: Boolean(category),
+      has_modality: modalidad !== 'todas',
+    })
     const params = new URLSearchParams()
     if (query.trim()) params.set('q', query.trim())
     if (provincia) params.set('provincia', provincia)

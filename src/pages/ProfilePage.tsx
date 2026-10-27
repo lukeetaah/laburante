@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, Link, useSearchParams, useLocation } from 'react-router-dom'
 import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages, Edit3 } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
@@ -18,6 +18,7 @@ import { isProviderProfile } from '@/lib/profile-publication'
 import { focusContextualElement } from '@/lib/contextual-navigation'
 import { getAuthorizedResumeUrl } from '@/lib/profile-assets'
 import { getPublicProfileContactHref, getPublicProfileContactLabel, getPublicProfileContacts } from '@/lib/contact-methods'
+import { trackProductEvent } from '@/lib/product-analytics'
 
 function PublicContactIcon({ type }: { type: string }) {
   if (type === 'linkedin') {
@@ -51,8 +52,9 @@ export default function ProfilePage() {
   const { user, isAdmin } = useAuthStore()
   const { slug } = useParams<{ slug: string }>()
   const location = useLocation()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const targetReviewId = searchParams.get('resena')
+  const requestIntent = searchParams.get('solicitar') === '1'
   const [rawProfile, setRawProfile] = useState<ProfileWithDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -68,6 +70,8 @@ export default function ProfilePage() {
   const [recommendationMessage, setRecommendationMessage] = useState('')
   const [resumeAccessUrl, setResumeAccessUrl] = useState<string | null>(null)
   const [resumeLoading, setResumeLoading] = useState(false)
+  const trackedProfileId = useRef<string | null>(null)
+  const requestIntentHandled = useRef(false)
 
   const fetchProfileBySlug = useProfileStore((s) => s.fetchProfileBySlug)
   const fetchMyProfile = useProfileStore((s) => s.fetchMyProfile)
@@ -80,6 +84,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!slug) return
+    requestIntentHandled.current = false
+    trackedProfileId.current = null
     const normalizedSlug = decodeURIComponent(slug).trim()
     setLoading(true)
     let active = true
@@ -156,6 +162,34 @@ export default function ProfilePage() {
     return () => { active = false }
   }, [profile?.id, profile?.has_resume, profile?.resume_url, user?.id])
 
+  const isCompanyViewer = isCompanyAccount(user, myProfile)
+  const isPublicProvider = profile ? isProviderProfile(profile) : false
+  const openJobRequest = () => {
+    trackProductEvent('request_started', { auth_required: !user })
+    setJobRequestOpen(true)
+  }
+
+  useEffect(() => {
+    if (loading || !profile || !requestIntent || requestIntentHandled.current) return
+    requestIntentHandled.current = true
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous)
+      next.delete('solicitar')
+      return next
+    }, { replace: true })
+
+    if (isPublicProvider && !isOwnerSession && !isCompanyViewer) {
+      trackProductEvent('request_resumed')
+      setJobRequestOpen(true)
+    }
+  }, [loading, profile?.id, requestIntent, isPublicProvider, isOwnerSession, isCompanyViewer, setSearchParams])
+
+  useEffect(() => {
+    if (loading || !profile || trackedProfileId.current === profile.id) return
+    trackedProfileId.current = profile.id
+    trackProductEvent('profile_viewed', { provider: isPublicProvider })
+  }, [loading, profile?.id, isPublicProvider])
+
   const handleShare = () => {
     const url = `${window.location.origin}/p/${profile?.slug}`
     if (navigator.clipboard) {
@@ -200,8 +234,6 @@ export default function ProfilePage() {
   }
 
   const isOwnProfile = user?.id === profile.id
-  const isCompanyViewer = isCompanyAccount(user, myProfile)
-  const isPublicProvider = isProviderProfile(profile)
   const publicContacts = getPublicProfileContacts(profile.contact_methods || [])
     .map((method) => ({
       ...method,
@@ -324,7 +356,7 @@ export default function ProfilePage() {
           {isPublicProvider && !isOwnProfile && !isCompanyViewer && (
             <>
               <button
-                onClick={() => setJobRequestOpen(true)}
+                onClick={openJobRequest}
                 className="btn-dark flex-1 sm:flex-initial py-3.5 px-7 rounded-2xl font-heading font-bold text-sm transition-transform hover:scale-[1.02] shadow-md text-center flex items-center justify-center gap-2"
                 title="Aportá fotos, urgencia y recibí un presupuesto guardado en la app"
               >
@@ -333,7 +365,7 @@ export default function ProfilePage() {
               </button>
 
               <button
-                onClick={() => setJobRequestOpen(true)}
+                onClick={openJobRequest}
                 className="inline-flex flex-1 items-center justify-center gap-2 py-3.5 px-6 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs sm:text-sm transition-colors sm:flex-initial"
               >
                 <MessageCircle size={16} className="text-emerald-600" /> Pedir presupuesto para contactar

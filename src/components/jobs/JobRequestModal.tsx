@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { X, Upload, Image as ImageIcon, Trash2, Clock, Calendar, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react'
 import { useJobStore, type JobRequestWithDetails } from '@/stores/job-store'
 import { useAuthStore } from '@/stores/auth-store'
 import type { JobRequestUrgency } from '@/lib/database.types'
+import { trackProductEvent } from '@/lib/product-analytics'
 
 interface JobRequestModalProps {
   profileId: string
@@ -64,27 +65,38 @@ export default function JobRequestModal({
   const [submitting, setSubmitting] = useState(false)
   const [createdRequest, setCreatedRequest] = useState<JobRequestWithDetails | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const authPromptTracked = useRef(false)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (!isOpen || user || authPromptTracked.current) return
+    authPromptTracked.current = true
+    trackProductEvent('request_auth_prompt')
+  }, [isOpen, user])
+
+  useEffect(() => {
+    if (!isOpen) authPromptTracked.current = false
+  }, [isOpen])
 
   if (!isOpen) return null
 
   const isOwnProfile = Boolean(user?.id && user.id === profileId)
 
   if (isOwnProfile) {
-    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-amber-600" /><div><h2 className="text-lg font-bold">No podés contratarte a vos mismo</h2><p className="mt-2 text-sm leading-relaxed text-slate-600">Este perfil pertenece a tu propia cuenta. Para probar el flujo, usá otra cuenta o buscá a otra persona.</p></div></div>
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="job-request-own-title">
+        <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-amber-600" /><div><h2 id="job-request-own-title" className="text-lg font-bold">No podés contratarte a vos mismo</h2><p className="mt-2 text-sm leading-relaxed text-slate-600">Este perfil pertenece a tu propia cuenta. Para probar el flujo, usá otra cuenta o buscá a otra persona.</p></div></div>
         <button type="button" onClick={onClose} className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white">Entendido</button>
       </div>
     </div>
   }
 
   if (!user) {
-    const returnPath = `/p/${encodeURIComponent(profileSlug)}`
-    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-indigo-600" /><div><h2 className="text-lg font-bold">Creá una cuenta para enviar la solicitud</h2><p className="mt-2 text-sm leading-relaxed text-slate-600">Necesitás una cuenta para que el pedido quede a tu nombre, puedas seguir el estado y recibas cada aviso cuando la persona responda.</p></div></div>
+    const returnPath = `/p/${encodeURIComponent(profileSlug)}?solicitar=1`
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="job-request-auth-title">
+        <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 shrink-0 text-indigo-600" /><div><h2 id="job-request-auth-title" className="text-lg font-bold">Creá una cuenta para enviar la solicitud</h2><p className="mt-2 text-sm leading-relaxed text-slate-600">Necesitás una cuenta para que el pedido quede a tu nombre, puedas seguir el estado y recibas cada aviso cuando la persona responda.</p></div></div>
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <Link to={`/registrar?redirect=${encodeURIComponent(returnPath)}`} onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white">Crear cuenta gratis <ArrowRight size={15} /></Link>
           <Link to={`/ingresar?redirect=${encodeURIComponent(returnPath)}`} onClick={onClose} className="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-800">Ya tengo cuenta</Link>
@@ -191,8 +203,10 @@ export default function JobRequestModal({
 
     if (res.error) {
       setError(res.error)
+      trackProductEvent('request_create_error')
     } else if (res.request) {
       setCreatedRequest(res.request)
+      trackProductEvent('request_created')
       if (onSuccess) onSuccess(res.request)
     }
   }
@@ -208,7 +222,7 @@ export default function JobRequestModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-xl rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-8">
+      <div className="relative w-full max-w-xl rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-8" role="dialog" aria-modal="true" aria-labelledby="job-request-title">
         <button
           onClick={handleReset}
           className="absolute top-5 right-5 p-1.5 rounded-xl text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)] transition-colors"
@@ -269,7 +283,7 @@ export default function JobRequestModal({
               <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700">
                 Presupuesto sin compromiso
               </span>
-              <h2 className="font-heading text-xl sm:text-2xl font-extrabold text-[var(--color-laburante-text)] mt-2">
+                <h2 id="job-request-title" className="font-heading text-xl sm:text-2xl font-extrabold text-[var(--color-laburante-text)] mt-2">
                 Pedir presupuesto a {profileName}
               </h2>
               <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1">
@@ -336,6 +350,7 @@ export default function JobRequestModal({
                         onClick={() => handleRemovePhoto(index)}
                         className="absolute top-1 right-1 p-1 bg-black/70 hover:bg-rose-600 text-white rounded-lg transition-colors"
                         title="Eliminar foto"
+                        aria-label={`Eliminar foto ${index + 1}`}
                       >
                         <Trash2 size={12} />
                       </button>

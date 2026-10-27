@@ -80,7 +80,7 @@ export default function Register() {
     } catch {}
 
     setOauthLoading('google')
-    const res = await signInWithGoogle()
+    const res = await signInWithGoogle(searchParams.get('redirect'))
     if (res.error) {
       setError(res.error)
       setOauthLoading(null)
@@ -309,7 +309,7 @@ export default function Register() {
             </button>
 
             <Link
-              to="/ingresar"
+              to={searchParams.get('redirect') ? `/ingresar?redirect=${encodeURIComponent(searchParams.get('redirect') || '')}` : '/ingresar'}
               className="btn-dark w-full py-3.5 px-4 rounded-xl font-heading font-bold text-sm inline-flex items-center justify-center gap-2"
             >
               <span>Ya confirmé mi cuenta · Iniciar sesión</span>
@@ -665,4 +665,3 @@ export default function Register() {
     </div>
   )
 }
-

@@ -43,7 +43,7 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     setError(null)
     setOauthLoading('google')
-    const res = await signInWithGoogle()
+    const res = await signInWithGoogle(searchParams.get('redirect'))
     if (res.error) {
       setError(res.error)
       setOauthLoading(null)
@@ -272,4 +272,3 @@ export default function Login() {
     </div>
   )
 }
-

@@ -86,7 +86,7 @@ interface AuthState {
   setSession: (session: Session | null) => void
   signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: string | null; needsSignIn?: boolean }>
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
-  signInWithGoogle: () => Promise<{ error: string | null }>
+  signInWithGoogle: (redirectTo?: string | null) => Promise<{ error: string | null }>
   resetPasswordForEmail: (email: string) => Promise<{ error: string | null }>
   updatePassword: (password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
@@ -326,10 +326,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     return { error: null }
   },
 
-  signInWithGoogle: async () => {
+  signInWithGoogle: async (redirectToPath) => {
     addAppBreadcrumb('oauth_google_started')
     try {
-      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/ingresar` : undefined
+      const safeRedirect = redirectToPath && redirectToPath.startsWith('/') && !redirectToPath.startsWith('//')
+        ? redirectToPath
+        : null
+      const callbackPath = safeRedirect
+        ? `/ingresar?redirect=${encodeURIComponent(safeRedirect)}`
+        : '/ingresar'
+      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}${callbackPath}` : undefined
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -422,4 +428,3 @@ export const useAuthStore = create<AuthState>((set) => ({
     _authSubscription = subscription
   },
 }))
-
