@@ -29,3 +29,18 @@ test('el editor preserva relaciones no modificadas al omitir sus patches', () =>
   assert.match(adminSource, /if \(contactsPatch !== undefined\) rpcPayload\.contact_methods_patch/)
   assert.match(adminSource, /if \(languagesPatch !== undefined\) rpcPayload\.languages_patch/)
 })
+
+test('el editor administrativo es desplazable y no expone relaciones como JSON', () => {
+  assert.match(adminSource, /max-h-\[calc\(100vh-2rem\)\].*overflow-y-auto/)
+  assert.doesNotMatch(adminSource, /Servicios <span[^>]*>\(JSON\)/)
+  assert.doesNotMatch(adminSource, /Contactos <span[^>]*>\(JSON\)/)
+  assert.doesNotMatch(adminSource, /Idiomas <span[^>]*>\(JSON\)/)
+  assert.match(adminSource, /Última conexión:/)
+})
+
+test('el panel expone cohortes como señales de acceso y no como retención inventada', () => {
+  assert.match(adminSource, /Actividad y cohortes/)
+  assert.match(adminSource, /No presenta esto como retención o reincidencia exacta/)
+  assert.match(adminSource, /Acceso posterior/)
+  assert.match(adminSource, /Conexión 30d/)
+})

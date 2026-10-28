@@ -107,7 +107,7 @@ export default function Admin() {
 
   const [searchParams] = useSearchParams()
   const initialUrlTab = searchParams.get('tab')
-  const validTabs = ['analytics', 'presence', 'jobs', 'verifications', 'confirmations', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'audit', 'legal', 'settings'] as const
+  const validTabs = ['analytics', 'engagement', 'presence', 'jobs', 'verifications', 'confirmations', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'audit', 'legal', 'settings'] as const
   type AdminTab = typeof validTabs[number]
   const [activeTab, setActiveTab] = useState<AdminTab | null>(
     validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : null
@@ -147,6 +147,7 @@ export default function Admin() {
   const [editingResumeUrl, setEditingResumeUrl] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<any>({})
   const [editReason, setEditReason] = useState('')
+  const [editSkillQuery, setEditSkillQuery] = useState('')
   const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [credentialsSaving, setCredentialsSaving] = useState(false)
   const [jobRequests, setJobRequests] = useState<any[]>([])
@@ -732,17 +733,44 @@ export default function Admin() {
       intent: profile.intent || '',
       account_type: profile.account_type || 'persona',
       company_plan: profile.company_plan || 'gratis',
-      skillsText: (profile.skills || []).map((skill: any) => typeof skill === 'string' ? skill : skill.name).filter(Boolean).join('\n'),
-      servicesJson: JSON.stringify(profile.services || [], null, 2),
-      contactsJson: JSON.stringify(profile.contact_methods || [], null, 2),
-      languagesJson: JSON.stringify(profile.profile_languages || [], null, 2),
+      skills: (profile.skills || []).map((skill: any) => ({ ...(typeof skill === 'object' ? skill : {}), name: typeof skill === 'string' ? skill : skill.name })).filter((skill: any) => skill.name),
+      services: (profile.services || []).map((service: any) => ({ ...service, title: service.title || '', description: service.description || '', precio_orientativo: service.precio_orientativo || '' })),
+      contact_methods: (profile.contact_methods || []).map((contact: any) => ({ ...contact, type: contact.type || 'email', value: contact.value || '', is_public: contact.is_public !== false })),
+      languages: (profile.profile_languages || []).map((language: any) => ({ ...language, language: language.language || '', level: language.level || 'intermedio', is_public: language.is_public !== false })),
       email: '',
       password: '',
     })
+    setEditSkillQuery('')
     const { data: email } = await (supabase.rpc as any)('admin_get_user_email', { target_user_id: profile.id })
     setEditForm((current: any) => ({ ...current, email: email || '' }))
     const resume = await getAuthorizedResumeUrl(profile.id)
     setEditingResumeUrl(resume.url)
+  }
+
+  const updateEditRelation = (field: 'services' | 'contact_methods' | 'languages', index: number, key: string, value: unknown) => {
+    setEditForm((current: any) => ({
+      ...current,
+      [field]: (current[field] || []).map((item: any, itemIndex: number) => itemIndex === index ? { ...item, [key]: value } : item),
+    }))
+  }
+
+  const removeEditRelation = (field: 'services' | 'contact_methods' | 'languages', index: number) => {
+    setEditForm((current: any) => ({ ...current, [field]: (current[field] || []).filter((_: unknown, itemIndex: number) => itemIndex !== index) }))
+  }
+
+  const addEditSkill = (value = editSkillQuery) => {
+    const name = value.trim()
+    if (!name) return
+    setEditForm((current: any) => {
+      const skills = current.skills || []
+      if (skills.some((skill: any) => String(skill.name || '').toLowerCase() === name.toLowerCase())) return current
+      return { ...current, skills: [...skills, { name }] }
+    })
+    setEditSkillQuery('')
+  }
+
+  const removeEditSkill = (index: number) => {
+    setEditForm((current: any) => ({ ...current, skills: (current.skills || []).filter((_: unknown, itemIndex: number) => itemIndex !== index) }))
   }
 
   const handleUpdateCredentials = async () => {
@@ -817,37 +845,23 @@ export default function Admin() {
       if (value !== originalProfileValues[field]) profilePatch[field] = value
     })
 
-    const currentSkills = editForm.skillsText.split('\n').map((value: string) => value.trim()).filter(Boolean)
+    const currentSkills = (editForm.skills || []).map((skill: any) => ({ ...skill, name: String(skill.name || '').trim() })).filter((skill: any) => skill.name)
     const originalSkills = (editingProfile.skills || [])
-      .map((skill: any) => typeof skill === 'string' ? skill : skill.name)
-      .filter(Boolean)
+      .map((skill: any) => ({ ...(typeof skill === 'object' ? skill : {}), name: typeof skill === 'string' ? skill : skill.name }))
+      .filter((skill: any) => skill.name)
     const skillsChanged = JSON.stringify(currentSkills) !== JSON.stringify(originalSkills)
     let skillsPatch: any[] | undefined
     let servicesPatch: any[] | undefined
     let contactsPatch: any[] | undefined
     let languagesPatch: any[] | undefined
 
-    const parseChangedRelation = (label: string, currentText: string, originalText: string) => {
-      if (currentText === originalText) return undefined
-      const parsed = JSON.parse(currentText || '[]')
-      if (!Array.isArray(parsed)) throw new Error(`${label} debe ser una lista JSON.`)
-      return parsed
-    }
-
-    try {
-      servicesPatch = parseChangedRelation('Los servicios', editForm.servicesJson, JSON.stringify(editingProfile.services || [], null, 2))
-      contactsPatch = parseChangedRelation('Los contactos', editForm.contactsJson, JSON.stringify(editingProfile.contact_methods || [], null, 2))
-      languagesPatch = parseChangedRelation('Los idiomas', editForm.languagesJson, JSON.stringify(editingProfile.profile_languages || [], null, 2))
-    } catch (parseError: any) {
-      setActionMessage(`No se pudieron leer las relaciones del perfil: ${parseError.message}`)
-      return
-    }
+    const relationPatch = (current: unknown[], original: unknown[]) => JSON.stringify(current) === JSON.stringify(original) ? undefined : current
+    servicesPatch = relationPatch((editForm.services || []).map((service: any) => ({ ...service, title: String(service.title || '').trim(), description: String(service.description || '').trim() || null, precio_orientativo: String(service.precio_orientativo || '').trim() || null })), editingProfile.services || [])
+    contactsPatch = relationPatch((editForm.contact_methods || []).map((contact: any) => ({ ...contact, type: String(contact.type || '').trim(), value: String(contact.value || '').trim(), is_public: contact.is_public !== false })).filter((contact: any) => contact.type || contact.value), editingProfile.contact_methods || [])
+    languagesPatch = relationPatch((editForm.languages || []).map((language: any) => ({ ...language, language: String(language.language || '').trim(), level: language.level || 'intermedio', is_public: language.is_public !== false })).filter((language: any) => language.language), editingProfile.profile_languages || [])
 
     if (skillsChanged) {
-      skillsPatch = currentSkills.map((name: string) => {
-        const existing = (editingProfile.skills || []).find((skill: any) => (skill.name || skill).trim().toLowerCase() === name.toLowerCase())
-        return existing?.id ? { id: existing.id, name } : name
-      })
+      skillsPatch = currentSkills.map((skill: any) => skill.id ? { id: skill.id, name: skill.name } : skill.name)
     }
 
     const rpcPayload: Record<string, unknown> = {
@@ -1335,6 +1349,26 @@ export default function Admin() {
   const legalAnteriorCount = legalUsersList.filter((u) => u.status === 'anterior').length
   const legalPendienteCount = legalUsersList.filter((u) => u.status === 'pendiente').length
 
+  const activityDataAvailable = profiles.some((profile) => profile.auth_activity_available)
+  const activityWindowStart = Date.now() - 30 * 24 * 60 * 60 * 1000
+  const recentlySignedInCount = profiles.filter((profile) => {
+    const timestamp = Date.parse(profile.last_sign_in_at || '')
+    return Number.isFinite(timestamp) && timestamp >= activityWindowStart
+  }).length
+  const registrationCohorts = Object.entries(profiles.reduce<Record<string, { label: string; total: number; accessAfterDay: number; active30d: number }>>((cohorts, profile) => {
+    const createdAt = Date.parse(profile.created_at || '')
+    if (!Number.isFinite(createdAt)) return cohorts
+    const date = new Date(createdAt)
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const cohort = cohorts[key] || { label: date.toLocaleDateString('es-AR', { month: 'short', year: 'numeric' }), total: 0, accessAfterDay: 0, active30d: 0 }
+    cohort.total += 1
+    const lastSignIn = Date.parse(profile.last_sign_in_at || '')
+    if (Number.isFinite(lastSignIn) && lastSignIn >= createdAt + 24 * 60 * 60 * 1000) cohort.accessAfterDay += 1
+    if (Number.isFinite(lastSignIn) && lastSignIn >= activityWindowStart) cohort.active30d += 1
+    cohorts[key] = cohort
+    return cohorts
+  }, {})).sort(([left], [right]) => right.localeCompare(left)).slice(0, 12).map(([, cohort]) => cohort)
+
   const filteredLegalUsers = legalUsersList.filter((item) => {
     if (legalFilter !== 'todos' && item.status !== legalFilter) return false
     if (legalSearch.trim()) {
@@ -1528,6 +1562,21 @@ export default function Admin() {
                 <p className="text-xs text-[var(--color-laburante-text-secondary)] mt-1 leading-relaxed">
                   Embudo de solicitudes, pedidos presupuestados y análisis del flujo de trabajo.
                 </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('engagement')}
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-cyan-200 bg-cyan-50/40 hover:bg-cyan-50 hover:border-cyan-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-2 sm:p-2.5 rounded-xl bg-cyan-700 text-white shadow-xs group-hover:scale-105 transition-transform"><TrendingUp size={18} /></div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-cyan-100 text-cyan-900">{activityDataAvailable ? `${recentlySignedInCount} activos 30d` : 'Sin conexión Auth'}</span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-cyan-950">Actividad y cohortes</h3>
+                <p className="text-xs text-cyan-950/70 mt-1 leading-relaxed">Conexiones registradas por cohorte de alta, con límites explícitos de la medición.</p>
               </div>
             </button>
 
@@ -1859,6 +1908,7 @@ export default function Admin() {
               Módulo activo: <strong className="text-[var(--color-laburante-text)] capitalize">
                 {activeTab === 'legal' && 'Edad y aceptación legal'}
                 {activeTab === 'analytics' && 'Métricas y Operatoria'}
+                {activeTab === 'engagement' && 'Actividad y cohortes'}
                 {activeTab === 'presence' && 'Mapa de presencia'}
                 {activeTab === 'jobs' && 'Pedidos de trabajo'}
                 {activeTab === 'verifications' && 'Verificaciones WhatsApp'}
@@ -2159,6 +2209,30 @@ export default function Admin() {
             </section>
             <section className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5"><h3 className="font-heading font-bold">Lectura rápida</h3><div className="mt-4 space-y-3 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]"><p><strong className="text-[var(--color-laburante-text)]">Presupuestos:</strong> {budgetedJobs} de {jobRequests.length} pedidos recibieron una propuesta.</p><p><strong className="text-[var(--color-laburante-text)]">Cierre:</strong> {unresolvedCases} casos completados todavía necesitan respuesta de una de las partes.</p><p><strong className="text-[var(--color-laburante-text)]">Empresas:</strong> {profiles.filter((p) => p.account_type === 'empresa').length} cuentas registradas para búsquedas y proyectos.</p></div></section>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'engagement' && (
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-cyan-200 bg-cyan-50/60 p-5 text-cyan-950">
+            <div className="flex items-center gap-2"><TrendingUp size={18} /><h2 className="font-heading text-lg font-bold">Actividad y cohortes de alta</h2></div>
+            <p className="mt-1 text-xs leading-relaxed">Usa la última conexión registrada por Auth para los perfiles cargados. No presenta esto como retención o reincidencia exacta: LABURANTE todavía no conserva un historial de eventos de sesión.</p>
+          </div>
+          {!activityDataAvailable ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-xs text-amber-950"><p className="font-bold">La última conexión no está disponible.</p><p className="mt-1 leading-relaxed">El panel no recibió datos de la función administrativa de actividad. No se calculan porcentajes hasta que la función de servidor responda correctamente.</p></div>
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5"><p className="text-xs font-semibold text-[var(--color-laburante-text-muted)]">Perfiles con conexión registrada</p><p className="mt-2 font-heading text-3xl font-extrabold">{profiles.filter((profile) => profile.last_sign_in_status === 'available').length}</p></article>
+                <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><p className="text-xs font-semibold text-emerald-900">Conexión en los últimos 30 días</p><p className="mt-2 font-heading text-3xl font-extrabold text-emerald-950">{recentlySignedInCount}</p></article>
+                <article className="rounded-2xl border border-slate-200 bg-slate-50 p-5"><p className="text-xs font-semibold text-slate-700">Sin inicio de sesión registrado</p><p className="mt-2 font-heading text-3xl font-extrabold text-slate-950">{profiles.filter((profile) => profile.last_sign_in_status === 'never').length}</p></article>
+              </div>
+              <section className="overflow-hidden rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
+                <div className="border-b border-[var(--color-laburante-border)] p-5"><h3 className="font-heading font-bold">Cohortes de perfiles</h3><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">“Acceso posterior” significa que Auth registra una conexión al menos 24 horas después del alta; es una señal observable, no una tasa de retención histórica.</p></div>
+                <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-muted)]"><tr><th className="px-5 py-3">Cohorte de alta</th><th className="px-5 py-3 text-right">Perfiles</th><th className="px-5 py-3 text-right">Acceso posterior</th><th className="px-5 py-3 text-right">Conexión 30d</th></tr></thead><tbody className="divide-y divide-[var(--color-laburante-border)]">{registrationCohorts.map((cohort) => <tr key={cohort.label}><td className="px-5 py-3 font-semibold capitalize">{cohort.label}</td><td className="px-5 py-3 text-right">{cohort.total}</td><td className="px-5 py-3 text-right">{cohort.accessAfterDay} · {cohort.total ? Math.round(cohort.accessAfterDay / cohort.total * 100) : 0}%</td><td className="px-5 py-3 text-right">{cohort.active30d} · {cohort.total ? Math.round(cohort.active30d / cohort.total * 100) : 0}%</td></tr>)}</tbody></table></div>
+              </section>
+            </>
+          )}
         </div>
       )}
 
@@ -3327,8 +3401,8 @@ export default function Admin() {
       )}
 
       {editingProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Editar perfil">
-          <div className="w-full max-w-lg rounded-2xl bg-[var(--color-laburante-surface)] p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="Editar perfil">
+          <div className="relative mx-auto my-2 w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-[var(--color-laburante-surface)] p-5 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Edición administrativa</p>
@@ -3336,6 +3410,7 @@ export default function Admin() {
                 {editForm.email && (
                   <p className="mt-0.5 text-xs text-[var(--color-laburante-text-secondary)] font-mono">{editForm.email}</p>
                 )}
+                <p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">Última conexión: {describeLastSignIn((editingProfile.last_sign_in_status || 'service_unavailable') as AdminAuthActivityStatus, editingProfile.last_sign_in_at)}</p>
               </div>
               <button type="button" onClick={() => setEditingProfile(null)} className="rounded-lg p-1 text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)]" aria-label="Cerrar"><XCircle size={19} /></button>
             </div>
@@ -3369,12 +3444,15 @@ export default function Admin() {
               </div>
             )}
             <label className="mt-3 block text-xs font-semibold">Presentación<textarea value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold">Habilidades <span className="font-normal text-[var(--color-laburante-text-muted)]">(una por línea)</span><textarea value={editForm.skillsText} onChange={(e) => setEditForm({ ...editForm, skillsText: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs" /></label>
-              <label className="text-xs font-semibold">Servicios <span className="font-normal text-[var(--color-laburante-text-muted)]">(JSON)</span><textarea value={editForm.servicesJson} onChange={(e) => setEditForm({ ...editForm, servicesJson: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 font-mono text-[10px]" /></label>
-              <label className="text-xs font-semibold">Contactos <span className="font-normal text-[var(--color-laburante-text-muted)]">(JSON)</span><textarea value={editForm.contactsJson} onChange={(e) => setEditForm({ ...editForm, contactsJson: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 font-mono text-[10px]" /></label>
-              <label className="text-xs font-semibold">Idiomas <span className="font-normal text-[var(--color-laburante-text-muted)]">(JSON)</span><textarea value={editForm.languagesJson} onChange={(e) => setEditForm({ ...editForm, languagesJson: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 font-mono text-[10px]" /></label>
-            </div>
+            <section className="mt-4 rounded-2xl border border-[var(--color-laburante-border)] p-4">
+              <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-bold">Habilidades y oficios</h3><span className="text-[11px] text-[var(--color-laburante-text-muted)]">{(editForm.skills || []).length} seleccionadas</span></div>
+              <div className="mt-3 flex gap-2"><input value={editSkillQuery} onChange={(event) => setEditSkillQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addEditSkill() } }} placeholder="Buscar o agregar habilidad" className="min-w-0 flex-1 rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /><button type="button" onClick={() => addEditSkill()} className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800">Agregar</button></div>
+              {editSkillQuery.trim() && <div className="mt-2 flex flex-wrap gap-1">{CATEGORIES.flatMap((category) => category.subcategories || []).filter((skill) => normalizeSearchText(skill).includes(normalizeSearchText(editSkillQuery)) && !(editForm.skills || []).some((item: any) => normalizeSearchText(item.name || '') === normalizeSearchText(skill))).slice(0, 8).map((skill) => <button key={skill} type="button" onClick={() => addEditSkill(skill)} className="rounded-lg border border-[var(--color-laburante-border)] px-2 py-1 text-[11px] hover:bg-indigo-50">+ {skill}</button>)}</div>}
+              <div className="mt-3 flex flex-wrap gap-2">{(editForm.skills || []).map((skill: any, index: number) => <span key={`${skill.id || skill.name}-${index}`} className="inline-flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-950">{skill.name}<button type="button" onClick={() => removeEditSkill(index)} className="text-amber-700 hover:text-rose-700" aria-label={`Quitar ${skill.name}`}><X size={13} /></button></span>)}</div>
+            </section>
+            <section className="mt-3 rounded-2xl border border-[var(--color-laburante-border)] p-4"><div className="flex items-center justify-between"><h3 className="text-sm font-bold">Servicios</h3><button type="button" onClick={() => setEditForm((current: any) => ({ ...current, services: [...(current.services || []), { title: '', description: '', precio_orientativo: '' }] }))} className="text-xs font-bold text-indigo-700">+ Agregar servicio</button></div><div className="mt-3 space-y-3">{(editForm.services || []).map((service: any, index: number) => <div key={service.id || index} className="rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/40 p-3"><div className="flex gap-2"><input value={service.title} onChange={(event) => updateEditRelation('services', index, 'title', event.target.value)} placeholder="Título del servicio" className="min-w-0 flex-1 rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-sm font-semibold" /><button type="button" onClick={() => removeEditRelation('services', index)} className="p-2 text-[var(--color-laburante-text-muted)] hover:text-rose-600" aria-label="Quitar servicio"><Trash2 size={16} /></button></div><div className="mt-2 grid gap-2 sm:grid-cols-[1fr_180px]"><input value={service.description || ''} onChange={(event) => updateEditRelation('services', index, 'description', event.target.value)} placeholder="Descripción" className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs" /><input value={service.precio_orientativo || ''} onChange={(event) => updateEditRelation('services', index, 'precio_orientativo', event.target.value)} placeholder="Precio orientativo" className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs" /></div></div>)}</div></section>
+            <section className="mt-3 rounded-2xl border border-[var(--color-laburante-border)] p-4"><div className="flex items-center justify-between"><h3 className="text-sm font-bold">Medios de contacto</h3><button type="button" onClick={() => setEditForm((current: any) => ({ ...current, contact_methods: [...(current.contact_methods || []), { type: 'email', value: '', is_public: true }] }))} className="text-xs font-bold text-indigo-700">+ Agregar medio</button></div><div className="mt-3 space-y-2">{(editForm.contact_methods || []).map((contact: any, index: number) => <div key={contact.id || index} className="grid gap-2 sm:grid-cols-[150px_1fr_auto_auto]"><select value={contact.type} onChange={(event) => updateEditRelation('contact_methods', index, 'type', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs"><option value="whatsapp">WhatsApp</option><option value="telefono">Teléfono</option><option value="email">Email</option><option value="instagram">Instagram</option><option value="linkedin">LinkedIn</option><option value="portfolio">Portfolio</option><option value="web">Sitio web</option></select><input value={contact.value} onChange={(event) => updateEditRelation('contact_methods', index, 'value', event.target.value)} placeholder="Dato de contacto" className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /><label className="flex items-center gap-1 text-[11px]"><input type="checkbox" checked={contact.is_public !== false} onChange={(event) => updateEditRelation('contact_methods', index, 'is_public', event.target.checked)} /> Público</label><button type="button" onClick={() => removeEditRelation('contact_methods', index)} className="p-2 text-[var(--color-laburante-text-muted)] hover:text-rose-600" aria-label="Quitar medio"><Trash2 size={16} /></button></div>)}</div></section>
+            <section className="mt-3 rounded-2xl border border-[var(--color-laburante-border)] p-4"><div className="flex items-center justify-between"><h3 className="text-sm font-bold">Idiomas</h3><button type="button" onClick={() => setEditForm((current: any) => ({ ...current, languages: [...(current.languages || []), { language: '', level: 'intermedio', is_public: true }] }))} className="text-xs font-bold text-indigo-700">+ Agregar idioma</button></div><div className="mt-3 space-y-2">{(editForm.languages || []).map((language: any, index: number) => <div key={`${language.language}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_150px_auto_auto]"><input value={language.language} onChange={(event) => updateEditRelation('languages', index, 'language', event.target.value)} placeholder="Ej: Inglés" className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /><select value={language.level} onChange={(event) => updateEditRelation('languages', index, 'level', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs"><option value="basico">Básico</option><option value="intermedio">Intermedio</option><option value="avanzado">Avanzado</option><option value="bilingue">Bilingüe</option><option value="nativo">Nativo</option></select><label className="flex items-center gap-1 text-[11px]"><input type="checkbox" checked={language.is_public !== false} onChange={(event) => updateEditRelation('languages', index, 'is_public', event.target.checked)} /> Público</label><button type="button" onClick={() => removeEditRelation('languages', index)} className="p-2 text-[var(--color-laburante-text-muted)] hover:text-rose-600" aria-label="Quitar idioma"><Trash2 size={16} /></button></div>)}</div></section>
             <label className="mt-3 block text-xs font-semibold">Motivo obligatorio de auditoría<textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2} placeholder="Por qué se realiza esta modificación..." className="mt-1 w-full rounded-xl border border-amber-300 bg-amber-50/40 px-3 py-2 text-sm" /></label>
             <div className="mt-4 border-t border-[var(--color-laburante-border)] pt-4">
               <button type="button" onClick={() => setCredentialsOpen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800"><KeyRound size={14} /> {credentialsOpen ? 'Ocultar cambio de acceso' : 'Cambiar email o contraseña'}</button>
