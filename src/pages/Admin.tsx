@@ -61,6 +61,7 @@ import { CURRENT_TERMS_VERSION } from '@/lib/constants'
 import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS } from '@/lib/support'
 import { formatProfileLocation } from '@/lib/profile-location'
 import { describeLastSignIn, type AdminAuthActivityStatus } from '@/lib/auth-activity'
+import { classifyAdminActivityResult, describeAdminActivityFailure, type AdminActivityFailure } from '@/lib/admin-activity'
 import ProvincePresenceMap from '@/components/admin/ProvincePresenceMap'
 
 function isValidPhotoUrl(photo: string): boolean {
@@ -287,11 +288,10 @@ export default function Admin() {
       })()
       const authActivityPromise = (async () => {
         try {
-          const { data, error } = await supabase.functions.invoke('admin-user-activity', { body: { profile_ids: profileIds } })
-          if (error || data?.status !== 'ok' || !Array.isArray(data?.users)) return { available: false, users: {} }
-          return { available: true, users: Object.fromEntries(data.users.map((entry: any) => [entry.id, { last_sign_in_at: entry.last_sign_in_at || null, last_sign_in_status: entry.last_sign_in_status || 'invalid_response' }])) }
-        } catch {
-          return { available: false, users: {} }
+          const result = await supabase.functions.invoke('admin-user-activity', { body: { profile_ids: profileIds } })
+          return await classifyAdminActivityResult(result)
+        } catch (error) {
+          return await classifyAdminActivityResult({ data: null, error })
         }
       })()
 
@@ -324,6 +324,7 @@ export default function Admin() {
       const hydrated = allCombined.map((p: any) => ({
         ...p,
         auth_activity_available: Boolean((authActivity as any).available),
+        auth_activity_failure: (authActivity as any).failure || null,
         last_sign_in_at: ((authActivity as any).users as Record<string, { last_sign_in_at: string | null }>)[p.id]?.last_sign_in_at || null,
         last_sign_in_status: (authActivity as any).available
           ? (((authActivity as any).users as Record<string, { last_sign_in_status?: AdminAuthActivityStatus }>)[p.id]?.last_sign_in_status || 'user_not_found')
@@ -1350,6 +1351,7 @@ export default function Admin() {
   const legalPendienteCount = legalUsersList.filter((u) => u.status === 'pendiente').length
 
   const activityDataAvailable = profiles.some((profile) => profile.auth_activity_available)
+  const activityFailure = (profiles.find((profile) => profile.auth_activity_failure)?.auth_activity_failure || null) as AdminActivityFailure | null
   const activityWindowStart = Date.now() - 30 * 24 * 60 * 60 * 1000
   const recentlySignedInCount = profiles.filter((profile) => {
     const timestamp = Date.parse(profile.last_sign_in_at || '')
@@ -2219,7 +2221,7 @@ export default function Admin() {
             <p className="mt-1 text-xs leading-relaxed">Usa la última conexión registrada por Auth para los perfiles cargados. No presenta esto como retención o reincidencia exacta: LABURANTE todavía no conserva un historial de eventos de sesión.</p>
           </div>
           {!activityDataAvailable ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-xs text-amber-950"><p className="font-bold">La última conexión no está disponible.</p><p className="mt-1 leading-relaxed">El panel no recibió datos de la función administrativa de actividad. No se calculan porcentajes hasta que la función de servidor responda correctamente.</p></div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-xs text-amber-950"><p className="font-bold">La última conexión no está disponible.</p><p className="mt-1 leading-relaxed">{describeAdminActivityFailure(activityFailure)}</p><p className="mt-2 text-[11px]">No se calculan porcentajes hasta recibir una respuesta válida de la función.</p></div>
           ) : (
             <>
               <div className="grid gap-3 sm:grid-cols-3">
