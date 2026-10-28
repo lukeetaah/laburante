@@ -88,13 +88,14 @@ const REASON_LABELS: Record<string, string> = {
   otro: 'Otro motivo',
 }
 
-const HYBRID_COLUMN_MISSING_RE = /hybrid_(presencial|remoto)_pct|column .* does not exist|Could not find .*hybrid_/i
+// La disponibilidad de la Edge Function debe confirmarse en Supabase antes
+// de habilitar una acción destructiva desde el panel.
+const ADMIN_ACCOUNT_DELETE_AVAILABLE = false
 
 export default function Admin() {
   const { user, isAdmin, loading: authLoading } = useAuthStore()
   const {
     fetchAccountDeletions,
-    updateProfileVisibility,
     fetchPendingWhatsAppVerifications,
     adminApproveWhatsAppVerification,
     adminRejectWhatsAppVerification,
@@ -106,7 +107,7 @@ export default function Admin() {
 
   const [searchParams] = useSearchParams()
   const initialUrlTab = searchParams.get('tab')
-  const validTabs = ['analytics', 'presence', 'jobs', 'verifications', 'confirmations', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'legal', 'settings'] as const
+  const validTabs = ['analytics', 'presence', 'jobs', 'verifications', 'confirmations', 'support', 'reports', 'profiles', 'companies', 'company_ops', 'reviews', 'deletions', 'audit', 'legal', 'settings'] as const
   type AdminTab = typeof validTabs[number]
   const [activeTab, setActiveTab] = useState<AdminTab | null>(
     validTabs.includes(initialUrlTab as any) ? (initialUrlTab as AdminTab) : null
@@ -128,6 +129,9 @@ export default function Admin() {
   const [recStatusFilter, setRecStatusFilter] = useState<'todas' | 'pendientes' | 'visibles' | 'ocultas' | 'caducadas' | 'anonimas'>('todas')
   const [recSearch, setRecSearch] = useState('')
   const [deletions, setDeletions] = useState<AccountDeletionRecord[]>([])
+  const [adminAuditEvents, setAdminAuditEvents] = useState<any[]>([])
+  const [adminAuditPage, setAdminAuditPage] = useState(1)
+  const [adminAuditTotal, setAdminAuditTotal] = useState(0)
   const [waRequests, setWaRequests] = useState<WhatsAppVerificationRequest[]>([])
   const [unconfirmedRegistrations, setUnconfirmedRegistrations] = useState<any[]>([])
   const [unconfirmedFilter, setUnconfirmedFilter] = useState<'todos' | 'pendiente' | 'recordatorio_1' | 'recordatorio_2' | 'limpieza_programada' | 'excluido_actividad'>('todos')
@@ -142,6 +146,7 @@ export default function Admin() {
   const [editingProfile, setEditingProfile] = useState<any | null>(null)
   const [editingResumeUrl, setEditingResumeUrl] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<any>({})
+  const [editReason, setEditReason] = useState('')
   const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [credentialsSaving, setCredentialsSaving] = useState(false)
   const [jobRequests, setJobRequests] = useState<any[]>([])
@@ -220,7 +225,7 @@ export default function Admin() {
           `)
           .order('created_at', { ascending: false }),
         (supabase.from('profiles') as any)
-          .select('id, name, slug, bio, provincia, localidad, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, disponibilidad, account_type, company_plan, photo_url, resume_url, resume_name, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(name), services(title), contact_methods(type,value,is_public)')
+          .select('id, name, slug, bio, provincia, localidad, zona_trabajo, modalidad, hybrid_presencial_pct, hybrid_remoto_pct, status, intent, disponibilidad, account_type, company_plan, photo_url, resume_url, resume_name, profile_completion_reminder_sent_at, created_at, whatsapp_verified, whatsapp_verified_at, skills(id,name), services(id,title,description,precio_orientativo), contact_methods(id,type,value,is_public), profile_languages(language,level,is_public)')
           .order('created_at', { ascending: false }),
       ])
 
@@ -238,7 +243,7 @@ export default function Admin() {
       let profilesData: any[] | null = profilesResult.data
       if (profilesResult.error) {
         const resFallback = await (supabase.from('profiles') as any)
-          .select('id, name, slug, bio, provincia, localidad, modalidad, status, disponibilidad, account_type, photo_url, resume_url, resume_name, created_at, skills(name), services(title), contact_methods(type,value,is_public)')
+          .select('id, name, slug, bio, provincia, localidad, zona_trabajo, modalidad, status, disponibilidad, account_type, company_plan, photo_url, resume_url, resume_name, created_at, skills(id,name), services(id,title,description,precio_orientativo), contact_methods(id,type,value,is_public), profile_languages(language,level,is_public)')
           .order('created_at', { ascending: false })
         profilesData = resFallback.data
       }
@@ -343,6 +348,26 @@ export default function Admin() {
     }
     setLoading(false)
   }
+
+  const loadAdminAudit = async () => {
+    const pageSize = 20
+    const { data, error, count } = await (supabase.from('admin_audit_events') as any)
+      .select('id, actor_user_id, action, entity_type, entity_id, result, reason, changed_fields, correlation_id, created_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range((adminAuditPage - 1) * pageSize, adminAuditPage * pageSize - 1)
+    if (error) {
+      setAdminAuditEvents([])
+      setAdminAuditTotal(0)
+      setActionMessage(`No se pudo cargar la auditoría administrativa: ${error.message}. Aplicá la migración de guardrails.`)
+      return
+    }
+    setAdminAuditEvents(data || [])
+    setAdminAuditTotal(count || 0)
+  }
+
+  useEffect(() => {
+    if (activeTab === 'audit') void loadAdminAudit()
+  }, [activeTab, adminAuditPage])
 
   useEffect(() => {
     if (isAdmin) {
@@ -593,40 +618,37 @@ export default function Admin() {
 
   const handleToggleProfileStatus = async (profileId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'suspendido' ? 'activo' : 'suspendido'
-    const { error } = await (supabase.from('profiles') as any)
-      .update({ status: nextStatus })
-      .eq('id', profileId)
+    const reason = window.prompt('Motivo obligatorio para cambiar el estado del perfil:')?.trim()
+    if (!reason) return
+    const { error } = await (supabase.rpc as any)('admin_set_profile_status', {
+      target_profile_id: profileId,
+      target_status: nextStatus,
+      edit_reason: reason,
+    })
 
-    if (!error) {
-      setProfiles((prev) =>
-        prev.map((p) => (p.id === profileId ? { ...p, status: nextStatus } : p))
-      )
-      setActionMessage(`Estado del perfil actualizado a: ${nextStatus.toUpperCase()}.`)
+    if (error) {
+      setActionMessage(`No se pudo cambiar el estado del perfil: ${error.message}`)
+      return
     }
+    setProfiles((prev) =>
+      prev.map((p) => (p.id === profileId ? { ...p, status: nextStatus } : p))
+    )
+    setActionMessage(`Estado del perfil actualizado a: ${nextStatus.toUpperCase()}.`)
   }
 
   const handleSetCompanyPlan = async (profile: any, plan: 'gratis' | 'pago') => {
     if (profile.account_type !== 'empresa') return
     setActionMessage(null)
-    let { error } = await (supabase.rpc as any)('admin_set_company_plan', {
-      target_user_id: profile.id,
+    const reason = window.prompt('Motivo obligatorio para cambiar el plan Empresa:')?.trim()
+    if (!reason) return
+    const { error } = await (supabase.rpc as any)('admin_set_company_plan_audited', {
+      target_profile_id: profile.id,
       target_plan: plan,
+      edit_reason: reason,
     })
 
-    // Permite operar con la política de admin si la función todavía no fue
-    // creada, sin abrir el update a cuentas no administrativas.
     if (error) {
-      const fallback = await (supabase.from('profiles') as any)
-        .update({ company_plan: plan, updated_at: new Date().toISOString() })
-        .eq('id', profile.id)
-        .eq('account_type', 'empresa')
-        .select('id, company_plan')
-        .maybeSingle()
-      error = fallback.error || (!fallback.data ? { message: 'No se actualizó ninguna cuenta Empresa.' } : null)
-    }
-
-    if (error) {
-      setActionMessage(`No se pudo cambiar el plan de ${profile.name}: ${error.message}. Aplicá migration_company_plans.sql en Supabase.`)
+      setActionMessage(`No se pudo cambiar el plan de ${profile.name}: ${error.message}. Aplicá la migración de guardrails administrativos.`)
       return
     }
     setProfiles((prev) => prev.map((item) => item.id === profile.id ? { ...item, company_plan: plan } : item))
@@ -635,9 +657,15 @@ export default function Admin() {
 
   const handleToggleProfileVisibility = async (profileId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'oculto' ? 'activo' : 'oculto'
-    const result = await updateProfileVisibility(profileId, nextStatus)
-    if (result.error) {
-      setActionMessage(`No se pudo actualizar la visibilidad: ${result.error}`)
+    const reason = window.prompt('Motivo obligatorio para cambiar la visibilidad del perfil:')?.trim()
+    if (!reason) return
+    const { error } = await (supabase.rpc as any)('admin_set_profile_status', {
+      target_profile_id: profileId,
+      target_status: nextStatus,
+      edit_reason: reason,
+    })
+    if (error) {
+      setActionMessage(`No se pudo actualizar la visibilidad: ${error.message}`)
       return
     }
     setProfiles((prev) =>
@@ -652,13 +680,13 @@ export default function Admin() {
 
   const handleToggleWhatsAppVerified = async (profileId: string, currentVerified: boolean) => {
     const nextVal = !currentVerified
-    const now = new Date().toISOString()
-    const { error } = await (supabase.from('profiles') as any)
-      .update({
-        whatsapp_verified: nextVal,
-        whatsapp_verified_at: nextVal ? now : null,
-      })
-      .eq('id', profileId)
+    const reason = window.prompt('Motivo obligatorio para cambiar la certificación de WhatsApp:')?.trim()
+    if (!reason) return
+    const { error } = await (supabase.rpc as any)('admin_set_whatsapp_verification', {
+      target_profile_id: profileId,
+      target_verified: nextVal,
+      edit_reason: reason,
+    })
     if (error) {
       setActionMessage(`No se pudo actualizar la certificación de WhatsApp: ${error.message}`)
       return
@@ -668,7 +696,7 @@ export default function Admin() {
       const raw = localStorage.getItem('laburante_v2_verified_wa')
       const parsed = raw ? JSON.parse(raw) : {}
       if (nextVal) {
-        parsed[profileId] = { phone: 'admin-override', at: now }
+        parsed[profileId] = { phone: 'admin-override', at: new Date().toISOString() }
       } else {
         delete parsed[profileId]
       }
@@ -689,16 +717,25 @@ export default function Admin() {
     setEditingProfile(profile)
     setEditingResumeUrl(null)
     setCredentialsOpen(false)
+    setEditReason('')
     setEditForm({
       name: profile.name || '',
       bio: profile.bio || '',
       provincia: profile.provincia || '',
       localidad: profile.localidad || '',
+      zona_trabajo: profile.zona_trabajo || '',
       modalidad: profile.modalidad || 'presencial',
       hybrid_presencial_pct: typeof profile.hybrid_presencial_pct === 'number' ? profile.hybrid_presencial_pct : 50,
       hybrid_remoto_pct: typeof profile.hybrid_remoto_pct === 'number' ? profile.hybrid_remoto_pct : 50,
       disponibilidad: profile.disponibilidad || 'disponible',
+      status: profile.status || 'activo',
+      intent: profile.intent || '',
       account_type: profile.account_type || 'persona',
+      company_plan: profile.company_plan || 'gratis',
+      skillsText: (profile.skills || []).map((skill: any) => typeof skill === 'string' ? skill : skill.name).filter(Boolean).join('\n'),
+      servicesJson: JSON.stringify(profile.services || [], null, 2),
+      contactsJson: JSON.stringify(profile.contact_methods || [], null, 2),
+      languagesJson: JSON.stringify(profile.profile_languages || [], null, 2),
       email: '',
       password: '',
     })
@@ -713,12 +750,15 @@ export default function Admin() {
       setActionMessage('Ingresá un nuevo email o una contraseña para actualizar el acceso.')
       return
     }
+    const reason = window.prompt('Motivo obligatorio para cambiar las credenciales:')?.trim()
+    if (!reason) return
     setCredentialsSaving(true)
     const { data, error } = await supabase.functions.invoke('admin-update-user-credentials', {
       body: {
         target_user_id: editingProfile.id,
         new_email: editForm.email.trim() || null,
         new_password: editForm.password || null,
+        reason,
       },
     })
     setCredentialsSaving(false)
@@ -740,51 +780,117 @@ export default function Admin() {
       setActionMessage('Completá nombre, provincia y localidad antes de guardar.')
       return
     }
-    const updatePayload = {
+    if (editReason.trim().length < 3) {
+      setActionMessage('Ingresá un motivo de auditoría para guardar la edición administrativa.')
+      return
+    }
+    const normalizeOptionalText = (value: unknown) => {
+      const text = typeof value === 'string' ? value.trim() : ''
+      return text || null
+    }
+    const profileValues: Record<string, unknown> = {
       name: editForm.name.trim(),
-      bio: editForm.bio.trim() || null,
+      bio: normalizeOptionalText(editForm.bio),
       provincia: editForm.provincia.trim(),
       localidad: editForm.localidad.trim(),
+      zona_trabajo: normalizeOptionalText(editForm.zona_trabajo),
       modalidad: editForm.modalidad,
       hybrid_presencial_pct: editForm.modalidad === 'ambas' ? Number(editForm.hybrid_presencial_pct) : null,
       hybrid_remoto_pct: editForm.modalidad === 'ambas' ? 100 - Number(editForm.hybrid_presencial_pct) : null,
       disponibilidad: editForm.disponibilidad,
-      account_type: editForm.account_type,
-      updated_at: new Date().toISOString(),
+      intent: normalizeOptionalText(editForm.intent),
+    }
+    const originalProfileValues: Record<string, unknown> = {
+      name: editingProfile.name?.trim() || '',
+      bio: normalizeOptionalText(editingProfile.bio),
+      provincia: editingProfile.provincia?.trim() || '',
+      localidad: editingProfile.localidad?.trim() || '',
+      zona_trabajo: normalizeOptionalText(editingProfile.zona_trabajo),
+      modalidad: editingProfile.modalidad,
+      hybrid_presencial_pct: editingProfile.modalidad === 'ambas' ? editingProfile.hybrid_presencial_pct : null,
+      hybrid_remoto_pct: editingProfile.modalidad === 'ambas' ? editingProfile.hybrid_remoto_pct : null,
+      disponibilidad: editingProfile.disponibilidad,
+      intent: normalizeOptionalText(editingProfile.intent),
+    }
+    const profilePatch: Record<string, unknown> = {}
+    Object.entries(profileValues).forEach(([field, value]) => {
+      if (value !== originalProfileValues[field]) profilePatch[field] = value
+    })
+
+    const currentSkills = editForm.skillsText.split('\n').map((value: string) => value.trim()).filter(Boolean)
+    const originalSkills = (editingProfile.skills || [])
+      .map((skill: any) => typeof skill === 'string' ? skill : skill.name)
+      .filter(Boolean)
+    const skillsChanged = JSON.stringify(currentSkills) !== JSON.stringify(originalSkills)
+    let skillsPatch: any[] | undefined
+    let servicesPatch: any[] | undefined
+    let contactsPatch: any[] | undefined
+    let languagesPatch: any[] | undefined
+
+    const parseChangedRelation = (label: string, currentText: string, originalText: string) => {
+      if (currentText === originalText) return undefined
+      const parsed = JSON.parse(currentText || '[]')
+      if (!Array.isArray(parsed)) throw new Error(`${label} debe ser una lista JSON.`)
+      return parsed
     }
 
-    let { error } = await (supabase.from('profiles') as any)
-      .update({
-        ...updatePayload,
-      })
-      .eq('id', editingProfile.id)
-
-    if (error && HYBRID_COLUMN_MISSING_RE.test(error.message || '')) {
-      const { hybrid_presencial_pct, hybrid_remoto_pct, ...legacyPayload } = updatePayload
-      const retry = await (supabase.from('profiles') as any)
-        .update(legacyPayload)
-        .eq('id', editingProfile.id)
-      error = retry.error
-    }
-
-    if (error) {
-      setActionMessage(`No se pudo guardar: ${error.message}`)
+    try {
+      servicesPatch = parseChangedRelation('Los servicios', editForm.servicesJson, JSON.stringify(editingProfile.services || [], null, 2))
+      contactsPatch = parseChangedRelation('Los contactos', editForm.contactsJson, JSON.stringify(editingProfile.contact_methods || [], null, 2))
+      languagesPatch = parseChangedRelation('Los idiomas', editForm.languagesJson, JSON.stringify(editingProfile.profile_languages || [], null, 2))
+    } catch (parseError: any) {
+      setActionMessage(`No se pudieron leer las relaciones del perfil: ${parseError.message}`)
       return
     }
-    setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? { ...p, ...editForm, hybrid_remoto_pct: editForm.modalidad === 'ambas' ? 100 - Number(editForm.hybrid_presencial_pct) : null } : p))
+
+    if (skillsChanged) {
+      skillsPatch = currentSkills.map((name: string) => {
+        const existing = (editingProfile.skills || []).find((skill: any) => (skill.name || skill).trim().toLowerCase() === name.toLowerCase())
+        return existing?.id ? { id: existing.id, name } : name
+      })
+    }
+
+    const rpcPayload: Record<string, unknown> = {
+      target_profile_id: editingProfile.id,
+      profile_patch: profilePatch,
+      edit_reason: editReason.trim(),
+    }
+    if (skillsPatch !== undefined) rpcPayload.skills_patch = skillsPatch
+    if (servicesPatch !== undefined) rpcPayload.services_patch = servicesPatch
+    if (contactsPatch !== undefined) rpcPayload.contact_methods_patch = contactsPatch
+    if (languagesPatch !== undefined) rpcPayload.languages_patch = languagesPatch
+
+    const { error } = await (supabase.rpc as any)('admin_update_profile', rpcPayload)
+
+    if (error) {
+      setActionMessage(`No se pudo guardar la edición segura: ${error.message}. Aplicá la migración de guardrails administrativos.`)
+      return
+    }
+    const localUpdates: Record<string, unknown> = { ...profilePatch }
+    if (skillsPatch !== undefined) localUpdates.skills = currentSkills
+    if (servicesPatch !== undefined) localUpdates.services = servicesPatch
+    if (contactsPatch !== undefined) localUpdates.contact_methods = contactsPatch
+    if (languagesPatch !== undefined) localUpdates.profile_languages = languagesPatch
+    setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? { ...p, ...localUpdates } : p))
     setEditingProfile(null)
-    setActionMessage('Perfil actualizado desde Administración.')
+    setActionMessage('Perfil actualizado desde Administración y registrado en auditoría.')
   }
 
   const handleDeleteAccount = async (profile: any) => {
+    if (!ADMIN_ACCOUNT_DELETE_AVAILABLE) {
+      setActionMessage('La eliminación administrativa está deshabilitada hasta verificar el despliegue de su Edge Function en Supabase.')
+      return
+    }
     if (profile.id === user?.id) {
       setActionMessage('La cuenta administradora activa no se puede eliminar desde este panel.')
       return
     }
     if (!window.confirm(`¿Eliminar definitivamente la cuenta de ${profile.name}? También se quitará su acceso y sus datos asociados.`)) return
-    const { error } = await (supabase.rpc as any)('admin_delete_account', { target_user_id: profile.id })
-    if (error) {
-      setActionMessage(`No se pudo eliminar la cuenta: ${error.message}. Aplicá migration_admin_controls.sql en Supabase.`)
+    const reason = window.prompt('Motivo obligatorio para eliminar definitivamente la cuenta:')?.trim()
+    if (!reason) return
+    const { data, error } = await supabase.functions.invoke('admin-delete-account', { body: { target_user_id: profile.id, reason } })
+    if (error || data?.error) {
+      setActionMessage(`No se pudo eliminar la cuenta: ${data?.error || error?.message || 'Error de eliminación'}. Aplicá la Edge Function de eliminación administrativa.`)
       return
     }
     setProfiles((prev) => prev.filter((p) => p.id !== profile.id))
@@ -1024,19 +1130,16 @@ export default function Admin() {
 
   const handleAdminModerateRec = async (id: string, newStatus: string) => {
     try {
-      const { error } = await (supabase.from('recommendations') as any)
-        .update({ status: newStatus })
-        .eq('id', id)
-
+      const reason = window.prompt('Motivo obligatorio de moderación de la reseña:')?.trim()
+      if (!reason) return
+      const { error } = await (supabase.rpc as any)('admin_moderate_recommendation', {
+        target_id: id,
+        target_status: newStatus,
+        moderation_reason: reason,
+      })
       if (error) {
-        const { error: rpcError } = await (supabase.rpc as any)('admin_moderate_recommendation', {
-          target_id: id,
-          target_status: newStatus,
-        })
-        if (rpcError) {
-          setActionMessage(`No se pudo actualizar la reseña: ${rpcError.message}. Aplicá migration_admin_reviews_moderation.sql en Supabase.`)
-          return
-        }
+        setActionMessage(`No se pudo actualizar la reseña: ${error.message}. Aplicá la migración de guardrails de reseñas en Supabase.`)
+        return
       }
 
       setRecommendations((prev) =>
@@ -1155,54 +1258,6 @@ export default function Admin() {
       setActionMessage('Entrevista actualizada exitosamente.')
     } catch (err: any) {
       setActionMessage(`Error al actualizar entrevista: ${err.message}`)
-    }
-  }
-
-  const handleAdminDeleteRec = async (id: string) => {
-    if (!window.confirm('¿Confirmás que querés eliminar esta reseña definitivamente?')) return
-    try {
-      // 1. Probar RPC delete_recommendation
-      const { error: rpcError } = await (supabase.rpc as any)('delete_recommendation', {
-        target_id: id,
-      })
-
-      if (!rpcError) {
-        setRecommendations((prev) => prev.filter((r) => r.id !== id))
-        setActionMessage('Reseña eliminada definitivamente.')
-        return
-      }
-
-      // 2. Probar RPC admin_delete_recommendation
-      const { error: adminRpcError } = await (supabase.rpc as any)('admin_delete_recommendation', {
-        target_id: id,
-      })
-
-      if (!adminRpcError) {
-        setRecommendations((prev) => prev.filter((r) => r.id !== id))
-        setActionMessage('Reseña eliminada definitivamente.')
-        return
-      }
-
-      // 3. Fallback con DELETE directo y verificación de filas afectadas
-      const { data: deleted, error: deleteError } = await (supabase.from('recommendations') as any)
-        .delete()
-        .eq('id', id)
-        .select('id')
-
-      if (deleteError) {
-        setActionMessage(`Error al eliminar reseña: ${deleteError.message}`)
-        return
-      }
-
-      if (!deleted || deleted.length === 0) {
-        setActionMessage('No se pudo eliminar en la base de datos. Por favor aplicá el script supabase/migration_fix_reviews_and_notifications.sql en Supabase.')
-        return
-      }
-
-      setRecommendations((prev) => prev.filter((r) => r.id !== id))
-      setActionMessage('Reseña eliminada definitivamente.')
-    } catch (err: any) {
-      setActionMessage(`Error al eliminar reseña: ${err.message}`)
     }
   }
 
@@ -1747,7 +1802,23 @@ export default function Admin() {
               </div>
             </button>
 
-            {/* 13. Configuración operativa */}
+            {/* 13. Auditoría administrativa */}
+            <button
+              type="button"
+              onClick={() => { setActiveTab('audit'); setAdminAuditPage(1) }}
+              className="group p-3 sm:p-4 min-h-[124px] sm:min-h-[146px] rounded-2xl border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-300 text-left transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer flex flex-col justify-between gap-2 sm:gap-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-700 text-white shadow-xs group-hover:scale-105 transition-transform"><ClipboardList size={18} /></div>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-900">{adminAuditTotal} eventos</span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-indigo-950">Auditoría administrativa</h3>
+                <p className="text-xs text-indigo-950/70 mt-1 leading-relaxed">Historial privado y paginado de cambios sensibles, actor, motivo y resultado.</p>
+              </div>
+            </button>
+
+            {/* 14. Configuración operativa */}
             <button
               type="button"
               onClick={() => setActiveTab('settings')}
@@ -1799,6 +1870,7 @@ export default function Admin() {
                 {activeTab === 'profiles' && 'Directorio de Perfiles'}
                 {activeTab === 'deletions' && 'Bajas de cuentas'}
                 {activeTab === 'reviews' && 'Reseñas'}
+                {activeTab === 'audit' && 'Auditoría administrativa'}
                 {activeTab === 'settings' && 'Configuración operativa'}
               </strong>
             </span>
@@ -2821,6 +2893,8 @@ export default function Admin() {
 
                     <button
                       onClick={() => handleDeleteAccount(p)}
+                      disabled={!ADMIN_ACCOUNT_DELETE_AVAILABLE}
+                      title={ADMIN_ACCOUNT_DELETE_AVAILABLE ? 'Eliminar cuenta mediante Edge Function' : 'Acción deshabilitada: falta verificar el despliegue de la Edge Function'}
                       className="py-1.5 px-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 text-xs font-semibold flex items-center gap-1"
                     >
                       <Trash2 size={13} /> Eliminar
@@ -3245,7 +3319,7 @@ export default function Admin() {
                 <label className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">Plan<select value={company.company_plan || 'gratis'} onChange={(event) => handleSetCompanyPlan(company, event.target.value as 'gratis' | 'pago')} className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs font-bold text-amber-900"><option value="gratis">Gratis</option><option value="pago">Pago</option></select></label>
                 <button onClick={() => openProfileEditor(company)} className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800"><Pencil size={13} /> Editar</button>
                 <button onClick={() => handleToggleProfileStatus(company.id, company.status)} className="rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs font-semibold">{company.status === 'suspendido' ? 'Reactivar cuenta' : 'Suspender cuenta'}</button>
-                <button onClick={() => handleDeleteAccount(company)} className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800"><Trash2 size={13} /> Eliminar</button>
+                <button onClick={() => handleDeleteAccount(company)} disabled={!ADMIN_ACCOUNT_DELETE_AVAILABLE} title={ADMIN_ACCOUNT_DELETE_AVAILABLE ? 'Eliminar cuenta mediante Edge Function' : 'Acción deshabilitada: falta verificar el despliegue de la Edge Function'} className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800"><Trash2 size={13} /> Eliminar</button>
               </div>
             </div>
           ))}
@@ -3275,11 +3349,15 @@ export default function Admin() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-xs font-semibold">Nombre<input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
-              <label className="text-xs font-semibold">Tipo<select value={editForm.account_type} onChange={(e) => setEditForm({ ...editForm, account_type: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="persona">LABURANTE</option><option value="empresa">EMPRESA</option></select></label>
+              <label className="text-xs font-semibold">Tipo<input value={editForm.account_type === 'empresa' ? 'EMPRESA' : 'LABURANTE'} readOnly className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] bg-gray-100 px-3 py-2 text-sm text-gray-600" /></label>
               <label className="text-xs font-semibold">Provincia<input value={editForm.provincia} onChange={(e) => setEditForm({ ...editForm, provincia: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
               <label className="text-xs font-semibold">Localidad<input value={editForm.localidad} onChange={(e) => setEditForm({ ...editForm, localidad: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold">Zona de trabajo<input value={editForm.zona_trabajo} onChange={(e) => setEditForm({ ...editForm, zona_trabajo: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
               <label className="text-xs font-semibold">Modalidad<select value={editForm.modalidad} onChange={(e) => setEditForm({ ...editForm, modalidad: e.target.value, hybrid_presencial_pct: e.target.value === 'ambas' ? editForm.hybrid_presencial_pct || 50 : null })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="presencial">Presencial</option><option value="remoto">Remoto</option><option value="ambas">Híbrido</option></select></label>
               <label className="text-xs font-semibold">Disponibilidad<select value={editForm.disponibilidad} onChange={(e) => setEditForm({ ...editForm, disponibilidad: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="disponible">Disponible</option><option value="ocupado">Ocupado</option><option value="no_disponible">No disponible</option></select></label>
+              <label className="text-xs font-semibold">Estado<input value={editForm.status} readOnly className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] bg-gray-100 px-3 py-2 text-sm text-gray-600" /></label>
+              <label className="text-xs font-semibold">Intención<select value={editForm.intent} onChange={(e) => setEditForm({ ...editForm, intent: e.target.value })} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm"><option value="">Sin declarar</option><option value="ofrecer">Ofrecer trabajo</option><option value="buscar">Buscar trabajo</option><option value="ambas">Ambas</option></select></label>
+              <label className="text-xs font-semibold">Plan Empresa<input value={editForm.company_plan} readOnly className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] bg-gray-100 px-3 py-2 text-sm text-gray-600" /></label>
             </div>
             {editForm.modalidad === 'ambas' && (
               <div className="mt-3 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 p-3">
@@ -3291,6 +3369,13 @@ export default function Admin() {
               </div>
             )}
             <label className="mt-3 block text-xs font-semibold">Presentación<textarea value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-sm" /></label>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-semibold">Habilidades <span className="font-normal text-[var(--color-laburante-text-muted)]">(una por línea)</span><textarea value={editForm.skillsText} onChange={(e) => setEditForm({ ...editForm, skillsText: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 text-xs" /></label>
+              <label className="text-xs font-semibold">Servicios <span className="font-normal text-[var(--color-laburante-text-muted)]">(JSON)</span><textarea value={editForm.servicesJson} onChange={(e) => setEditForm({ ...editForm, servicesJson: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 font-mono text-[10px]" /></label>
+              <label className="text-xs font-semibold">Contactos <span className="font-normal text-[var(--color-laburante-text-muted)]">(JSON)</span><textarea value={editForm.contactsJson} onChange={(e) => setEditForm({ ...editForm, contactsJson: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 font-mono text-[10px]" /></label>
+              <label className="text-xs font-semibold">Idiomas <span className="font-normal text-[var(--color-laburante-text-muted)]">(JSON)</span><textarea value={editForm.languagesJson} onChange={(e) => setEditForm({ ...editForm, languagesJson: e.target.value })} rows={4} className="mt-1 w-full rounded-xl border border-[var(--color-laburante-border)] px-3 py-2 font-mono text-[10px]" /></label>
+            </div>
+            <label className="mt-3 block text-xs font-semibold">Motivo obligatorio de auditoría<textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2} placeholder="Por qué se realiza esta modificación..." className="mt-1 w-full rounded-xl border border-amber-300 bg-amber-50/40 px-3 py-2 text-sm" /></label>
             <div className="mt-4 border-t border-[var(--color-laburante-border)] pt-4">
               <button type="button" onClick={() => setCredentialsOpen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800"><KeyRound size={14} /> {credentialsOpen ? 'Ocultar cambio de acceso' : 'Cambiar email o contraseña'}</button>
               {credentialsOpen && <div className="mt-3 grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 sm:grid-cols-2">
@@ -3554,20 +3639,43 @@ export default function Admin() {
                           Ocultar
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleAdminDeleteRec(rec.id)}
-                        className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer ml-auto"
-                      >
-                        <Trash2 size={13} />
-                        Eliminar definitivamente
-                      </button>
                     </div>
                   </div>
                 )
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab: Administrative audit */}
+      {activeTab === 'audit' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 text-xs text-indigo-950">
+            <p className="font-bold">Auditoría administrativa privada</p>
+            <p className="mt-1 leading-relaxed">Sólo muestra eventos emitidos por funciones de servidor. No permite editar, borrar ni agregar registros desde el panel.</p>
+          </div>
+          {adminAuditEvents.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[var(--color-laburante-border)] p-10 text-center text-xs text-[var(--color-laburante-text-secondary)]">No hay eventos para esta página o la migración todavía no fue aplicada.</div>
+          ) : (
+            <div className="space-y-2">
+              {adminAuditEvents.map((event) => (
+                <article key={event.id} className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-indigo-100 px-2 py-1 font-bold text-indigo-900">{event.action}</span><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{event.result}</span></div>
+                    <time className="text-[var(--color-laburante-text-muted)]">{new Date(event.created_at).toLocaleString('es-AR')}</time>
+                  </div>
+                  <p className="mt-2 text-[var(--color-laburante-text-secondary)]"><strong>Entidad:</strong> {event.entity_type} · {event.entity_id || 'sin ID'}</p>
+                  <p className="mt-1 text-[var(--color-laburante-text-secondary)]"><strong>Actor:</strong> {event.actor_user_id} · <strong>Campos:</strong> {Array.isArray(event.changed_fields) ? event.changed_fields.join(', ') || 'sin cambios' : 'ver registro'}</p>
+                  <p className="mt-2 rounded-xl bg-amber-50/70 p-2 text-amber-950"><strong>Motivo:</strong> {event.reason}</p>
+                </article>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center justify-between rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-3 text-xs">
+            <span>Página {adminAuditPage} · {adminAuditTotal} eventos</span>
+            <div className="flex gap-2"><button type="button" disabled={adminAuditPage <= 1} onClick={() => setAdminAuditPage((page) => Math.max(1, page - 1))} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Anterior</button><button type="button" disabled={adminAuditPage * 20 >= adminAuditTotal} onClick={() => setAdminAuditPage((page) => page + 1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Siguiente</button></div>
+          </div>
         </div>
       )}
 

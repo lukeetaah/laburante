@@ -54,6 +54,7 @@ Deno.serve(async (request) => {
   if (update.error === 'invalid_target_user') return json(request, { error: update.error }, 400)
   if (update.error === 'missing_credential_change') return json(request, { error: update.error }, 400)
   if (update.error === 'weak_password') return json(request, { error: update.error }, 400)
+  if (update.error === 'missing_audit_reason') return json(request, { error: update.error }, 400)
 
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -67,11 +68,40 @@ Deno.serve(async (request) => {
   }
   if (update.password) attributes.password = update.password
 
+  const changedFields = [
+    ...(update.email ? ['email'] : []),
+    ...(update.password ? ['password'] : []),
+  ]
+  const { data: auditEvent, error: auditInsertError } = await adminClient.from('admin_audit_events').insert({
+    actor_user_id: authData.user.id,
+    action: 'admin_credentials_edit',
+    entity_type: 'auth_user',
+    entity_id: update.targetUserId,
+    result: 'pending',
+    reason: update.reason,
+    changed_fields: changedFields,
+    changes: {
+      email_requested: Boolean(update.email),
+      password_requested: Boolean(update.password),
+    },
+  }).select('id').single()
+  if (auditInsertError || !auditEvent?.id) {
+    console.error('admin_credentials_audit_pending_failed', { code: auditInsertError?.code || 'audit_insert_error' })
+    return json(request, { error: 'credential_update_audit_failed' }, 502)
+  }
+
   const { error } = await adminClient.auth.admin.updateUserById(update.targetUserId, attributes)
   if (error) {
+    await adminClient.from('admin_audit_events').update({ result: 'failure' }).eq('id', auditEvent.id)
     // Do not return provider details, email addresses, or credential data.
     console.error('admin_update_user_credentials_failed', { code: error.code || 'auth_admin_error' })
     return json(request, { error: 'credential_update_failed' }, 502)
+  }
+
+  const { error: auditError } = await adminClient.from('admin_audit_events').update({ result: 'success' }).eq('id', auditEvent.id)
+  if (auditError) {
+    console.error('admin_credentials_audit_failed', { code: auditError.code || 'audit_insert_error' })
+    return json(request, { error: 'credential_update_audit_failed' }, 502)
   }
 
   return json(request, {
