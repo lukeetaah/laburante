@@ -2,17 +2,19 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   categoryWorkTerms,
+  categorySearchTerms,
   expandCategorySearchTerms,
   matchesCategoryDocument,
   matchesSearchDocument,
   normalizeSearchText,
+  searchTermVariants,
   scoreSearchDocument,
 } from '../src/lib/search-matching.ts'
 
 const catalogTerms = ['Contador']
 
-test('Contador finds a public profile containing Contadora in public text', () => {
-  const document = { publicText: 'Contadora con experiencia', workText: '' }
+test('Contador requires declared work evidence and matches feminine variants', () => {
+  const document = { publicText: 'Perfil profesional', workText: 'Contadora con experiencia' }
   assert.equal(matchesSearchDocument('Contador', document, catalogTerms, ['contador', 'contadora']), true)
   assert.equal(matchesSearchDocument('Contadora', document, catalogTerms, ['contadora', 'contador']), true)
   assert.equal(matchesSearchDocument('Contadoras', document, catalogTerms, ['contadoras']), true)
@@ -22,6 +24,31 @@ test('matching is case and accent insensitive', () => {
   const document = { publicText: 'Diseñadora gráfica', workText: 'Ilustración' }
   assert.equal(matchesSearchDocument('DISENADORA', document, [], ['disenadora']), true)
   assert.equal(normalizeSearchText('Árboles   Públicos'), 'arboles publicos')
+})
+
+test('the database prefilter keeps accented and unaccented catalog spellings', () => {
+  const catalog = ['Carpintería']
+  const accentedVariants = searchTermVariants('Carpintería', catalog)
+  const unaccentedVariants = searchTermVariants('Carpinteria', catalog)
+
+  assert.ok(accentedVariants.includes('carpintería'))
+  assert.ok(accentedVariants.includes('carpinteria'))
+  assert.ok(unaccentedVariants.includes('carpintería'))
+  assert.ok(unaccentedVariants.includes('carpinteria'))
+  assert.equal(accentedVariants.some((term) => 'carpintería'.toLowerCase().includes(term)), true)
+  assert.equal(unaccentedVariants.some((term) => 'carpintería'.toLowerCase().includes(term)), true)
+})
+
+test('exact and partial skill/service searches use declared work evidence', () => {
+  const skill = { publicText: 'Perfil profesional', workText: 'Carpintería' }
+  const service = { publicText: 'Perfil profesional', workText: 'Carpintería a medida' }
+
+  for (const query of ['Carpintería', 'Carpinteria', 'Carpinter']) {
+    assert.equal(matchesSearchDocument(query, skill, ['Carpintería'], [query]), true)
+    assert.equal(matchesSearchDocument(query, service, ['Carpintería'], [query]), true)
+  }
+
+  assert.equal(matchesSearchDocument('Carpinter', { publicText: 'Busco carpintería', workText: '' }, ['Carpintería'], ['carpinter']), false)
 })
 
 test('work fields and public fields both participate without leaking private fields', () => {
@@ -85,4 +112,15 @@ test('Finanzas expands through the existing category taxonomy', () => {
     matchesSearchDocument('Finanzas', { publicText: '', workText: 'Administración y ventas' }, ['Administración', 'Finanzas'], expandedTerms),
     true,
   )
+})
+
+test('Oficios keeps its parent behavior and accepts a subcategory filter', () => {
+  const categories = [
+    { name: 'Oficios', subcategories: ['Plomería', 'Carpintería'] },
+    { name: 'Construcción', subcategories: ['Albañilería'] },
+  ]
+
+  assert.deepEqual(categorySearchTerms('Oficios', categories), ['Plomería', 'Carpintería'])
+  assert.deepEqual(categorySearchTerms('Carpinteria', categories), ['Carpintería'])
+  assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Carpintería' }, categorySearchTerms('Carpinteria', categories).map((term) => normalizeSearchText(term))), true)
 })

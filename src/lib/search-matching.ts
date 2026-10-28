@@ -5,6 +5,37 @@ export const normalizeSearchText = (value: string) => value
   .replace(/\s+/g, ' ')
   .trim()
 
+/** Preserve user/catalog diacritics for the database prefilter while keeping
+ * punctuation out of PostgREST filter expressions. */
+export function sanitizeSearchTermForDatabase(value: string) {
+  return value
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function searchTermVariants(value: string, relatedSpellings: string[] = []) {
+  const preserved = sanitizeSearchTermForDatabase(value)
+  const normalized = normalizeSearchText(value)
+  const variants = new Set<string>()
+
+  if (preserved) {
+    variants.add(preserved)
+    preserved.split(' ').filter((word) => word.length > 2).forEach((word) => variants.add(word))
+  }
+  if (normalized) {
+    variants.add(normalized)
+    normalized.split(' ').filter((word) => word.length > 2).forEach((word) => variants.add(word))
+    relatedSpellings
+      .filter((spelling) => normalizeSearchText(spelling) === normalized)
+      .forEach((spelling) => variants.add(sanitizeSearchTermForDatabase(spelling)))
+  }
+
+  return Array.from(variants)
+}
+
 function wordVariants(word: string) {
   const variants = new Set([word])
 
@@ -59,6 +90,21 @@ export function categoryWorkTerms(category: { subcategories?: string[] }) {
     .filter(Boolean)
 }
 
+export function categorySearchTerms(
+  input: string,
+  categories: Array<{ name: string; subcategories?: string[] }>,
+) {
+  const normalized = normalizeSearchText(input)
+  if (!normalized) return []
+
+  const category = categories.find((entry) => normalizeSearchText(entry.name) === normalized)
+  if (category) return [...(category.subcategories || [])]
+
+  return categories
+    .flatMap((entry) => entry.subcategories || [])
+    .filter((subcategory, index, all) => normalizeSearchText(subcategory) === normalized && all.indexOf(subcategory) === index)
+}
+
 export function expandCategorySearchTerms(
   input: string,
   categories: Array<{ name: string; subcategories?: string[] }>,
@@ -109,7 +155,9 @@ export function isCatalogSearch(input: string, catalogTerms: string[], expandedT
   const query = normalizeSearchText(input)
   const catalog = new Set(catalogTerms.map(normalizeSearchText))
   const expanded = normalizedTerms(expandedTerms)
-  return catalog.has(query) || expanded.some((term) => catalog.has(term))
+  return catalog.has(query)
+    || Array.from(catalog).some((term) => term.includes(query) || query.includes(term))
+    || expanded.some((term) => catalog.has(term))
 }
 
 export function matchesSearchDocument(
@@ -126,10 +174,14 @@ export function matchesSearchDocument(
   const terms = normalizedTerms(expandedTerms.length ? expandedTerms : [query])
   const catalog = new Set(catalogTerms.map(normalizeSearchText))
 
-  if (catalog.has(query) || terms.some((term) => catalog.has(term))) {
-    // Catalog terms remain relevant to work fields, while public profile text
-    // is also searchable so gender/plural variants do not change semantics.
-    return terms.some((term) => workText.includes(term) || publicText.includes(term))
+  if (
+    catalog.has(query)
+    || Array.from(catalog).some((term) => term.includes(query) || query.includes(term))
+    || terms.some((term) => catalog.has(term))
+  ) {
+    // Catalog terms must be backed by declared work evidence. This prevents a
+    // generic mention in a bio or profile name from becoming a false result.
+    return terms.some((term) => workText.includes(term))
   }
 
   return terms.some((term) => publicText.includes(term) || workText.includes(term))

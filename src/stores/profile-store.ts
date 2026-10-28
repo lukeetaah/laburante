@@ -12,10 +12,12 @@ import { resolveProfilePhotoUrl } from '@/lib/profile-assets'
 import { hasValidProfileLocation, normalizeProfileLocation } from '@/lib/profile-location'
 import {
   categoryWorkTerms,
+  categorySearchTerms,
   expandSearchTermVariants,
   isCatalogSearch,
   matchesCategoryDocument,
   matchesSearchDocument,
+  searchTermVariants,
   scoreSearchDocument,
 } from '@/lib/search-matching'
 
@@ -364,21 +366,23 @@ function searchDocumentForProfile(profile: ProfileWithDetails) {
 
 function normalizedSearchTerms(filters: { query?: string; category?: string }) {
   const terms = new Set<string>()
+  const catalogSpellings = CATEGORIES.flatMap((category) => category.subcategories || [])
+  const addSearchVariants = (value: string) => searchTermVariants(value, catalogSpellings).forEach((term) => terms.add(term))
+
   if (filters.query?.trim()) {
     const interpretation = interpretSearch(filters.query)
-    terms.add(normalizeSearchText(filters.query))
-    interpretation.expandedTerms.forEach((term) => terms.add(normalizeSearchText(term)))
+    addSearchVariants(filters.query)
+    interpretation.expandedTerms.forEach((term) => addSearchVariants(term))
   }
 
   if (filters.category) {
-    const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
-    categoryWorkTerms(categoryDef || {}).forEach((term) => terms.add(term))
+    categorySearchTerms(filters.category, CATEGORIES).forEach(addSearchVariants)
   }
 
   return Array.from(terms)
     .flatMap((term) => [term, ...expandSearchTermVariants(term)])
     .flatMap((term) => {
-      const safeTerm = term.replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+      const safeTerm = term.replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim()
       return [safeTerm, ...safeTerm.split(' ')]
     })
     .filter((term, index, all) => term.length > 2 && all.indexOf(term) === index)
@@ -611,8 +615,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       realProfiles = realProfiles.filter((profile) => hasValidProfileLocation(profile) && isProviderProfile(profile))
 
       if (filters.category) {
-        const categoryDef = CATEGORIES.find((category) => normalizeSearchText(category.name) === normalizeSearchText(filters.category!))
-        const categoryTerms = categoryWorkTerms(categoryDef || {})
+        const categoryTerms = categoryWorkTerms({ subcategories: categorySearchTerms(filters.category, CATEGORIES) })
         realProfiles = realProfiles.filter((profile) => matchesCategoryDocument(searchDocumentForProfile(profile), categoryTerms))
       }
 
