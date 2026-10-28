@@ -16,6 +16,7 @@ import { removeOwnedProfileAsset, uploadProfileAsset } from '@/lib/profile-asset
 import { hasProviderContent, isProviderProfile, normalizeProfileIntent, type ProfileIntent } from '@/lib/profile-publication'
 import { loadEmailNotificationsEnabled, saveEmailNotificationsEnabled } from '@/lib/notification-preferences'
 import { toEditableContactMethod } from '@/lib/contact-methods'
+import { registerCustomProposedSkills, type ProposedSkillsClient } from '@/lib/proposed-skills'
 
 export default function CreateProfile() {
   const { user, loading: authLoading } = useAuthStore()
@@ -418,15 +419,25 @@ export default function CreateProfile() {
         // Registrar habilidades personalizadas en proposed_skills para revisión de admin
         const customSkills = sanitizedSkills.filter((s) => !isKnownWorkOption(s))
         if (customSkills.length > 0 && user?.id) {
-          for (const cs of customSkills) {
-            await (supabase.from('proposed_skills') as any)
-              .insert({
-                skill_name: cs,
-                proposed_by_profile_id: user.id,
-                status: 'pendiente',
-              })
-              .catch(() => {})
-          }
+          await registerCustomProposedSkills(
+            supabase as unknown as ProposedSkillsClient,
+            customSkills,
+            user.id,
+            {
+              onQueryError: (queryError) => {
+                console.warn('No se pudo registrar una habilidad personalizada para revisión:', {
+                  code: queryError.code || 'proposed_skill_insert_error',
+                })
+              },
+              onException: (exception) => {
+                captureAppError(exception, 'proposed_skill_insert', {
+                  stage: 'post_save',
+                  resource: 'proposed_skill',
+                  route: '/crear-perfil',
+                })
+              },
+            },
+          )
         }
 
         if (user?.id) {
