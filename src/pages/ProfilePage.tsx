@@ -11,6 +11,7 @@ import EmailPreferencesToggle from '@/components/notifications/EmailPreferencesT
 import ProfileCompletionCard from '@/components/profile/ProfileCompletionCard'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import ReviewStars from '@/components/profile/ReviewStars'
+import { formatRating } from '@/lib/rating-format'
 import { isCompanyAccount } from '@/lib/account'
 import { formatModality } from '@/lib/profile-format'
 import { formatProfileLocation } from '@/lib/profile-location'
@@ -553,9 +554,9 @@ export default function ProfilePage() {
               Referencias y experiencias de trabajo
             </h2>
             {profile.review_count ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-laburante-text-secondary)]" aria-label={`${profile.review_average?.toFixed(1)} de 5, ${profile.review_count} calificaciones`}>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-laburante-text-secondary)]" aria-label={`${formatRating(profile.review_average)} de 5, ${profile.review_count} calificaciones`}>
                 <ReviewStars value={profile.review_average || 0} />
-                <strong className="text-[var(--color-laburante-text)]">{profile.review_average?.toFixed(1)}/5</strong>
+                <strong className="text-[var(--color-laburante-text)]">{formatRating(profile.review_average)}/5</strong>
                 <span>· {profile.review_count} {profile.review_count === 1 ? 'calificación' : 'calificaciones'}</span>
               </div>
             ) : (

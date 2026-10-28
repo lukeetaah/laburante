@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react'
+import { formatRating } from '@/lib/rating-format'
 
 interface ReviewStarsProps {
   value: number
@@ -9,7 +10,7 @@ interface ReviewStarsProps {
 export default function ReviewStars({ value, size = 16, label }: ReviewStarsProps) {
   const safeValue = Math.max(0, Math.min(5, value))
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={label || `${safeValue.toFixed(1)} de 5 estrellas`}>
+    <span className="inline-flex items-center gap-0.5" aria-label={label || `${formatRating(safeValue)} de 5 estrellas`}>
       {[1, 2, 3, 4, 5].map((star) => {
         const fill = Math.max(0, Math.min(100, (safeValue - star + 1) * 100))
         return (

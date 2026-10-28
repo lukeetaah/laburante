@@ -3,6 +3,7 @@ import { MapPin, Briefcase } from 'lucide-react'
 import type { ProfileWithDetails } from '@/stores/profile-store'
 import { formatModality } from '@/lib/profile-format'
 import { formatProfileLocation } from '@/lib/profile-location'
+import { formatRating } from '@/lib/rating-format'
 import ReviewStars from './ReviewStars'
 
 interface ProfileCardProps {
@@ -71,7 +72,7 @@ export default function ProfileCard({ profile }: ProfileCardProps) {
         <div className="flex items-center gap-3 text-[var(--color-laburante-text-muted)] font-medium">
           <Briefcase size={13} />
           <span>{formatModality(profile.modalidad, profile.hybrid_presencial_pct, profile.hybrid_remoto_pct)}</span>
-          {!!profile.review_count && <span className="inline-flex items-center gap-1 text-amber-700" title="Reseñas publicadas"><ReviewStars value={profile.review_average || 0} size={13} /> {profile.review_average?.toFixed(1)} · {profile.review_count}</span>}
+          {!!profile.review_count && <span className="inline-flex items-center gap-1 text-amber-700" title="Reseñas publicadas"><ReviewStars value={profile.review_average || 0} size={13} /> {formatRating(profile.review_average)} · {profile.review_count}</span>}
         </div>
         <Link
           to={`/p/${profile.slug}`}
