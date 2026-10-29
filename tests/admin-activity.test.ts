@@ -17,6 +17,19 @@ test('clasifica cuerpos HTTP vacíos o JSON inválido sin exponerlos', async () 
   assert.equal(invalidJsonFromAuth.available, false); if (!invalidJsonFromAuth.available) assert.deepEqual(invalidJsonFromAuth.failure, { kind: 'auth_users_unavailable', httpStatus: 502 })
 })
 
+test('conserva códigos diagnósticos seguros de la función', async () => {
+  const result = await classifyAdminActivityResult({
+    data: null,
+    error: { name: 'FunctionsHttpError' },
+    response: new Response(JSON.stringify({ error: 'auth_users_unavailable', diagnostic_code: 'RPC_QUERY_FAILED' }), { status: 502 }),
+  })
+  assert.equal(result.available, false)
+  if (!result.available) {
+    assert.deepEqual(result.failure, { kind: 'auth_users_unavailable', httpStatus: 502, diagnosticCode: 'RPC_QUERY_FAILED' })
+    assert.match(describeAdminActivityFailure(result.failure), /falló la consulta de actividad/i)
+  }
+})
+
 test('distingue red, errores de parseo HTTP 2xx y contratos inválidos', async () => {
   const network = await classifyAdminActivityResult({ data: null, error: { name: 'FunctionsFetchError' } })
   const unexpected = await classifyAdminActivityResult({ data: null, error: { name: 'FunctionsHttpError' }, response: new Response('upstream error', { status: 500 }) })

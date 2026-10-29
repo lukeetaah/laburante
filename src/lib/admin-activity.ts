@@ -9,6 +9,7 @@ export type AdminActivityFailureKind =
 export type AdminActivityFailure = {
   kind: AdminActivityFailureKind
   httpStatus: number | null
+  diagnosticCode?: string
 }
 
 export type AdminActivityUser = {
@@ -29,20 +30,27 @@ type InvokeResult = {
   response?: Response
 }
 
-async function safeErrorCode(response?: Response) {
+async function safeErrorPayload(response?: Response) {
   if (!response) return null
   try {
     const body = await response.clone().json()
-    return body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string'
-      ? (body as { error: string }).error
-      : null
+    if (!body || typeof body !== 'object') return null
+    const payload = body as { error?: unknown; diagnostic_code?: unknown }
+    return {
+      error: typeof payload.error === 'string' ? payload.error : null,
+      diagnosticCode: typeof payload.diagnostic_code === 'string' ? payload.diagnostic_code : null,
+    }
   } catch {
     return null
   }
 }
 
-function failure(kind: AdminActivityFailureKind, httpStatus: number | null): AdminActivityResult {
-  return { available: false, users: {}, failure: { kind, httpStatus } }
+function failure(kind: AdminActivityFailureKind, httpStatus: number | null, diagnosticCode?: string | null): AdminActivityResult {
+  return {
+    available: false,
+    users: {},
+    failure: { kind, httpStatus, ...(diagnosticCode ? { diagnosticCode } : {}) },
+  }
 }
 
 function isAdminActivityUser(entry: unknown): entry is AdminActivityUser {
@@ -60,11 +68,13 @@ function isAdminActivityUser(entry: unknown): entry is AdminActivityUser {
 export async function classifyAdminActivityResult({ data, error, response }: InvokeResult): Promise<AdminActivityResult> {
   if (error) {
     const httpStatus = typeof response?.status === 'number' ? response.status : null
-    const errorCode = await safeErrorCode(response)
+    const errorPayload = await safeErrorPayload(response)
+    const errorCode = errorPayload?.error
+    const diagnosticCode = errorPayload?.diagnosticCode
 
-    if (errorCode === 'unauthorized' || httpStatus === 401) return failure('unauthorized', httpStatus)
-    if (errorCode === 'unauthorized_admin_access' || httpStatus === 403) return failure('unauthorized_admin_access', httpStatus)
-    if (errorCode === 'auth_users_unavailable' || httpStatus === 502) return failure('auth_users_unavailable', httpStatus)
+    if (errorCode === 'unauthorized' || httpStatus === 401) return failure('unauthorized', httpStatus, diagnosticCode)
+    if (errorCode === 'unauthorized_admin_access' || httpStatus === 403) return failure('unauthorized_admin_access', httpStatus, diagnosticCode)
+    if (errorCode === 'auth_users_unavailable' || httpStatus === 502) return failure('auth_users_unavailable', httpStatus, diagnosticCode)
     if ((error as { name?: unknown }).name === 'FunctionsFetchError') return failure('network', null)
     if (!response) return failure('invalid_response', null)
     return failure('unexpected_http', httpStatus)
@@ -85,7 +95,10 @@ export function describeAdminActivityFailure(failure: AdminActivityFailure | nul
   switch (failure?.kind) {
     case 'unauthorized': return 'La sesión administrativa no está disponible o venció. Volvé a iniciar sesión.'
     case 'unauthorized_admin_access': return 'La sesión no incluye el permiso administrativo requerido por la función.'
-    case 'auth_users_unavailable': return 'La función respondió, pero no pudo recuperar la actividad desde Auth.'
+    case 'auth_users_unavailable':
+      if (failure.diagnosticCode === 'RPC_QUERY_FAILED') return 'La función llegó al servidor, pero falló la consulta de actividad en Auth.'
+      if (failure.diagnosticCode === 'INVALID_ACTIVITY_RESPONSE') return 'La consulta de Auth respondió con una estructura incompatible.'
+      return 'La función respondió, pero no pudo recuperar la actividad desde Auth.'
     case 'network': return 'No se pudo conectar con la función de actividad. Revisá la conexión e intentá actualizar.'
     case 'unexpected_http': return `La función devolvió una respuesta HTTP inesperada${failure.httpStatus ? ` (${failure.httpStatus})` : ''}.`
     case 'invalid_response': return 'La función respondió con un formato incompatible. Revisá el contrato desplegado.'
