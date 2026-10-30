@@ -41,6 +41,7 @@ test('las funciones administrativas no cachean datos sensibles ni descargan todo
   assert.doesNotMatch(authActivityEdge, /auth\.admin\.listUsers/)
   assert.match(authActivityEdge, /profile_ids/)
   assert.match(authActivityEdge, /Cache-Control.*no-store/)
+  assert.match(authActivityEdge, /Access-Control-Allow-Headers.*baggage.*sentry-trace/)
   assert.match(presenceEdge, /admin_get_profile_presence_counts/)
   assert.doesNotMatch(presenceEdge, /from\('profiles'\)/)
 })

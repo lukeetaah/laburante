@@ -11,7 +11,10 @@ function cors(request: Request) {
   return {
     'Access-Control-Allow-Origin': allowed ? origin : SITE_URL,
     'Vary': 'Origin',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    // The browser tracing integration adds these two headers for the configured
+    // Supabase origin. Keep this list explicit so authenticated requests pass
+    // the preflight without widening the allowed origin or request surface.
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, baggage, sentry-trace',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json',
     'Cache-Control': 'no-store, max-age=0',
