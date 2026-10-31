@@ -38,9 +38,9 @@ test('el editor administrativo es desplazable y no expone relaciones como JSON',
   assert.match(adminSource, /Última conexión:/)
 })
 
-test('el panel expone cohortes como señales de acceso y no como retención inventada', () => {
-  assert.match(adminSource, /Actividad y cohortes/)
-  assert.match(adminSource, /No presenta esto como retención o reincidencia exacta/)
-  assert.match(adminSource, /Acceso posterior/)
-  assert.match(adminSource, /Conexión 30d/)
+test('el panel conecta el análisis semanal sin reemplazar la auditoría de último ingreso', () => {
+  assert.match(adminSource, /Crecimiento y cohortes/)
+  assert.match(adminSource, /GrowthCohorts/)
+  assert.match(adminSource, /admin-user-activity/)
+  assert.match(adminSource, /admin_get_auth_created_at_by_ids/)
 })

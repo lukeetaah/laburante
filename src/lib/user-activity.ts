@@ -1,12 +1,12 @@
 import { supabase } from '@/lib/supabase'
 
-const ACTIVITY_TOUCH_PREFIX = 'laburante_activity_touch:'
-const TOUCH_INTERVAL_MS = 24 * 60 * 60 * 1000
+const ACTIVITY_TOUCH_PREFIX = 'laburante_activity_week:'
+const TOUCH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000
 let activityRequestInFlight = false
 
 /**
- * Records meaningful app use without writing on every interaction.
- * The database function repeats the 24-hour guard, so localStorage is only a
+ * Records one authenticated presence per calendar week without writing on every interaction.
+ * The database primary key repeats the weekly guard, so localStorage is only a
  * request optimization and never an authorization or activity source of truth.
  */
 export async function recordUserActivity(userId: string): Promise<void> {
@@ -22,7 +22,7 @@ export async function recordUserActivity(userId: string): Promise<void> {
 
   activityRequestInFlight = true
   try {
-    const { error } = await (supabase.rpc as any)('touch_my_activity')
+    const { error } = await (supabase.rpc as any)('record_my_weekly_activity')
     if (!error) {
       try {
         window.localStorage.setItem(storageKey, String(Date.now()))

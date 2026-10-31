@@ -61,8 +61,9 @@ import { CURRENT_TERMS_VERSION } from '@/lib/constants'
 import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS } from '@/lib/support'
 import { formatProfileLocation } from '@/lib/profile-location'
 import { describeLastSignIn, type AdminAuthActivityStatus } from '@/lib/auth-activity'
-import { classifyAdminActivityResult, describeAdminActivityFailure, type AdminActivityFailure } from '@/lib/admin-activity'
+import { classifyAdminActivityResult } from '@/lib/admin-activity'
 import ProvincePresenceMap from '@/components/admin/ProvincePresenceMap'
+import GrowthCohorts from '@/components/admin/GrowthCohorts'
 
 function isValidPhotoUrl(photo: string): boolean {
   if (typeof photo !== 'string') return false
@@ -139,7 +140,7 @@ export default function Admin() {
   const [unconfirmedSearch, setUnconfirmedSearch] = useState('')
   const [unconfirmedSort, setUnconfirmedSort] = useState<'antiguedad_desc' | 'antiguedad_asc'>('antiguedad_desc')
   const [lastLoginFilter, setLastLoginFilter] = useState<'todos' | 'mas_30_dias' | 'nunca'>('todos')
-  const [lastLoginSort, setLastLoginSort] = useState<'recientes' | 'antiguos'>('recientes')
+  const [profilesSort, setProfilesSort] = useState<'created_recent' | 'created_old' | 'signin_recent' | 'signin_old'>('created_recent')
   const [cleanupSimulating, setCleanupSimulating] = useState(false)
   const [cleanupResults, setCleanupResults] = useState<any[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -294,8 +295,17 @@ export default function Admin() {
           return await classifyAdminActivityResult({ data: null, error })
         }
       })()
+      const authCreatedAtPromise = (async () => {
+        try {
+          const { data, error } = await (supabase.rpc as any)('admin_get_auth_created_at_by_ids', { target_user_ids: profileIds })
+          if (error || !Array.isArray(data)) return {}
+          return Object.fromEntries(data.map((entry: any) => [entry.user_id, entry.account_created_at || null]))
+        } catch {
+          return {}
+        }
+      })()
 
-      const [waReqs, emailsByProfileId, jobsResult, delList, recsResult, unconfirmed, , legalData, authActivity] = await Promise.all([
+      const [waReqs, emailsByProfileId, jobsResult, delList, recsResult, unconfirmed, , legalData, authActivity, authCreatedAt] = await Promise.all([
         (async () => {
           await (supabase.rpc as any)('admin_cleanup_orphan_verifications')
           return fetchPendingWhatsAppVerifications()
@@ -318,6 +328,7 @@ export default function Admin() {
           }
         })(),
         authActivityPromise,
+        authCreatedAtPromise,
       ])
 
       setWaRequests(waReqs)
@@ -325,6 +336,7 @@ export default function Admin() {
         ...p,
         auth_activity_available: Boolean((authActivity as any).available),
         auth_activity_failure: (authActivity as any).failure || null,
+        auth_created_at: (authCreatedAt as Record<string, string | null>)[p.id] || null,
         last_sign_in_at: ((authActivity as any).users as Record<string, { last_sign_in_at: string | null }>)[p.id]?.last_sign_in_at || null,
         last_sign_in_status: (authActivity as any).available
           ? (((authActivity as any).users as Record<string, { last_sign_in_status?: AdminAuthActivityStatus }>)[p.id]?.last_sign_in_status || 'user_not_found')
@@ -968,8 +980,9 @@ export default function Admin() {
     if (filters.verification === 'pendiente' && p.whatsapp_verified) return false
     if (filters.completion === 'completo' && p.completion_percent < 100) return false
     if (filters.completion === 'incompleto' && p.completion_percent >= 100) return false
-    if (filters.dateFrom && new Date(p.created_at) < new Date(`${filters.dateFrom}T00:00:00`)) return false
-    if (filters.dateTo && new Date(p.created_at) > new Date(`${filters.dateTo}T23:59:59`)) return false
+    const accountCreatedAt = p.auth_created_at || p.created_at
+    if (filters.dateFrom && new Date(accountCreatedAt) < new Date(`${filters.dateFrom}T00:00:00`)) return false
+    if (filters.dateTo && new Date(accountCreatedAt) > new Date(`${filters.dateTo}T23:59:59`)) return false
     if (filters.category) {
       const category = CATEGORIES.find((item) => item.name === filters.category)
       const categoryText = normalizeSearchText([category?.name, ...(category?.subcategories || [])].filter(Boolean).join(' '))
@@ -979,9 +992,17 @@ export default function Admin() {
     return true
   })
   const sortedProfiles = [...filteredProfiles].sort((a, b) => {
-    const aTime = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0
-    const bTime = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0
-    return lastLoginSort === 'recientes' ? bTime - aTime : aTime - bTime
+    const aCreated = new Date(a.auth_created_at || a.created_at || 0).getTime()
+    const bCreated = new Date(b.auth_created_at || b.created_at || 0).getTime()
+    const aLogin = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0
+    const bLogin = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0
+    const primary = profilesSort === 'created_recent' ? bCreated - aCreated
+      : profilesSort === 'created_old' ? aCreated - bCreated
+      : profilesSort === 'signin_recent' ? bLogin - aLogin
+      : aLogin - bLogin
+    if (primary !== 0) return primary
+    const secondary = bCreated - aCreated
+    return secondary !== 0 ? secondary : String(a.id).localeCompare(String(b.id))
   })
 
   const selectedProvince = PROVINCES.find((province) => province.name === adminFilters.provincia)
@@ -989,7 +1010,7 @@ export default function Admin() {
   const resetAdminFilters = () => {
     setProfileFilter('todos')
     setLastLoginFilter('todos')
-    setLastLoginSort('recientes')
+    setProfilesSort('created_recent')
     setAdminFilters({ query: '', provincia: '', localidad: '', category: '', modalidad: '', disponibilidad: '', accountType: '', providerKind: 'todos', verification: 'todos', completion: 'todos', dateFrom: '', dateTo: '' })
   }
   const handleSaveSettings = async () => {
@@ -1350,27 +1371,6 @@ export default function Admin() {
   const legalAnteriorCount = legalUsersList.filter((u) => u.status === 'anterior').length
   const legalPendienteCount = legalUsersList.filter((u) => u.status === 'pendiente').length
 
-  const activityDataAvailable = profiles.some((profile) => profile.auth_activity_available)
-  const activityFailure = (profiles.find((profile) => profile.auth_activity_failure)?.auth_activity_failure || null) as AdminActivityFailure | null
-  const activityWindowStart = Date.now() - 30 * 24 * 60 * 60 * 1000
-  const recentlySignedInCount = profiles.filter((profile) => {
-    const timestamp = Date.parse(profile.last_sign_in_at || '')
-    return Number.isFinite(timestamp) && timestamp >= activityWindowStart
-  }).length
-  const registrationCohorts = Object.entries(profiles.reduce<Record<string, { label: string; total: number; accessAfterDay: number; active30d: number }>>((cohorts, profile) => {
-    const createdAt = Date.parse(profile.created_at || '')
-    if (!Number.isFinite(createdAt)) return cohorts
-    const date = new Date(createdAt)
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    const cohort = cohorts[key] || { label: date.toLocaleDateString('es-AR', { month: 'short', year: 'numeric' }), total: 0, accessAfterDay: 0, active30d: 0 }
-    cohort.total += 1
-    const lastSignIn = Date.parse(profile.last_sign_in_at || '')
-    if (Number.isFinite(lastSignIn) && lastSignIn >= createdAt + 24 * 60 * 60 * 1000) cohort.accessAfterDay += 1
-    if (Number.isFinite(lastSignIn) && lastSignIn >= activityWindowStart) cohort.active30d += 1
-    cohorts[key] = cohort
-    return cohorts
-  }, {})).sort(([left], [right]) => right.localeCompare(left)).slice(0, 12).map(([, cohort]) => cohort)
-
   const filteredLegalUsers = legalUsersList.filter((item) => {
     if (legalFilter !== 'todos' && item.status !== legalFilter) return false
     if (legalSearch.trim()) {
@@ -1574,10 +1574,10 @@ export default function Admin() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="p-2 sm:p-2.5 rounded-xl bg-cyan-700 text-white shadow-xs group-hover:scale-105 transition-transform"><TrendingUp size={18} /></div>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-cyan-100 text-cyan-900">{activityDataAvailable ? `${recentlySignedInCount} activos 30d` : 'Sin conexión Auth'}</span>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-cyan-100 text-cyan-900">Semanal</span>
               </div>
               <div>
-                <h3 className="font-heading font-bold text-base text-cyan-950">Actividad y cohortes</h3>
+                <h3 className="font-heading font-bold text-base text-cyan-950">Crecimiento y cohortes</h3>
                 <p className="text-xs text-cyan-950/70 mt-1 leading-relaxed">Conexiones registradas por cohorte de alta, con límites explícitos de la medición.</p>
               </div>
             </button>
@@ -1910,7 +1910,7 @@ export default function Admin() {
               Módulo activo: <strong className="text-[var(--color-laburante-text)] capitalize">
                 {activeTab === 'legal' && 'Edad y aceptación legal'}
                 {activeTab === 'analytics' && 'Métricas y Operatoria'}
-                {activeTab === 'engagement' && 'Actividad y cohortes'}
+                {activeTab === 'engagement' && 'Crecimiento y cohortes'}
                 {activeTab === 'presence' && 'Mapa de presencia'}
                 {activeTab === 'jobs' && 'Pedidos de trabajo'}
                 {activeTab === 'verifications' && 'Verificaciones WhatsApp'}
@@ -2215,27 +2215,7 @@ export default function Admin() {
       )}
 
       {activeTab === 'engagement' && (
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-cyan-200 bg-cyan-50/60 p-5 text-cyan-950">
-            <div className="flex items-center gap-2"><TrendingUp size={18} /><h2 className="font-heading text-lg font-bold">Actividad y cohortes de alta</h2></div>
-            <p className="mt-1 text-xs leading-relaxed">Usa la última conexión registrada por Auth para los perfiles cargados. No presenta esto como retención o reincidencia exacta: LABURANTE todavía no conserva un historial de eventos de sesión.</p>
-          </div>
-          {!activityDataAvailable ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-xs text-amber-950"><p className="font-bold">La última conexión no está disponible.</p><p className="mt-1 leading-relaxed">{describeAdminActivityFailure(activityFailure)}</p><p className="mt-2 text-[11px]">No se calculan porcentajes hasta recibir una respuesta válida de la función.</p></div>
-          ) : (
-            <>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5"><p className="text-xs font-semibold text-[var(--color-laburante-text-muted)]">Perfiles con conexión registrada</p><p className="mt-2 font-heading text-3xl font-extrabold">{profiles.filter((profile) => profile.last_sign_in_status === 'available').length}</p></article>
-                <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><p className="text-xs font-semibold text-emerald-900">Conexión en los últimos 30 días</p><p className="mt-2 font-heading text-3xl font-extrabold text-emerald-950">{recentlySignedInCount}</p></article>
-                <article className="rounded-2xl border border-slate-200 bg-slate-50 p-5"><p className="text-xs font-semibold text-slate-700">Sin inicio de sesión registrado</p><p className="mt-2 font-heading text-3xl font-extrabold text-slate-950">{profiles.filter((profile) => profile.last_sign_in_status === 'never').length}</p></article>
-              </div>
-              <section className="overflow-hidden rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)]">
-                <div className="border-b border-[var(--color-laburante-border)] p-5"><h3 className="font-heading font-bold">Cohortes de perfiles</h3><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">“Acceso posterior” significa que Auth registra una conexión al menos 24 horas después del alta; es una señal observable, no una tasa de retención histórica.</p></div>
-                <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text-muted)]"><tr><th className="px-5 py-3">Cohorte de alta</th><th className="px-5 py-3 text-right">Perfiles</th><th className="px-5 py-3 text-right">Acceso posterior</th><th className="px-5 py-3 text-right">Conexión 30d</th></tr></thead><tbody className="divide-y divide-[var(--color-laburante-border)]">{registrationCohorts.map((cohort) => <tr key={cohort.label}><td className="px-5 py-3 font-semibold capitalize">{cohort.label}</td><td className="px-5 py-3 text-right">{cohort.total}</td><td className="px-5 py-3 text-right">{cohort.accessAfterDay} · {cohort.total ? Math.round(cohort.accessAfterDay / cohort.total * 100) : 0}%</td><td className="px-5 py-3 text-right">{cohort.active30d} · {cohort.total ? Math.round(cohort.active30d / cohort.total * 100) : 0}%</td></tr>)}</tbody></table></div>
-              </section>
-            </>
-          )}
-        </div>
+        <GrowthCohorts />
       )}
 
       {activeTab === 'presence' && <ProvincePresenceMap />}
@@ -2853,7 +2833,7 @@ export default function Admin() {
               <select value={adminFilters.verification} onChange={(event) => setAdminFilter('verification', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="todos">WhatsApp: todos</option><option value="verificado">Verificado</option><option value="pendiente">Sin verificar</option></select>
               <select value={adminFilters.completion} onChange={(event) => setAdminFilter('completion', event.target.value)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="todos">Completitud: todas</option><option value="completo">100%</option><option value="incompleto">Incompleto</option></select>
               <select value={lastLoginFilter} onChange={(event) => { setLastLoginFilter(event.target.value as typeof lastLoginFilter); setProfilesPage(1) }} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="todos">Último ingreso: todos</option><option value="mas_30_dias">Más de 30 días / nunca</option><option value="nunca">Nunca ingresó</option></select>
-              <select value={lastLoginSort} onChange={(event) => setLastLoginSort(event.target.value as typeof lastLoginSort)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="recientes">Ordenar: último ingreso reciente</option><option value="antiguos">Ordenar: más antiguos / nunca</option></select>
+              <select value={profilesSort} onChange={(event) => setProfilesSort(event.target.value as typeof profilesSort)} className="rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-xs"><option value="created_recent">Creación de cuenta: más recientes</option><option value="created_old">Creación de cuenta: más antiguas</option><option value="signin_recent">Último ingreso: más reciente</option><option value="signin_old">Último ingreso: más antiguo / nunca</option></select>
               <label className="flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-[11px] text-[var(--color-laburante-text-muted)]">Desde<input type="date" value={adminFilters.dateFrom} onChange={(event) => setAdminFilter('dateFrom', event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs text-[var(--color-laburante-text)]" /></label>
               <label className="flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-3 py-2 text-[11px] text-[var(--color-laburante-text-muted)]">Hasta<input type="date" value={adminFilters.dateTo} onChange={(event) => setAdminFilter('dateTo', event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs text-[var(--color-laburante-text)]" /></label>
             </div>
@@ -2908,7 +2888,7 @@ export default function Admin() {
                     </div>
 
                     <p className="text-xs text-[var(--color-laburante-text-secondary)]">
-                      {formatProfileLocation(p)} · Registrado el {new Date(p.created_at).toLocaleDateString()}
+                      {formatProfileLocation(p)} · Cuenta creada el {new Date(p.auth_created_at || p.created_at).toLocaleDateString()}
                     </p>
                     <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
                       Último ingreso: {describeLastSignIn((p.last_sign_in_status || 'service_unavailable') as AdminAuthActivityStatus, p.last_sign_in_at)}
