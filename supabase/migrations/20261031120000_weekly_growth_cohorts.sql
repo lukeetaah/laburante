@@ -12,13 +12,11 @@ CREATE TABLE IF NOT EXISTS public.user_activity_weeks (
   PRIMARY KEY (user_id, week_start)
 );
 
-CREATE INDEX IF NOT EXISTS idx_user_activity_weeks_week_start
-  ON public.user_activity_weeks(week_start);
+CREATE INDEX IF NOT EXISTS idx_user_activity_weeks_week_user
+  ON public.user_activity_weeks(week_start, user_id);
 
 ALTER TABLE public.user_activity_weeks ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public.user_activity_weeks FROM PUBLIC, anon, authenticated;
-GRANT SELECT ON TABLE public.user_activity_weeks TO service_role;
-GRANT INSERT ON TABLE public.user_activity_weeks TO service_role;
+REVOKE ALL ON TABLE public.user_activity_weeks FROM PUBLIC, anon, authenticated, service_role;
 
 -- Recupera sólo las fechas canónicas de creación de las cuentas que el panel
 -- ya tiene en pantalla. La última conexión continúa pasando por la Edge
@@ -41,7 +39,7 @@ BEGIN
 
   RETURN QUERY
   SELECT u.id, u.created_at
-  FROM auth.users u
+  FROM auth.users AS u
   WHERE u.id = ANY(target_user_ids);
 END;
 $$;
@@ -55,7 +53,7 @@ CREATE OR REPLACE FUNCTION public.record_my_weekly_activity()
 RETURNS BOOLEAN
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public, auth
+SET search_path = pg_catalog, auth
 AS $$
 DECLARE
   v_user_id UUID := auth.uid();
@@ -82,178 +80,252 @@ CREATE OR REPLACE FUNCTION public.admin_get_growth_cohort_summary(p_weeks INTEGE
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public, auth
+SET search_path = pg_catalog, auth
 AS $$
 DECLARE
   v_weeks INTEGER := LEAST(GREATEST(COALESCE(p_weeks, 12), 4), 52);
   v_today_local DATE := (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE;
   v_current_week_start DATE := v_today_local - (EXTRACT(ISODOW FROM v_today_local)::INTEGER - 1);
   v_first_week DATE := v_current_week_start - ((v_weeks - 1) * 7);
-  v_measurement_start DATE;
-  v_total_accounts BIGINT;
-  v_new_last_week BIGINT;
-  v_active_last_week BIGINT;
-  v_profiles_complete BIGINT;
-  v_profiles_visible BIGINT;
-  v_service_providers BIGINT;
-  v_cohorts JSONB;
+  v_first_recorded_week DATE;
+  v_measurement_available_from DATE;
+  v_summary JSONB;
 BEGIN
   IF COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
     RAISE EXCEPTION 'admin_only';
   END IF;
 
-  SELECT MIN(week_start) INTO v_measurement_start
+  SELECT MIN(week_start)
+  INTO v_first_recorded_week
   FROM public.user_activity_weeks;
 
-  SELECT COUNT(*) INTO v_total_accounts FROM auth.users;
+  -- La primera semana observada siempre se trata como parcial. La medición
+  -- comienza en la semana calendario completa siguiente, sin reconstruir nada.
+  v_measurement_available_from := CASE
+    WHEN v_first_recorded_week IS NULL THEN NULL
+    ELSE v_first_recorded_week + 7
+  END;
 
-  SELECT COUNT(*) INTO v_new_last_week
-  FROM auth.users u
-  WHERE (u.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE
-    - (EXTRACT(ISODOW FROM (u.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires'))::INTEGER - 1)
-    = v_current_week_start - 7;
-
-  SELECT COUNT(DISTINCT aw.user_id) INTO v_active_last_week
-  FROM public.user_activity_weeks aw
-  WHERE aw.week_start = v_current_week_start - 7;
-
-  SELECT COUNT(*) INTO v_profiles_complete
-  FROM public.profiles p
-  WHERE trim(COALESCE(p.name, '')) <> ''
-    AND trim(COALESCE(p.provincia, '')) <> ''
-    AND trim(COALESCE(p.localidad, '')) <> ''
-    AND EXISTS (SELECT 1 FROM public.contact_methods c WHERE c.profile_id = p.id)
-    AND (
-      p.account_type = 'empresa'
-      OR (
-        p.modalidad IS NOT NULL
-        AND (
-          p.intent = 'buscar'
-          OR EXISTS (SELECT 1 FROM public.skills s WHERE s.profile_id = p.id)
-          OR EXISTS (SELECT 1 FROM public.services s WHERE s.profile_id = p.id)
-        )
-      )
-    );
-
-  SELECT COUNT(*) INTO v_profiles_visible
-  FROM public.profiles p
-  WHERE p.status = 'activo';
-
-  SELECT COUNT(*) INTO v_service_providers
-  FROM public.profiles p
-  WHERE p.status = 'activo'
-    AND p.account_type <> 'empresa'
-    AND p.intent IN ('ofrecer', 'ambas');
-
-  WITH weeks AS (
-    SELECT v_first_week + (series.week_index * 7) AS week_start
-    FROM generate_series(0, v_weeks - 1) AS series(week_index)
-  ), cohort_rows AS (
+  -- Incluye una semana técnica anterior al primer período visible para que
+  -- la variación de la primera fila no quede artificialmente en cero. El
+  -- filtro de cohort_json mantiene intacto el rango que ve el panel.
+  WITH weeks AS MATERIALIZED (
     SELECT
-      c.week_start,
-      c.week_start + 6 AS week_end,
-      COUNT(u.id)::BIGINT AS cohort_size,
-      COUNT(p.id)::BIGINT AS profiles_count,
-      COUNT(p.id) FILTER (WHERE
+      (v_first_week - 7) + (series.week_index * 7) AS week_start,
+      (v_first_week - 7) + (series.week_index * 7) + 6 AS week_end
+    FROM generate_series(0, v_weeks) AS series(week_index)
+  ),
+  profile_state AS MATERIALIZED (
+    SELECT
+      p.id,
+      (
         trim(COALESCE(p.name, '')) <> ''
         AND trim(COALESCE(p.provincia, '')) <> ''
         AND trim(COALESCE(p.localidad, '')) <> ''
-        AND EXISTS (SELECT 1 FROM public.contact_methods cm WHERE cm.profile_id = p.id)
-        AND (p.account_type = 'empresa' OR (p.modalidad IS NOT NULL AND (p.intent = 'buscar' OR EXISTS (SELECT 1 FROM public.skills s WHERE s.profile_id = p.id) OR EXISTS (SELECT 1 FROM public.services s WHERE s.profile_id = p.id))))
-      )::BIGINT AS profiles_complete,
-      COUNT(p.id) FILTER (WHERE p.status = 'activo')::BIGINT AS profiles_visible,
-      COUNT(p.id) FILTER (WHERE p.whatsapp_verified = TRUE)::BIGINT AS whatsapp_verified,
-      COUNT(p.id) FILTER (WHERE p.account_type <> 'empresa' AND p.intent IN ('ofrecer', 'ambas') AND p.status = 'activo')::BIGINT AS service_providers,
-      COALESCE((
-        SELECT COUNT(*)::BIGINT
-        FROM auth.users prev
-        WHERE (prev.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE
-          - (EXTRACT(ISODOW FROM (prev.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires'))::INTEGER - 1)
-          = c.week_start - 7
-      ), 0) AS previous_size
-    FROM weeks c
-    LEFT JOIN auth.users u
-      ON (u.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE
-        - (EXTRACT(ISODOW FROM (u.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires'))::INTEGER - 1)
-        = c.week_start
-    LEFT JOIN public.profiles p ON p.id = u.id
-    GROUP BY c.week_start
-  )
-  SELECT COALESCE(jsonb_agg(
-    jsonb_build_object(
-      'week_start', cohort.week_start,
-      'week_end', cohort.week_end,
-      'cohort_size', cohort.cohort_size,
-      'previous_size', cohort.previous_size,
-      'absolute_change', cohort.cohort_size - cohort.previous_size,
-      'percent_change', CASE WHEN cohort.previous_size > 0 THEN ROUND(((cohort.cohort_size - cohort.previous_size)::NUMERIC / cohort.previous_size) * 100, 1) ELSE NULL END,
-      'profiles_count', cohort.profiles_count,
-      'profiles_complete', cohort.profiles_complete,
-      'profiles_visible', cohort.profiles_visible,
-      'whatsapp_verified', cohort.whatsapp_verified,
-      'service_providers', cohort.service_providers,
-      'retention', (
-        SELECT COALESCE(jsonb_agg(jsonb_build_object(
-          'relative_week', rel.n,
-          'state', CASE
-            WHEN cohort.week_start + (rel.n * 7) > v_current_week_start THEN 'in_progress'
-            WHEN v_measurement_start IS NULL OR cohort.week_start + (rel.n * 7) < v_measurement_start THEN 'no_data'
-            ELSE 'measured'
-          END,
-          'active_users', CASE
-            WHEN cohort.week_start + (rel.n * 7) <= v_current_week_start
-              AND v_measurement_start IS NOT NULL
-              AND cohort.week_start + (rel.n * 7) >= v_measurement_start
-            THEN (
-              SELECT COUNT(DISTINCT aw.user_id)::BIGINT
-              FROM public.user_activity_weeks aw
-              JOIN auth.users au ON au.id = aw.user_id
-              WHERE aw.week_start = cohort.week_start + (rel.n * 7)
-                AND (au.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE
-                  - (EXTRACT(ISODOW FROM (au.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires'))::INTEGER - 1)
-                  = cohort.week_start
+        AND EXISTS (
+          SELECT 1
+          FROM public.contact_methods AS c
+          WHERE c.profile_id = p.id
+        )
+        AND (
+          p.account_type = 'empresa'
+          OR (
+            p.account_type <> 'empresa'
+            AND p.modalidad IS NOT NULL
+            AND (
+              p.intent = 'buscar'
+              OR EXISTS (
+                SELECT 1
+                FROM public.skills AS s
+                WHERE s.profile_id = p.id
+              )
+              OR EXISTS (
+                SELECT 1
+                FROM public.services AS s
+                WHERE s.profile_id = p.id
+              )
             )
-            ELSE NULL
-          END,
-          'retention_percent', CASE
-            WHEN cohort.cohort_size > 0
-              AND cohort.week_start + (rel.n * 7) <= v_current_week_start
-              AND v_measurement_start IS NOT NULL
-              AND cohort.week_start + (rel.n * 7) >= v_measurement_start
-            THEN ROUND((
-              (SELECT COUNT(DISTINCT aw.user_id)::NUMERIC
-               FROM public.user_activity_weeks aw
-               JOIN auth.users au ON au.id = aw.user_id
-               WHERE aw.week_start = cohort.week_start + (rel.n * 7)
-                 AND (au.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE
-                   - (EXTRACT(ISODOW FROM (au.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires'))::INTEGER - 1)
-                   = cohort.week_start
-              ) / cohort.cohort_size) * 100, 1)
-            ELSE NULL
-          END
-        ) ORDER BY rel.n), '[]'::JSONB)
-        FROM generate_series(1, v_weeks) AS rel(n)
-      )
-    ) ORDER BY cohort.week_start DESC
-  ), '[]'::JSONB) INTO v_cohorts
-  FROM cohort_rows cohort;
-
-  RETURN jsonb_build_object(
+          )
+        )
+      ) AS profile_complete,
+      -- El directorio real consulta public_profiles, restringe a personas
+      -- activas y con intención de ofrecer, y no muestra estados ocultos.
+      -- public_profiles también expone empresas ocultas para identidad de
+      -- contactos; esa excepción no se cuenta como visibilidad pública aquí.
+      (p.status = 'activo') AS profile_visible,
+      (
+        p.status = 'activo'
+        AND p.account_type <> 'empresa'
+        AND p.intent IN ('ofrecer', 'ambas')
+      ) AS service_provider,
+      COALESCE(p.whatsapp_verified, FALSE) AS whatsapp_verified
+    FROM public.profiles AS p
+  ),
+  cohort_users AS MATERIALIZED (
+    SELECT
+      u.id AS user_id,
+      w.week_start AS cohort_week
+    FROM weeks AS w
+    JOIN auth.users AS u
+      ON u.created_at >= (w.week_start::TIMESTAMP AT TIME ZONE 'America/Argentina/Buenos_Aires')
+     AND u.created_at < ((w.week_start + 7)::TIMESTAMP AT TIME ZONE 'America/Argentina/Buenos_Aires')
+  ),
+  cohort_rows AS (
+    SELECT
+      w.week_start,
+      w.week_end,
+      COUNT(cu.user_id)::BIGINT AS cohort_size,
+      COUNT(ps.id)::BIGINT AS profiles_count,
+      COUNT(ps.id) FILTER (WHERE ps.profile_complete)::BIGINT AS profiles_complete,
+      COUNT(ps.id) FILTER (WHERE ps.profile_visible)::BIGINT AS profiles_visible,
+      COUNT(ps.id) FILTER (WHERE ps.whatsapp_verified)::BIGINT AS whatsapp_verified,
+      COUNT(ps.id) FILTER (WHERE ps.service_provider)::BIGINT AS service_providers
+    FROM weeks AS w
+    LEFT JOIN cohort_users AS cu ON cu.cohort_week = w.week_start
+    LEFT JOIN profile_state AS ps ON ps.id = cu.user_id
+    GROUP BY w.week_start, w.week_end
+  ),
+  cohort_rows_with_previous AS (
+    SELECT
+      current_cohort.*,
+      COALESCE(previous_cohort.cohort_size, 0)::BIGINT AS previous_size
+    FROM cohort_rows AS current_cohort
+    LEFT JOIN cohort_rows AS previous_cohort
+      ON previous_cohort.week_start = current_cohort.week_start - 7
+  ),
+  activity_by_cohort AS (
+    SELECT
+      cu.cohort_week,
+      aw.week_start AS activity_week,
+      COUNT(DISTINCT aw.user_id)::BIGINT AS active_users
+    FROM public.user_activity_weeks AS aw
+    JOIN cohort_users AS cu ON cu.user_id = aw.user_id
+    WHERE v_measurement_available_from IS NOT NULL
+      AND aw.week_start >= v_measurement_available_from
+      AND aw.week_start < v_current_week_start
+    GROUP BY cu.cohort_week, aw.week_start
+  ),
+  retention_cells AS (
+    SELECT
+      cr.week_start AS cohort_week,
+      cr.cohort_size,
+      rel.relative_week,
+      cr.week_start + (rel.relative_week * 7) AS activity_week,
+      CASE
+        WHEN cr.week_start + (rel.relative_week * 7) >= v_current_week_start THEN 'in_progress'
+        WHEN v_measurement_available_from IS NULL
+          OR cr.week_start + (rel.relative_week * 7) < v_measurement_available_from THEN 'no_data'
+        ELSE 'measured'
+      END AS state
+    FROM cohort_rows_with_previous AS cr
+    CROSS JOIN LATERAL generate_series(1, v_weeks) AS rel(relative_week)
+  ),
+  retention_values AS (
+    SELECT
+      rc.cohort_week,
+      rc.relative_week,
+      rc.state,
+      CASE
+        WHEN rc.state = 'measured' THEN COALESCE(ab.active_users, 0)::BIGINT
+        ELSE NULL
+      END AS active_users,
+      CASE
+        WHEN rc.state = 'measured' AND rc.cohort_size > 0 THEN
+          ROUND((COALESCE(ab.active_users, 0)::NUMERIC / rc.cohort_size) * 100, 1)
+        ELSE NULL
+      END AS retention_percent
+    FROM retention_cells AS rc
+    LEFT JOIN activity_by_cohort AS ab
+      ON ab.cohort_week = rc.cohort_week
+     AND ab.activity_week = rc.activity_week
+  ),
+  cohort_json AS (
+    SELECT COALESCE(jsonb_agg(
+      jsonb_build_object(
+        'week_start', cr.week_start,
+        'week_end', cr.week_end,
+        'cohort_size', cr.cohort_size,
+        'previous_size', cr.previous_size,
+        'absolute_change', cr.cohort_size - cr.previous_size,
+        'percent_change', CASE
+          WHEN cr.previous_size > 0
+          THEN ROUND(((cr.cohort_size - cr.previous_size)::NUMERIC / cr.previous_size) * 100, 1)
+          ELSE NULL
+        END,
+        'profiles_count', cr.profiles_count,
+        'profiles_complete', cr.profiles_complete,
+        'profiles_visible', cr.profiles_visible,
+        'whatsapp_verified', cr.whatsapp_verified,
+        'service_providers', cr.service_providers,
+        'retention', (
+          SELECT COALESCE(jsonb_agg(
+            jsonb_build_object(
+              'relative_week', rv.relative_week,
+              'state', rv.state,
+              'active_users', rv.active_users,
+              'retention_percent', rv.retention_percent
+            ) ORDER BY rv.relative_week
+          ), '[]'::JSONB)
+          FROM retention_values AS rv
+          WHERE rv.cohort_week = cr.week_start
+        )
+      ) ORDER BY cr.week_start DESC
+    ), '[]'::JSONB) AS cohorts
+    FROM cohort_rows_with_previous AS cr
+    WHERE cr.week_start >= v_first_week
+  ),
+  metrics AS (
+    SELECT
+      (SELECT COUNT(*)::BIGINT FROM auth.users) AS total_accounts,
+      (
+        SELECT COUNT(*)::BIGINT
+        FROM auth.users AS u
+        WHERE u.created_at >= ((v_current_week_start - 7)::TIMESTAMP AT TIME ZONE 'America/Argentina/Buenos_Aires')
+          AND u.created_at < (v_current_week_start::TIMESTAMP AT TIME ZONE 'America/Argentina/Buenos_Aires')
+      ) AS new_last_week,
+      CASE
+        WHEN v_measurement_available_from IS NOT NULL
+          AND v_current_week_start - 7 >= v_measurement_available_from
+        THEN (
+          SELECT COUNT(DISTINCT aw.user_id)::BIGINT
+          FROM public.user_activity_weeks AS aw
+          WHERE aw.week_start = v_current_week_start - 7
+        )
+        ELSE NULL
+      END AS active_last_week,
+      CASE
+        WHEN v_measurement_available_from IS NOT NULL
+          AND v_current_week_start - 7 >= v_measurement_available_from
+        THEN 'measured'
+        ELSE 'no_data'
+      END AS active_last_week_state,
+      (SELECT COUNT(*)::BIGINT FROM profile_state WHERE profile_complete) AS profiles_complete,
+      (SELECT COUNT(*)::BIGINT FROM profile_state WHERE profile_visible) AS profiles_visible,
+      (SELECT COUNT(*)::BIGINT FROM profile_state WHERE service_provider) AS service_providers
+  )
+  SELECT jsonb_build_object(
     'generated_at', NOW(),
     'timezone', 'America/Argentina/Buenos_Aires',
     'first_week', v_first_week,
     'current_week_start', v_current_week_start,
-    'measurement_available_from', v_measurement_start,
+    'instrumentation_started_week', v_first_recorded_week,
+    'measurement_available_from', v_measurement_available_from,
     'metrics', jsonb_build_object(
-      'total_accounts', v_total_accounts,
-      'new_last_week', v_new_last_week,
-      'active_last_week', v_active_last_week,
-      'profiles_complete', v_profiles_complete,
-      'profiles_visible', v_profiles_visible,
-      'service_providers', v_service_providers
+      'total_accounts', metrics.total_accounts,
+      'new_last_week', metrics.new_last_week,
+      'active_last_week', metrics.active_last_week,
+      'active_last_week_state', metrics.active_last_week_state,
+      'profiles_complete', metrics.profiles_complete,
+      'profiles_visible', metrics.profiles_visible,
+      'service_providers', metrics.service_providers
     ),
-    'cohorts', v_cohorts
-  );
+    'cohorts', cohort_json.cohorts
+  )
+  INTO v_summary
+  FROM metrics
+  CROSS JOIN cohort_json;
+
+  RETURN v_summary;
 END;
 $$;
 
@@ -263,72 +335,150 @@ GRANT EXECUTE ON FUNCTION public.admin_get_growth_cohort_summary(INTEGER) TO aut
 CREATE OR REPLACE FUNCTION public.admin_get_growth_cohort_members(
   p_cohort_week DATE,
   p_relative_week INTEGER DEFAULT NULL,
-  p_include_inactive BOOLEAN DEFAULT TRUE
+  p_include_inactive BOOLEAN DEFAULT TRUE,
+  p_limit INTEGER DEFAULT 50,
+  p_offset INTEGER DEFAULT 0
 )
-RETURNS TABLE (
-  user_id UUID,
-  account_created_at TIMESTAMPTZ,
-  last_sign_in_at TIMESTAMPTZ,
-  name TEXT,
-  account_type TEXT,
-  profile_status TEXT,
-  profile_complete BOOLEAN,
-  profile_visible BOOLEAN,
-  whatsapp_verified BOOLEAN,
-  offers_services BOOLEAN,
-  active_in_selected_week BOOLEAN,
-  acquisition_source TEXT
-)
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public, auth
+SET search_path = pg_catalog, auth
 AS $$
 DECLARE
-  v_activity_week DATE;
+  v_limit INTEGER;
+  v_offset INTEGER;
+  v_total_count BIGINT;
+  v_members JSONB;
 BEGIN
   IF COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' THEN
     RAISE EXCEPTION 'admin_only';
   END IF;
 
-  IF p_relative_week IS NOT NULL AND p_relative_week < 1 THEN
+  IF p_cohort_week IS NULL THEN
+    RAISE EXCEPTION 'invalid_cohort_week';
+  END IF;
+
+  IF p_relative_week IS NOT NULL AND (p_relative_week < 1 OR p_relative_week > 52) THEN
     RAISE EXCEPTION 'invalid_relative_week';
   END IF;
 
-  v_activity_week := CASE WHEN p_relative_week IS NULL THEN NULL ELSE p_cohort_week + (p_relative_week * 7) END;
+  v_limit := COALESCE(p_limit, 50);
+  IF v_limit < 1 OR v_limit > 100 THEN
+    RAISE EXCEPTION 'invalid_page_limit';
+  END IF;
 
-  RETURN QUERY
+  v_offset := COALESCE(p_offset, 0);
+  IF v_offset < 0 OR v_offset > 1000000 THEN
+    RAISE EXCEPTION 'invalid_page_offset';
+  END IF;
+
+  -- Primero se filtran y ordenan únicamente las cuentas de Auth. Esto deja
+  -- el conteo exacto y aplica LIMIT/OFFSET antes de calcular atributos y
+  -- relaciones del perfil, evitando materializar todos los perfiles.
+  WITH eligible_members AS MATERIALIZED (
+    SELECT
+      u.id AS user_id,
+      u.created_at AS account_created_at
+    FROM auth.users AS u
+    WHERE u.created_at >= (p_cohort_week::TIMESTAMP AT TIME ZONE 'America/Argentina/Buenos_Aires')
+      AND u.created_at < ((p_cohort_week + 7)::TIMESTAMP AT TIME ZONE 'America/Argentina/Buenos_Aires')
+      AND (
+        COALESCE(p_include_inactive, TRUE)
+        OR (
+          p_relative_week IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM public.user_activity_weeks AS aw
+            WHERE aw.user_id = u.id
+              AND aw.week_start = p_cohort_week + (p_relative_week * 7)
+          )
+        )
+      )
+  ),
+  page_members AS (
+    SELECT *
+    FROM eligible_members
+    ORDER BY account_created_at ASC, user_id ASC
+    LIMIT v_limit
+    OFFSET v_offset
+  ),
+  page_profiles AS MATERIALIZED (
+    SELECT
+      pm.user_id,
+      pm.account_created_at,
+      u.last_sign_in_at,
+      p.name,
+      COALESCE(p.account_type, 'persona')::TEXT AS account_type,
+      p.status::TEXT AS profile_status,
+      CASE WHEN p.id IS NULL THEN FALSE ELSE (
+        trim(COALESCE(p.name, '')) <> ''
+        AND trim(COALESCE(p.provincia, '')) <> ''
+        AND trim(COALESCE(p.localidad, '')) <> ''
+        AND EXISTS (
+          SELECT 1
+          FROM public.contact_methods AS c
+          WHERE c.profile_id = p.id
+        )
+        AND (
+          p.account_type = 'empresa'
+          OR (
+            p.account_type <> 'empresa'
+            AND p.modalidad IS NOT NULL
+            AND (
+              p.intent = 'buscar'
+              OR EXISTS (
+                SELECT 1
+                FROM public.skills AS s
+                WHERE s.profile_id = p.id
+              )
+              OR EXISTS (
+                SELECT 1
+                FROM public.services AS s
+                WHERE s.profile_id = p.id
+              )
+            )
+          )
+        )
+      ) END AS profile_complete,
+      (p.status = 'activo') AS profile_visible,
+      COALESCE(p.whatsapp_verified, FALSE) AS whatsapp_verified,
+      (
+        p.status = 'activo'
+        AND p.account_type <> 'empresa'
+        AND p.intent IN ('ofrecer', 'ambas')
+      ) AS offers_services,
+      CASE
+        WHEN p_relative_week IS NULL THEN FALSE
+        ELSE EXISTS (
+          SELECT 1
+          FROM public.user_activity_weeks AS aw
+          WHERE aw.user_id = pm.user_id
+            AND aw.week_start = p_cohort_week + (p_relative_week * 7)
+        )
+      END AS active_in_selected_week,
+      'No registrado'::TEXT AS acquisition_source
+    FROM page_members AS pm
+    JOIN auth.users AS u ON u.id = pm.user_id
+    LEFT JOIN public.profiles AS p ON p.id = pm.user_id
+  )
   SELECT
-    u.id,
-    u.created_at,
-    u.last_sign_in_at,
-    p.name,
-    COALESCE(p.account_type, 'sin_perfil')::TEXT,
-    p.status::TEXT,
-    CASE WHEN p.id IS NULL THEN FALSE ELSE (
-      trim(COALESCE(p.name, '')) <> ''
-      AND trim(COALESCE(p.provincia, '')) <> ''
-      AND trim(COALESCE(p.localidad, '')) <> ''
-      AND EXISTS (SELECT 1 FROM public.contact_methods c WHERE c.profile_id = p.id)
-      AND (p.account_type = 'empresa' OR (p.modalidad IS NOT NULL AND (p.intent = 'buscar' OR EXISTS (SELECT 1 FROM public.skills s WHERE s.profile_id = p.id) OR EXISTS (SELECT 1 FROM public.services s WHERE s.profile_id = p.id))))
-    ) END,
-    COALESCE(p.status = 'activo', FALSE),
-    COALESCE(p.whatsapp_verified, FALSE),
-    COALESCE(p.account_type <> 'empresa' AND p.intent IN ('ofrecer', 'ambas') AND p.status = 'activo', FALSE),
-    CASE WHEN v_activity_week IS NULL THEN FALSE ELSE EXISTS (
-      SELECT 1 FROM public.user_activity_weeks aw WHERE aw.user_id = u.id AND aw.week_start = v_activity_week
-    ) END,
-    'No registrado'::TEXT
-  FROM auth.users u
-  LEFT JOIN public.profiles p ON p.id = u.id
-  WHERE (u.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::DATE
-    - (EXTRACT(ISODOW FROM (u.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires'))::INTEGER - 1)
-    = p_cohort_week
-    AND (p_include_inactive OR (v_activity_week IS NOT NULL AND EXISTS (SELECT 1 FROM public.user_activity_weeks aw WHERE aw.user_id = u.id AND aw.week_start = v_activity_week)))
-  ORDER BY u.created_at ASC, u.id ASC;
+    (SELECT COUNT(*)::BIGINT FROM eligible_members),
+    COALESCE((
+      SELECT jsonb_agg(to_jsonb(page_profiles) ORDER BY page_profiles.account_created_at, page_profiles.user_id)
+      FROM page_profiles
+    ), '[]'::JSONB)
+  INTO v_total_count, v_members;
+
+  RETURN jsonb_build_object(
+    'members', v_members,
+    'total_count', v_total_count,
+    'limit', v_limit,
+    'offset', v_offset
+  );
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.admin_get_growth_cohort_members(DATE, INTEGER, BOOLEAN) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.admin_get_growth_cohort_members(DATE, INTEGER, BOOLEAN) TO authenticated;
+REVOKE ALL ON FUNCTION public.admin_get_growth_cohort_members(DATE, INTEGER, BOOLEAN, INTEGER, INTEGER) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_get_growth_cohort_members(DATE, INTEGER, BOOLEAN, INTEGER, INTEGER) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
