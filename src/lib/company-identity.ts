@@ -1,5 +1,7 @@
 export const CANDIDATE_PROFILE_SELECT = 'id, name, slug, localidad, provincia'
 export const CANDIDATE_NAME_FALLBACK = 'Nombre no disponible'
+export const COMPANY_PROCESS_STATUSES = ['abierto', 'en_evaluacion', 'contratado', 'no_seleccionado', 'cancelado'] as const
+export type CompanyProcessStatus = typeof COMPANY_PROCESS_STATUSES[number]
 
 export type CandidateIdentity = {
   id: string
@@ -74,4 +76,20 @@ export const opportunityStatusClass = (status: string | null | undefined) => ({
   vista: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
   interesada: 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200',
   descartada: 'bg-rose-50 text-rose-800 ring-1 ring-rose-200',
+}[status || ''] || 'bg-slate-100 text-slate-700 ring-1 ring-slate-200')
+
+export const processStatusLabel = (status: string | null | undefined) => ({
+  abierto: 'Selección abierta',
+  en_evaluacion: 'En evaluación',
+  contratado: 'Contratado',
+  no_seleccionado: 'No seleccionado',
+  cancelado: 'Cancelado',
+}[status || ''] || status || 'Proceso no disponible')
+
+export const processStatusClass = (status: string | null | undefined) => ({
+  abierto: 'bg-indigo-50 text-indigo-800 ring-1 ring-indigo-200',
+  en_evaluacion: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200',
+  contratado: 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200',
+  no_seleccionado: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+  cancelado: 'bg-rose-50 text-rose-800 ring-1 ring-rose-200',
 }[status || ''] || 'bg-slate-100 text-slate-700 ring-1 ring-slate-200')

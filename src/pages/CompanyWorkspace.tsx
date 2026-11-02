@@ -12,15 +12,19 @@ import { focusContextualElement } from '@/lib/contextual-navigation'
 import EmailPreferencesToggle from '@/components/notifications/EmailPreferencesToggle'
 import {
   CANDIDATE_PROFILE_SELECT,
+  type CompanyProcessStatus,
   getCandidateDisplayName,
   inquiryStatusClass,
   inquiryStatusLabel,
   mergeCandidateIdentities,
   opportunityStatusClass,
   opportunityStatusLabel,
+  processStatusClass,
+  processStatusLabel,
 } from '@/lib/company-identity'
 
 type Opportunity = { id: string; title: string; description: string; status: string; created_at: string }
+type CompanyProcessFilter = 'activos' | 'contratados' | 'no_seleccionados' | 'archivados'
 
 const getContactActionUrl = (method: any, profileName: string) => {
   const value = String(method?.value || '').trim()
@@ -62,6 +66,10 @@ const getContactIcon = (type: string) => {
 }
 
 const isArchivedInquiry = (item: any) => Boolean(item?.archived_at) || item?.status === 'cerrada'
+const getProcessStatus = (item: any): CompanyProcessStatus => item?.process_status || 'abierto'
+const isActiveCandidateProcess = (item: any) =>
+  !isArchivedInquiry(item) && ['pendiente', 'aceptada'].includes(item?.status) && ['abierto', 'en_evaluacion'].includes(getProcessStatus(item))
+const isArchivedCandidateProcess = (item: any) => !isActiveCandidateProcess(item) && !['contratado', 'no_seleccionado'].includes(getProcessStatus(item))
 
 export default function CompanyWorkspace() {
   const user = useAuthStore((state) => state.user)
@@ -81,7 +89,7 @@ export default function CompanyWorkspace() {
   const [candidateInquiries, setCandidateInquiries] = useState<any[]>([])
   const [candidateInquiriesLoaded, setCandidateInquiriesLoaded] = useState(false)
   const [selectedCandidateInquiry, setSelectedCandidateInquiry] = useState<any | null>(null)
-  const [showArchivedCandidates, setShowArchivedCandidates] = useState(false)
+  const [processFilter, setProcessFilter] = useState<CompanyProcessFilter>('activos')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [originPlatform, setOriginPlatform] = useState('')
@@ -91,6 +99,8 @@ export default function CompanyWorkspace() {
   const [message, setMessage] = useState('')
   const [archiveMessage, setArchiveMessage] = useState('')
   const [opportunitiesError, setOpportunitiesError] = useState('')
+  const [resolutionMessage, setResolutionMessage] = useState('')
+  const [resolvingInquiryId, setResolvingInquiryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   // Shortlist / Favoritos de candidatos
@@ -289,11 +299,26 @@ export default function CompanyWorkspace() {
         ? await (supabase.from('authenticated_candidate_profiles') as any).select(CANDIDATE_PROFILE_SELECT).in('id', profileIds)
         : { data: [], error: null }
       const resolvedPrimaryProfiles = profiles || []
-      const missingProfileIds = profileIds.filter((id: string) => !resolvedPrimaryProfiles.some((profile: any) => profile.id === id && String(profile.name || '').trim()))
+      const missingProfileIds = profilesError
+        ? []
+        : profileIds.filter((id: string) => !resolvedPrimaryProfiles.some((profile: any) => profile.id === id && String(profile.name || '').trim()))
       const { data: fallbackProfiles, error: fallbackProfilesError } = missingProfileIds.length
         ? await (supabase.from('public_profiles') as any).select(CANDIDATE_PROFILE_SELECT).in('id', missingProfileIds)
         : { data: [], error: null }
       const { data: contactMethods } = acceptedProfileIds.length ? await (supabase.from('contact_methods') as any).select('profile_id, type, value, is_public').in('profile_id', acceptedProfileIds).eq('is_public', true) : { data: [] }
+      const inquiryIds = normalized.map((item: any) => item.id).filter(Boolean)
+      const [{ data: interviews, error: interviewsError }, { data: resolutionEvents, error: resolutionEventsError }] = inquiryIds.length
+        ? await Promise.all([
+            (supabase.from('interviews') as any)
+              .select('id, inquiry_id, status, modality, scheduled_at, location_or_link, notes, created_at, updated_at')
+              .in('inquiry_id', inquiryIds)
+              .order('created_at', { ascending: false }),
+            (supabase.from('company_candidate_inquiry_events') as any)
+              .select('id, inquiry_id, event_type, actor_id, created_at')
+              .in('inquiry_id', inquiryIds)
+              .order('created_at', { ascending: false }),
+          ])
+        : [{ data: [], error: null }, { data: [], error: null }]
       if (profilesError) {
         identityLoadError = true
         console.warn('No se pudo cargar la vista autenticada de candidatos; se usará el modelo público acotado:', profilesError.message)
@@ -302,7 +327,21 @@ export default function CompanyWorkspace() {
         identityLoadError = true
         setOpportunitiesError('No se pudo completar la identidad de algunas personas contactadas. Reintentá actualizar la actividad.')
       }
+      if (interviewsError || resolutionEventsError) {
+        console.warn('No se pudo cargar el detalle de entrevistas o el historial de resolución:', interviewsError?.message || resolutionEventsError?.message)
+        setOpportunitiesError('No se pudo cargar todo el historial de selección. Reintentá actualizar la actividad.')
+      }
       const byId = mergeCandidateIdentities(profileIds, resolvedPrimaryProfiles, fallbackProfiles || [])
+      const interviewByInquiry = new Map<string, any>()
+      ;(interviews || []).forEach((interview: any) => {
+        if (interview?.inquiry_id && !interviewByInquiry.has(interview.inquiry_id)) interviewByInquiry.set(interview.inquiry_id, interview)
+      })
+      const eventsByInquiry = new Map<string, any[]>()
+      ;(resolutionEvents || []).forEach((event: any) => {
+        const events = eventsByInquiry.get(event.inquiry_id) || []
+        events.push(event)
+        eventsByInquiry.set(event.inquiry_id, events)
+      })
       const contactsByProfile = new Map<string, any[]>()
       ;(contactMethods || []).forEach((method: any) => {
         const methods = contactsByProfile.get(method.profile_id) || []
@@ -312,6 +351,8 @@ export default function CompanyWorkspace() {
       setCandidateInquiries(normalized.map((item: any) => ({
         ...item,
         profile: { ...(byId.get(item.profile_id) || {}), contact_methods: contactsByProfile.get(item.profile_id) || [] },
+        interview: interviewByInquiry.get(item.id) || null,
+        resolution_events: eventsByInquiry.get(item.id) || [],
       })))
     }
     if (loadErrors.length && !identityLoadError) setOpportunitiesError('No se pudo actualizar toda la actividad de Empresa. Revisá la conexión e intentá nuevamente.')
@@ -322,7 +363,10 @@ export default function CompanyWorkspace() {
   useEffect(() => {
     if (!selectedInquiryId || !candidateInquiriesLoaded) return
     const selected = candidateInquiries.find((item) => item.id === selectedInquiryId) || null
-    setShowArchivedCandidates(true)
+    if (selected) {
+      const status = getProcessStatus(selected)
+      setProcessFilter(status === 'contratado' ? 'contratados' : status === 'no_seleccionado' ? 'no_seleccionados' : isActiveCandidateProcess(selected) ? 'activos' : 'archivados')
+    }
     setSelectedCandidateInquiry(selected)
   }, [selectedInquiryId, candidateInquiries, candidateInquiriesLoaded])
 
@@ -403,29 +447,55 @@ export default function CompanyWorkspace() {
       setArchiveMessage('')
       return
     }
-    // Compatibilidad con instalaciones que aún no aplicaron la columna archived_at.
-    const fallback = await (supabase.from('company_candidate_inquiries') as any).update({ status: 'cerrada', updated_at: archivedAt }).eq('id', inquiryId).eq('company_id', user.id).select('id').maybeSingle()
-    if (!fallback.error && fallback.data) {
-      setCandidateInquiries((items) => items.map((item) => item.id === inquiryId ? { ...item, status: 'cerrada', archived_at: archivedAt } : item))
-      setArchiveMessage('')
-      return
-    }
     setArchiveMessage('No se pudo archivar este proceso. Verificá que la migración de selección Empresa esté aplicada en Supabase.')
   }
 
   const cancelCandidateInquiry = async (inquiryId: string) => {
-    if (!window.confirm('¿Confirmás que querés cancelar este proceso de selección/entrevista?')) return
-    const now = new Date().toISOString()
-    const { error } = await (supabase.from('company_candidate_inquiries') as any)
-      .update({ status: 'cerrada', archived_at: now, updated_at: now })
-      .eq('id', inquiryId)
-      .eq('company_id', user.id)
+    await resolveCandidateInquiry(inquiryId, 'cancelado')
+  }
 
-    if (!error) {
-      setCandidateInquiries((items) =>
-        items.map((item) => (item.id === inquiryId ? { ...item, status: 'cerrada', archived_at: now } : item))
-      )
+  const resolveCandidateInquiry = async (inquiryId: string, outcome: Extract<CompanyProcessStatus, 'contratado' | 'no_seleccionado' | 'cancelado'>) => {
+    if (!user || resolvingInquiryId) return
+    const inquiry = candidateInquiries.find((item) => item.id === inquiryId)
+    if (!inquiry) return
+    const personName = getCandidateDisplayName(inquiry.profile)
+    const confirmation = outcome === 'contratado'
+      ? `¿Confirmás que ${personName} fue contratado/a? El proceso se cerrará como contratación exitosa.`
+      : outcome === 'no_seleccionado'
+        ? `¿Confirmás que ${personName} no fue seleccionado/a? El proceso se cerrará sin contratación y quedará en el historial.`
+        : `¿Confirmás que querés cancelar el proceso de selección de ${personName}? La interacción quedará cerrada y no se eliminará el historial.`
+    if (!window.confirm(confirmation)) return
+
+    setResolvingInquiryId(inquiryId)
+    setResolutionMessage('')
+    const { data: resolutionRows, error } = await (supabase.rpc as any)('resolve_company_candidate_inquiry', {
+      target_inquiry_id: inquiryId,
+      target_process_status: outcome,
+    })
+    const data = Array.isArray(resolutionRows) ? resolutionRows[0] : resolutionRows
+    if (error) {
+      setResolutionMessage(`No se pudo cerrar el proceso de ${personName}. Intentá nuevamente.`)
+      setResolvingInquiryId(null)
+      return
     }
+    if (!data) {
+      await loadOpportunities()
+      setResolutionMessage('El proceso ya fue resuelto o cambió mientras se confirmaba la acción. Actualicé la vista.')
+      setResolvingInquiryId(null)
+      return
+    }
+
+    const notification = await useNotificationStore.getState().addNotification({
+      kind: 'company_candidate_resolution',
+      inquiryId,
+      event: outcome,
+      operationAt: data.resolved_at,
+    })
+    await loadOpportunities()
+    setResolutionMessage(notification.error
+      ? 'Proceso actualizado. No se pudo enviar el aviso interno; podés reintentar desde Actualizar.'
+      : `Proceso actualizado como ${processStatusLabel(outcome)}.`)
+    setResolvingInquiryId(null)
   }
 
   const filteredShortlist = selectedProjectFilter === 'todos'
@@ -433,7 +503,23 @@ export default function CompanyWorkspace() {
     : selectedProjectFilter === 'sin_proyecto'
       ? shortlist.filter((item) => !item.project_id)
       : shortlist.filter((item) => item.project_id === selectedProjectFilter)
-  const visibleCandidateInquiries = candidateInquiries.filter((item) => showArchivedCandidates || !isArchivedInquiry(item))
+  const candidateProcessCounts = {
+    activos: candidateInquiries.filter(isActiveCandidateProcess).length,
+    contratados: candidateInquiries.filter((item) => getProcessStatus(item) === 'contratado').length,
+    no_seleccionados: candidateInquiries.filter((item) => getProcessStatus(item) === 'no_seleccionado').length,
+    archivados: candidateInquiries.filter(isArchivedCandidateProcess).length,
+  }
+  const visibleCandidateInquiries = candidateInquiries.filter((item) => {
+    if (processFilter === 'activos') return isActiveCandidateProcess(item)
+    if (processFilter === 'contratados') return getProcessStatus(item) === 'contratado'
+    if (processFilter === 'no_seleccionados') return getProcessStatus(item) === 'no_seleccionado'
+    return isArchivedCandidateProcess(item)
+  })
+  const resolvedProcessByProfile = new Map(
+    candidateInquiries
+      .filter((item) => ['contratado', 'no_seleccionado', 'cancelado'].includes(getProcessStatus(item)))
+      .map((item) => [item.profile_id, getProcessStatus(item)] as const)
+  )
 
   return <div className="container py-10 md:py-16 space-y-8">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-laburante-indigo)]"><Building2 size={15} /> Espacio Empresa</p><h1 className="mt-2 font-heading text-3xl font-extrabold text-[var(--color-laburante-text)]">Hola, {companyName}</h1><p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--color-laburante-text-secondary)]">Tu cuenta está lista para buscar profesionales.<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${isPaidCompany ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{profileLoaded ? `Plan ${isPaidCompany ? 'Pago activo' : 'Gratis'}` : 'Verificando plan'}</span></p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={loadOpportunities} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-white px-4 py-3 text-xs font-bold" title="Actualizar actividad" aria-label="Actualizar actividad"><RefreshCw size={15} /> Actualizar</button><Link to="/buscar" className="btn-dark inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold"><Search size={16} /> Empezar a buscar</Link></div></div>
@@ -468,27 +554,36 @@ export default function CompanyWorkspace() {
     <div className="grid gap-5 md:grid-cols-3"><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Search className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Búsqueda real</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Usá la búsqueda pública y revisá también los idiomas declarados en cada perfil.</p></article><article className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6"><Users className="text-[var(--color-laburante-indigo)]" size={22} /><h2 className="mt-4 font-heading font-bold">Red de empresas</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Cuando una búsqueda no encuentra respuesta, podés derivarla a empresas similares.</p></article><article className="rounded-2xl border border-amber-300 bg-amber-50/50 p-6"><Check className="text-emerald-600" size={22} /><h2 className="mt-4 font-heading font-bold">Sin spam</h2><p className="mt-2 text-sm text-[var(--color-laburante-text-secondary)]">Solo se comparte el pedido entre cuentas Empresa, sin exponer contactos ni datos privados.</p></article></div>
       {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{message}</div>}
       {opportunitiesError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">{opportunitiesError}</div>}
+      {resolutionMessage && <div role="status" className={`rounded-xl border p-3 text-xs font-semibold ${resolutionMessage.startsWith('No se pudo') ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{resolutionMessage}</div>}
      {archiveMessage && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">{archiveMessage}</div>}
       {!candidateInquiriesLoaded && <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-xs text-indigo-900">Cargando invitaciones y ofertas...</div>}
      {selectedInquiryId && candidateInquiriesLoaded && !selectedCandidateInquiry && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">No se encontró esa selección de Empresa en tu cuenta.</div>}
       {candidateInquiriesLoaded && candidateInquiries.length === 0 && <div className="rounded-xl border border-dashed border-[var(--color-laburante-border)] p-5 text-center text-xs text-[var(--color-laburante-text-secondary)]">Todavía no enviaste invitaciones u ofertas a profesionales.</div>}
      {candidateInquiries.length > 0 && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-4">
        <div className="flex flex-wrap items-center justify-between gap-3">
-         <div><h2 className="font-heading text-lg font-bold text-indigo-950">Selecciones de profesionales</h2><p className="mt-1 text-xs text-indigo-900/75">Las propuestas se cargan sólo para esta empresa y siguen disponibles aunque estén archivadas.</p></div>
-         <button type="button" onClick={() => setShowArchivedCandidates((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] font-bold text-indigo-800"><Archive size={14} /> {showArchivedCandidates ? 'Ocultar archivadas' : 'Ver archivadas'}</button>
+          <div><h2 className="font-heading text-lg font-bold text-indigo-950">Selecciones de profesionales</h2><p className="mt-1 text-xs text-indigo-900/75">La respuesta de la persona y el resultado de tu proceso se muestran por separado. Nada se borra del historial.</p></div>
        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          {([
+            ['activos', 'Procesos activos'],
+            ['contratados', 'Contrataciones'],
+            ['no_seleccionados', 'No seleccionados'],
+            ['archivados', 'Archivados'],
+          ] as const).map(([key, label]) => <button key={key} type="button" onClick={() => setProcessFilter(key)} className={`rounded-xl border px-3 py-2 text-left text-[11px] font-bold transition-colors sm:text-center ${processFilter === key ? 'border-indigo-700 bg-indigo-700 text-white' : 'border-indigo-200 bg-white text-indigo-900 hover:bg-indigo-50'}`}><span>{label}</span><span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${processFilter === key ? 'bg-white/20' : 'bg-indigo-50'}`}>{candidateProcessCounts[key]}</span></button>)}
+        </div>
         <div className="space-y-3">
-          {visibleCandidateInquiries.length === 0 ? <p className="rounded-xl border border-dashed border-indigo-200 bg-white/70 p-4 text-xs text-indigo-900/75">No hay interacciones activas para mostrar. Podés volver a ver las archivadas desde el botón superior.</p> : visibleCandidateInquiries.map((item) => {
+          {visibleCandidateInquiries.length === 0 ? <p className="rounded-xl border border-dashed border-indigo-200 bg-white/70 p-4 text-xs text-indigo-900/75">No hay procesos en esta categoría.</p> : visibleCandidateInquiries.map((item) => {
            const selected = item.id === selectedCandidateInquiry?.id
-           return <article key={item.id} data-inquiry-id={item.id} className={`rounded-xl border bg-white p-4 ${selected ? 'border-indigo-600 ring-2 ring-indigo-500/25' : 'border-indigo-200'}`}>
-              <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-bold text-[var(--color-laburante-text)]">{getCandidateDisplayName(item.profile)}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{item.process_type === 'entrevista' ? 'Entrevista' : 'Contratación'} · {new Date(item.created_at).toLocaleDateString('es-AR')}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiryStatusClass(item.status)}`}>{inquiryStatusLabel(item.status)}{isArchivedInquiry(item) ? ' · archivada' : ''}</span></div>
+            return <article key={item.id} data-inquiry-id={item.id} className={`rounded-xl border bg-white p-4 ${selected ? 'border-indigo-600 ring-2 ring-indigo-500/25' : 'border-indigo-200'}`}>
+              <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-bold text-[var(--color-laburante-text)]">{getCandidateDisplayName(item.profile)}</p><p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">{item.process_type === 'entrevista' ? 'Entrevista' : 'Contratación'} · Enviada el {new Date(item.created_at).toLocaleDateString('es-AR')}</p></div><div className="flex flex-wrap justify-end gap-1.5"><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiryStatusClass(item.status)}`}>Interacción: {inquiryStatusLabel(item.status)}</span><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${processStatusClass(getProcessStatus(item))}`}>Proceso: {processStatusLabel(getProcessStatus(item))}</span></div></div>
              {item.message && <p className="mt-2 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">{item.message}</p>}
              {item.status === 'rechazada' && (item as any).rejection_reason && <p className="mt-1 text-xs font-semibold text-rose-700">Devolución: {(item as any).rejection_reason}{(item as any).rejection_comment ? ` — ${(item as any).rejection_comment}` : ''}</p>}
-             <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCandidateInquiry(item)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{selected ? 'Selección abierta' : 'Abrir selección'}</button>{!isArchivedInquiry(item) && <button type="button" onClick={() => archiveCandidateInquiry(item.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"><Archive size={14} /> Archivar</button>}{item.status !== 'cerrada' && <button type="button" onClick={() => cancelCandidateInquiry(item.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 cursor-pointer transition-colors">Cancelar proceso</button>}</div>
+             {item.resolved_at && <p className="mt-2 text-[11px] font-semibold text-indigo-800">Resuelto el {new Date(item.resolved_at).toLocaleString('es-AR')}</p>}
+             <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setSelectedCandidateInquiry(item)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{selected ? 'Selección abierta' : 'Ver detalles'}</button>{isActiveCandidateProcess(item) && item.status === 'aceptada' && <><button type="button" onClick={() => resolveCandidateInquiry(item.id, 'contratado')} disabled={resolvingInquiryId === item.id} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{resolvingInquiryId === item.id ? 'Guardando...' : 'Marcar como contratado'}</button><button type="button" onClick={() => resolveCandidateInquiry(item.id, 'no_seleccionado')} disabled={resolvingInquiryId === item.id} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">No seleccionado</button></>}{!isArchivedInquiry(item) && <button type="button" onClick={() => archiveCandidateInquiry(item.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"><Archive size={14} /> Archivar</button>}{isActiveCandidateProcess(item) && <button type="button" onClick={() => cancelCandidateInquiry(item.id)} disabled={resolvingInquiryId === item.id} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 cursor-pointer transition-colors disabled:opacity-50">Cancelar proceso</button>}</div>
            </article>
          })}
        </div>
-       {selectedCandidateInquiry && <div className="rounded-xl border border-indigo-300 bg-white p-4 text-xs text-indigo-950"><p className="font-bold">Detalle de la selección</p><p className="mt-1 break-words">{getCandidateDisplayName(selectedCandidateInquiry.profile)} · {selectedCandidateInquiry.profile?.localidad || 'Ubicación no informada'}</p><p className="mt-2 whitespace-pre-line text-gray-700">{selectedCandidateInquiry.message || 'La selección no agregó un mensaje adicional.'}</p>{(selectedCandidateInquiry as any).rejection_reason && <p className="mt-2 text-xs font-semibold text-rose-700">Devolución del profesional: {(selectedCandidateInquiry as any).rejection_reason}{(selectedCandidateInquiry as any).rejection_comment ? ` — ${(selectedCandidateInquiry as any).rejection_comment}` : ''}</p>}{selectedCandidateInquiry.profile?.contact_methods?.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{selectedCandidateInquiry.profile.contact_methods.map((method: any) => <span key={`${method.type}-${method.value}`} className="rounded-lg bg-emerald-50 px-2 py-1 font-semibold text-emerald-800">{method.type}: {method.value}</span>)}</div>}</div>}
+       {selectedCandidateInquiry && <div className="rounded-xl border border-indigo-300 bg-white p-4 text-xs text-indigo-950"><p className="font-bold">Detalle de la selección</p><p className="mt-1 break-words">{getCandidateDisplayName(selectedCandidateInquiry.profile)} · {selectedCandidateInquiry.profile?.localidad || 'Ubicación no informada'}</p><div className="mt-3 flex flex-wrap gap-1.5"><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${inquiryStatusClass(selectedCandidateInquiry.status)}`}>Interacción: {inquiryStatusLabel(selectedCandidateInquiry.status)}</span><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${processStatusClass(getProcessStatus(selectedCandidateInquiry))}`}>Proceso: {processStatusLabel(getProcessStatus(selectedCandidateInquiry))}</span></div><p className="mt-3 text-[11px] font-semibold text-gray-500">Propuesta enviada el {new Date(selectedCandidateInquiry.created_at).toLocaleString('es-AR')}</p>{selectedCandidateInquiry.resolved_at && <p className="mt-1 text-[11px] font-semibold text-indigo-800">Resolución registrada el {new Date(selectedCandidateInquiry.resolved_at).toLocaleString('es-AR')}</p>}<p className="mt-2 whitespace-pre-line text-gray-700">{selectedCandidateInquiry.message || 'La selección no agregó un mensaje adicional.'}</p>{selectedCandidateInquiry.interview ? <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3"><p className="font-bold">Entrevista</p><p className="mt-1">{selectedCandidateInquiry.interview.scheduled_at ? new Date(selectedCandidateInquiry.interview.scheduled_at).toLocaleString('es-AR') : 'Fecha todavía no definida'} · {selectedCandidateInquiry.interview.status || 'Estado no disponible'}</p>{selectedCandidateInquiry.interview.location_or_link && <p className="mt-1 break-words">{/^https?:\/\//i.test(selectedCandidateInquiry.interview.location_or_link) ? <a href={selectedCandidateInquiry.interview.location_or_link} target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-700 underline">Abrir enlace de entrevista</a> : selectedCandidateInquiry.interview.location_or_link}</p>}</div> : <p className="mt-3 rounded-lg bg-gray-50 p-3 text-gray-600">No hay una entrevista programada en el registro estructurado.</p>}{(selectedCandidateInquiry as any).rejection_reason && <p className="mt-2 text-xs font-semibold text-rose-700">Devolución: {(selectedCandidateInquiry as any).rejection_reason}{(selectedCandidateInquiry as any).rejection_comment ? ` — ${(selectedCandidateInquiry as any).rejection_comment}` : ''}</p>}{selectedCandidateInquiry.profile?.contact_methods?.length > 0 && <div className="mt-3 space-y-2">{selectedCandidateInquiry.profile.contact_methods.map((method: any) => { const url = getContactActionUrl(method, getCandidateDisplayName(selectedCandidateInquiry.profile)); const external = /^https?:\/\//i.test(url || ''); return <a key={`${method.type}-${method.value}`} href={url || undefined} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined} className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-2 font-semibold text-emerald-800 break-all">{getContactIcon(method.type)}<span>{getContactLabel(method.type)}: {method.value}</span></a> })}</div>}</div>}
      </section>}
 
       {/* Shortlist / Candidatos de Interés y Búsqueda directa */}
@@ -499,10 +594,10 @@ export default function CompanyWorkspace() {
               <Star size={15} /> Shortlist y Búsqueda de Talentos
             </p>
             <h2 className="mt-1 font-heading text-xl font-bold text-[var(--color-laburante-text)]">
-              Candidatos guardados y seguimiento
+              Candidatos guardados y organización
             </h2>
             <p className="mt-1 text-xs text-[var(--color-laburante-text-secondary)]">
-              Buscá talentos por nombre u oficio y organizá a los candidatos según la etapa del proceso.
+              Buscá talentos por nombre u oficio y organizá tu lista sin borrar el historial de selección.
             </p>
           </div>
           <button
@@ -575,7 +670,7 @@ export default function CompanyWorkspace() {
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]">
-              Favoritos en seguimiento ({filteredShortlist.length}{selectedProjectFilter !== 'todos' ? ` de ${shortlist.length}` : ''})
+              Candidatos guardados ({filteredShortlist.length}{selectedProjectFilter !== 'todos' ? ` de ${shortlist.length}` : ''})
             </h3>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -649,6 +744,7 @@ export default function CompanyWorkspace() {
                           <p className="text-[11px] text-[var(--color-laburante-text-secondary)] mt-0.5">
                             {[item.candidate.localidad, item.candidate.provincia].filter(Boolean).join(', ') || 'Ubicación no informada'}
                           </p>
+                          {resolvedProcessByProfile.has(item.candidate_profile_id) && <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${processStatusClass(resolvedProcessByProfile.get(item.candidate_profile_id))}`}>Proceso: {processStatusLabel(resolvedProcessByProfile.get(item.candidate_profile_id))}</span>}
                         </>
                       ) : (
                         <>

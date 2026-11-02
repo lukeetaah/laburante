@@ -29,6 +29,7 @@ type NotificationCommand =
   | { kind: 'job_request'; jobRequestId: string; event: 'created'; recipientRole: 'client' | 'professional'; operationAt: string }
   | { kind: 'job_request'; jobRequestId: string; event: 'budget' | 'status' | 'cancelled'; operationAt: string }
   | { kind: 'company_candidate_inquiry'; inquiryId: string; event: 'created' | 'refreshed' | 'responded'; operationAt: string }
+  | { kind: 'company_candidate_resolution'; inquiryId: string; event: 'contratado' | 'no_seleccionado' | 'cancelado'; operationAt: string }
   | { kind: 'company_opportunity_share'; shareId: string; event: 'published' | 'interesada' | 'descartada' }
   | { kind: 'review'; recommendationId: string }
   | { kind: 'profile_whatsapp_verified'; profileId: string }
@@ -68,6 +69,11 @@ function getNotificationRpc(command: NotificationCommand) {
     case 'company_candidate_inquiry':
       return {
         name: 'notify_company_candidate_inquiry',
+        args: { target_inquiry_id: command.inquiryId, event_name: command.event, operation_marker: command.operationAt },
+      }
+    case 'company_candidate_resolution':
+      return {
+        name: 'notify_company_candidate_resolution',
         args: { target_inquiry_id: command.inquiryId, event_name: command.event, operation_marker: command.operationAt },
       }
     case 'company_opportunity_share':
