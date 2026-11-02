@@ -77,7 +77,7 @@ test('la pantalla usa el vínculo profile_id, limita la consulta y no vuelve a P
   assert.match(workspace, /getCandidateDisplayName\(item\.profile\)/)
   assert.match(workspace, /if \(profilesError\)[\s\S]*setOpportunitiesError\('No se pudo verificar la identidad/)
   assert.match(workspace, /fallbackProfilesError/)
-  assert.match(workspace, /const missingProfileIds = profilesError\s*\?\s*\[\]/)
+  assert.match(workspace, /const missingProfileIds = profileIds\.filter/)
   assert.match(workspace, /resolve_company_candidate_inquiry/)
   assert.match(workspace, /target_inquiry_id: inquiryId/)
   assert.match(workspace, /target_process_status: outcome/)
