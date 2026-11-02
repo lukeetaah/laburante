@@ -102,6 +102,41 @@ export function getMemberPageBounds(totalCount: number, page: number, pageSize =
   return { start, end, hasPrevious: safePage > 0, hasNext: end < safeTotal }
 }
 
+function parseDateOnly(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (!Number.isFinite(date.getTime())) throw new Error('invalid_date')
+  return date
+}
+
+export function addCalendarDays(value: string, days: number): string {
+  const date = parseDateOnly(value)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+const SHORT_MONTHS = ['ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.', 'sep.', 'oct.', 'nov.', 'dic.']
+
+export function formatShortDate(value: string): string {
+  const date = parseDateOnly(value)
+  return `${date.getUTCDate()} ${SHORT_MONTHS[date.getUTCMonth()]}`
+}
+
+export function formatCompactWeekRange(start: string, end: string): string {
+  const startDate = parseDateOnly(start)
+  const endDate = parseDateOnly(end)
+  const startMonth = SHORT_MONTHS[startDate.getUTCMonth()]
+  const endMonth = SHORT_MONTHS[endDate.getUTCMonth()]
+  if (startDate.getUTCFullYear() === endDate.getUTCFullYear() && startDate.getUTCMonth() === endDate.getUTCMonth()) {
+    return `${startDate.getUTCDate()}-${endDate.getUTCDate()} ${endMonth}`
+  }
+  return `${startDate.getUTCDate()} ${startMonth} - ${endDate.getUTCDate()} ${endMonth}`
+}
+
+export function getLastCompleteWeekStarts(currentWeekStart: string, count = 4): string[] {
+  return Array.from({ length: Math.max(0, count) }, (_, index) => addCalendarDays(currentWeekStart, -7 * (index + 1)))
+}
+
 export function formatWeekRange(start: string, end: string): string {
   const format = (value: string) => new Date(`${value}T12:00:00-03:00`).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
   return `${format(start)} – ${format(end)}`

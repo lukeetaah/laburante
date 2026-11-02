@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { formatRetentionCell, formatWeekRange, getBuenosAiresWeekStart, getMemberPageBounds, getRetentionState } from '../src/lib/growth-cohorts.ts'
+import { addCalendarDays, formatCompactWeekRange, formatRetentionCell, formatShortDate, formatWeekRange, getBuenosAiresWeekStart, getLastCompleteWeekStarts, getMemberPageBounds, getRetentionState } from '../src/lib/growth-cohorts.ts'
 
 test('retención distingue semanas futuras, sin datos y medición real', () => {
   assert.equal(formatRetentionCell({ relative_week: 1, state: 'in_progress', active_users: null, retention_percent: null }), 'En curso')
@@ -11,6 +11,23 @@ test('retención distingue semanas futuras, sin datos y medición real', () => {
 
 test('las semanas se muestran como rango y no como fecha de perfil', () => {
   assert.match(formatWeekRange('2026-10-26', '2026-11-01'), /26.?oct.*01.?nov/i)
+})
+
+test('las etiquetas compactas y la línea de tiempo respetan rangos semanales reales', () => {
+  assert.equal(formatCompactWeekRange('2026-09-07', '2026-09-13'), '7-13 sep.')
+  assert.equal(addCalendarDays('2026-11-02', 6), '2026-11-08')
+  assert.equal(formatShortDate('2026-11-09'), '9 nov.')
+  assert.deepEqual(getLastCompleteWeekStarts('2026-11-02', 4), ['2026-10-26', '2026-10-19', '2026-10-12', '2026-10-05'])
+})
+
+test('el dashboard prioriza lectura visual y honestidad estadística', () => {
+  const component = readFileSync(new URL('../src/components/admin/GrowthCohorts.tsx', import.meta.url), 'utf8')
+  assert.match(component, /Altas últimas cuatro semanas/)
+  assert.match(component, /Cuentas con perfil activo/)
+  assert.match(component, /Estamos empezando a medir el retorno de la comunidad/)
+  assert.match(component, /Base pequeña: cada usuario modifica sensiblemente el porcentaje/)
+  assert.match(component, /Sin referencia/)
+  assert.match(component, /cell\.active_users \?\? 0} de \$\{cohortSize\}/)
 })
 
 test('la semana anterior está completa y la actual o futura sigue en curso', () => {
@@ -38,8 +55,9 @@ test('la actividad de la última semana distingue medición disponible de no_dat
   assert.match(source, /active_last_week_state/)
   assert.match(source, /v_current_week_start - 7 >= v_measurement_available_from/)
   assert.match(source, /THEN 'measured'\s+ELSE 'no_data'/)
-  assert.match(component, /active_last_week_state === 'no_data'/)
-  assert.match(component, /value === null \? 'Sin datos'/)
+  assert.match(component, /RetentionTimeline/)
+  assert.match(component, /firstResultsDate/)
+  assert.doesNotMatch(component, /Activos última semana/)
 })
 
 test('los límites domingo-lunes usan semanas argentinas de lunes a domingo', () => {

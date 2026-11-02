@@ -22,6 +22,14 @@ Fecha de revisión: 1 de noviembre de 2026
 - Activación: los criterios se alinean con la completitud operativa del frontend. La métrica pública usa `status = 'activo'`, que coincide con el directorio de personas; la exposición excepcional de empresas `oculto` en `public_profiles` es sólo identidad de contacto y no se cuenta como perfil público.
 - Seguridad: las cuatro funciones usan `SECURITY DEFINER` con `SET search_path = pg_catalog, auth`, verifican `app_metadata.role = 'admin'` cuando corresponde y no consultan `user_metadata`. La tabla no recibe grants directos para `anon`, `authenticated` ni `service_role`; el acceso pasa por funciones explícitas.
 
+## Rediseño visual local
+
+- Crecimiento: tres indicadores principales — cuentas acumuladas, altas de la última semana cerrada y altas acumuladas de las últimas cuatro semanas completas— con períodos explícitos.
+- Adquisición: barras horizontales con rangos completos como `7-13 sep.`, escala comparable y marca discreta para la semana en curso. La variación se expresa en cuentas, no en porcentajes.
+- Comunidad: barras de progreso para cuentas con perfil completo y cuentas con perfil activo. Los perfiles activos no se llaman “visibles” porque la consulta no demuestra toda la elegibilidad pública del directorio. La cantidad de prestadores se muestra sin porcentaje inventado.
+- Retención: mientras no existan semanas completas medidas, se muestra una línea de tiempo de inicio, primera semana medible y disponibilidad estimada del primer resultado. Cuando existan datos, se usa un mapa de calor con `personas que volvieron de la cohorte · porcentaje`, estados explícitos y advertencia para bases menores a 20 integrantes.
+- El detalle paginado, el orden por creación, la última conexión de Auth y la lógica de filtros se conservaron.
+
 ## Alcance SQL
 
 - `user_activity` no se modifica: continúa siendo la fuente de recordatorios y la Edge Function de última conexión permanece intacta.
@@ -38,7 +46,7 @@ En esta etapa, Supabase CLI no está instalado en el entorno (`SUPABASE_CLI=NOT_
 
 ## Verificación local
 
-- Suite completa: **92/92 pruebas correctas**.
+- Suite completa: **94/94 pruebas correctas**.
 - `npm run build`: **correcto**; sólo produjo advertencias informativas de chunk grande, imports dinámicos inefectivos y sourcemap de Tailwind.
 - `git diff --check`: sin errores.
 - El build sólo conserva advertencias informativas de chunk grande, imports dinámicos inefectivos y sourcemap de Tailwind.
