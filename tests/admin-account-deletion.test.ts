@@ -76,8 +76,10 @@ test('los adjuntos de soporte se desacoplan vía Storage API sin perder trazabil
   assert.match(edgeFunction, /user_id:\s*null/)
 })
 
-test('el frontend administrativo mantiene protegida la acción destructiva hasta su verificación remota', () => {
-  assert.match(adminPage, /const ADMIN_ACCOUNT_DELETE_AVAILABLE = false/)
+test('el frontend administrativo expone la acción destructiva con sus guardas de seguridad internas', () => {
+  // Edge Function admin-delete-account v3 (verify_jwt: true) desplegada y certificada.
+  // La flag se activó después de validar migración, Edge Function y suite 114/114.
+  assert.match(adminPage, /const ADMIN_ACCOUNT_DELETE_AVAILABLE = true/)
   assert.match(adminPage, /disabled=\{!ADMIN_ACCOUNT_DELETE_AVAILABLE\}/)
   assert.match(adminPage, /accountToDelete/)
   assert.match(adminPage, /trimmedReason\.length < 10/)

@@ -20,7 +20,7 @@ test('el panel no conserva fallbacks administrativos directos ni borrado de reco
   assert.doesNotMatch(adminSource, /from\('recommendations'\)[\s\S]{0,180}\.update\(/)
   assert.doesNotMatch(adminSource, /admin_set_company_plan'\s*,/)
   assert.doesNotMatch(adminSource, /admin_delete_recommendation/)
-  assert.match(adminSource, /ADMIN_ACCOUNT_DELETE_AVAILABLE = false/)
+  assert.match(adminSource, /ADMIN_ACCOUNT_DELETE_AVAILABLE = true/)  // activado tras deploy v3 y 114/114
 })
 
 test('el editor preserva relaciones no modificadas al omitir sus patches', () => {

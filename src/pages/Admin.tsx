@@ -92,7 +92,7 @@ const REASON_LABELS: Record<string, string> = {
 
 // La disponibilidad de la Edge Function debe confirmarse en Supabase antes
 // de habilitar una acción destructiva desde el panel.
-const ADMIN_ACCOUNT_DELETE_AVAILABLE = false
+const ADMIN_ACCOUNT_DELETE_AVAILABLE = true
 
 export default function Admin() {
   const { user, isAdmin, loading: authLoading } = useAuthStore()
