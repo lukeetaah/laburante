@@ -117,7 +117,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         })
         const formatted: JobRequestWithDetails[] = data.map((item: any) => ({
           ...item,
-          pro_name: profilesById.get(item.profile_id)?.name || 'Profesional',
+          pro_name: profilesById.get(item.profile_id)?.name || item.professional_name || 'Profesional',
           pro_slug: profilesById.get(item.profile_id)?.slug || '',
           pro_photo: profilesById.get(item.profile_id)?.photo_url || null,
           pro_provincia: profilesById.get(item.profile_id)?.provincia || '',

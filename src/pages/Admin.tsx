@@ -180,6 +180,11 @@ export default function Admin() {
   const [supportReply, setSupportReply] = useState('')
   const [supportRequestCapture, setSupportRequestCapture] = useState(false)
   const [supportSaving, setSupportSaving] = useState(false)
+  const [accountToDelete, setAccountToDelete] = useState<any | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteStage, setDeleteStage] = useState<string | null>(null)
   // Company Operations (solicitudes y entrevistas)
   const [companyOps, setCompanyOps] = useState<{
     inquiries: any[]
@@ -903,7 +908,7 @@ export default function Admin() {
     setActionMessage('Perfil actualizado desde Administración y registrado en auditoría.')
   }
 
-  const handleDeleteAccount = async (profile: any) => {
+  const handleDeleteAccount = (profile: any) => {
     if (!ADMIN_ACCOUNT_DELETE_AVAILABLE) {
       setActionMessage('La eliminación administrativa está deshabilitada hasta verificar el despliegue de su Edge Function en Supabase.')
       return
@@ -912,27 +917,58 @@ export default function Admin() {
       setActionMessage('La cuenta administradora activa no se puede eliminar desde este panel.')
       return
     }
-    if (!window.confirm(`¿Eliminar definitivamente la cuenta de ${profile.name}? También se quitará su acceso y sus datos asociados.`)) return
-    const reason = window.prompt('Motivo obligatorio para eliminar definitivamente la cuenta:')?.trim()
-    if (!reason) return
-    const { data, error } = await supabase.functions.invoke('admin-delete-account', { body: { target_user_id: profile.id, reason } })
-    if (error || data?.error) {
-      setActionMessage(`No se pudo eliminar la cuenta: ${data?.error || error?.message || 'Error de eliminación'}. Aplicá la Edge Function de eliminación administrativa.`)
+    setAccountToDelete(profile)
+    setDeleteReason('')
+    setDeleteError(null)
+    setDeleteStage(null)
+  }
+
+  const executeDeleteAccount = async () => {
+    if (!accountToDelete || isDeletingAccount) return
+    const trimmedReason = deleteReason.trim()
+    if (trimmedReason.length < 10) {
+      setDeleteError('El motivo debe tener al menos 10 caracteres explicativos.')
       return
     }
-    setProfiles((prev) => prev.filter((p) => p.id !== profile.id))
-    setWaRequests((prev) => prev.filter((request) => request.profile_id !== profile.id))
+    setIsDeletingAccount(true)
+    setDeleteError(null)
+    setDeleteStage(null)
+
     try {
-      const raw = localStorage.getItem('laburante_v2_verified_wa')
-      const verified = raw ? JSON.parse(raw) : {}
-      delete verified[profile.id]
-      localStorage.setItem('laburante_v2_verified_wa', JSON.stringify(verified))
-      const requestsRaw = localStorage.getItem('laburante_v2_wa_verification_requests')
-      const requests = requestsRaw ? JSON.parse(requestsRaw) : []
-      localStorage.setItem('laburante_v2_wa_verification_requests', JSON.stringify(requests.filter((request: any) => request.profile_id !== profile.id)))
-    } catch {}
-    setActionMessage(`Cuenta de ${profile.name} eliminada definitivamente.`)
-    await loadData()
+      const { data, error } = await supabase.functions.invoke('admin-delete-account', {
+        body: { target_user_id: accountToDelete.id, deletion_reason: trimmedReason },
+      })
+
+      if (error || data?.error) {
+        const errorMsg = data?.error || error?.message || 'Error de eliminación'
+        const stage = data?.phase || 'desconocida'
+        setDeleteError(`Fallo en etapa ${stage}: ${errorMsg}. Podés reintentar para completar las etapas pendientes.`)
+        setDeleteStage(stage)
+        setIsDeletingAccount(false)
+        return
+      }
+
+      setProfiles((prev) => prev.filter((p) => p.id !== accountToDelete.id))
+      setWaRequests((prev) => prev.filter((request) => request.profile_id !== accountToDelete.id))
+      try {
+        const raw = localStorage.getItem('laburante_v2_verified_wa')
+        const verified = raw ? JSON.parse(raw) : {}
+        delete verified[accountToDelete.id]
+        localStorage.setItem('laburante_v2_verified_wa', JSON.stringify(verified))
+        const requestsRaw = localStorage.getItem('laburante_v2_wa_verification_requests')
+        const requests = requestsRaw ? JSON.parse(requestsRaw) : []
+        localStorage.setItem('laburante_v2_wa_verification_requests', JSON.stringify(requests.filter((request: any) => request.profile_id !== accountToDelete.id)))
+      } catch {}
+
+      const deletedName = accountToDelete.name
+      setAccountToDelete(null)
+      setIsDeletingAccount(false)
+      setActionMessage(`Cuenta de ${deletedName} eliminada definitivamente y auditada.`)
+      await loadData()
+    } catch (err: any) {
+      setDeleteError(`Error de red o invocación: ${err?.message || 'Fallo inesperado'}`)
+      setIsDeletingAccount(false)
+    }
   }
 
   const pendingReportsCount = reports.filter((r) => r.status === 'pendiente').length
@@ -3379,6 +3415,97 @@ export default function Admin() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {accountToDelete && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-4 sm:p-6 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Confirmar eliminación de cuenta">
+          <div className="relative mx-auto my-2 w-full max-w-lg rounded-2xl bg-[var(--color-laburante-surface)] p-6 shadow-2xl border border-rose-200">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-rose-600">Acción Administrativa Destructiva</p>
+                <h2 className="mt-1 font-heading text-xl font-bold text-gray-900">Eliminar cuenta definitivamente</h2>
+              </div>
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => setAccountToDelete(null)}
+                className="rounded-lg p-1 text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)] disabled:opacity-50"
+                aria-label="Cerrar"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50/70 p-4 text-xs text-rose-900 space-y-2">
+              <p>
+                Estás a punto de eliminar definitivamente la cuenta de <strong>{accountToDelete.name}</strong> ({accountToDelete.account_type === 'empresa' ? 'Empresa' : 'Persona'}).
+              </p>
+              <p className="font-mono text-[11px] text-rose-800">ID: {accountToDelete.id}</p>
+              {accountToDelete.auth_email && (
+                <p className="font-mono text-[11px] text-rose-800">Email: {accountToDelete.auth_email}</p>
+              )}
+              <p className="text-[11px] text-rose-700 leading-relaxed border-t border-rose-200/60 pt-2">
+                Esta acción revocará el acceso en Supabase Auth, purgará fotos y documentos en Storage, cancelará solicitudes activas y anonimizará las reseñas emitidas. No se pierden datos comerciales de terceros.
+              </p>
+            </div>
+
+            {deleteError && (
+              <div className="mb-4 rounded-xl border border-rose-300 bg-rose-100/90 p-3 text-xs text-rose-900">
+                <p className="font-bold">Error durante el proceso:</p>
+                <p className="mt-1">{deleteError}</p>
+                {deleteStage && (
+                  <p className="mt-1 text-[11px] font-medium text-rose-800">Etapa afectada: {deleteStage}</p>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-800">
+                Motivo obligatorio de eliminación <span className="font-normal text-gray-500">(mínimo 10 caracteres)</span>
+              </label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                disabled={isDeletingAccount}
+                rows={3}
+                placeholder="Explicá el motivo administrativo (ej. Solicitud expresa del titular, infracción grave de términos, cuenta duplicada verificada)..."
+                className="w-full rounded-xl border border-[var(--color-laburante-border)] p-3 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+              <div className="flex justify-between text-[11px] text-gray-500">
+                <span>{deleteReason.trim().length < 10 ? `Faltan ${10 - deleteReason.trim().length} caracteres` : 'Motivo válido'}</span>
+                <span>{deleteReason.trim().length} caracteres</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => setAccountToDelete(null)}
+                className="rounded-xl border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleteReason.trim().length < 10 || isDeletingAccount}
+                onClick={executeDeleteAccount}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 text-xs font-bold shadow disabled:opacity-50 transition-colors"
+              >
+                {isDeletingAccount ? (
+                  <>
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Eliminando en curso...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} /> Confirmar eliminación definitiva
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
