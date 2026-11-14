@@ -63,6 +63,7 @@ import {
   buildAdminProfilePatch,
   buildAdminProfileRpcPayload,
   buildAdminRelationPatches,
+  formatAdminProfileSaveError,
   validateAdminProfileEdit,
 } from '@/lib/admin-profile-edit'
 import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS } from '@/lib/support'
@@ -863,7 +864,7 @@ export default function Admin() {
 
       if (error) {
         console.error('admin_update_profile_failed', { code: error.code || 'rpc_error' })
-        setEditError(`No se pudo guardar la edición segura: ${error.message}. Aplicá la migración de guardrails administrativos.`)
+        setEditError(formatAdminProfileSaveError(error))
         setSavingProfile(false)
         return
       }
@@ -879,7 +880,7 @@ export default function Admin() {
       setActionMessage('Perfil actualizado desde Administración y registrado en auditoría.')
     } catch (err: any) {
       console.error('admin_update_profile_exception', err)
-      setEditError(`Error inesperado al guardar la edición: ${err?.message || 'Error de conexión'}.`)
+      setEditError(formatAdminProfileSaveError(err))
       setSavingProfile(false)
     }
   }

@@ -267,3 +267,46 @@ export function buildAdminProfileRpcPayload(
 
   return payload
 }
+
+export function formatAdminProfileSaveError(error: any): string {
+  if (!error) return 'Error desconocido al guardar la edición.'
+
+  const message = String(error.message || '')
+  const code = String(error.code || '')
+  const details = String(error.details || '')
+
+  // 1. Errores de Permisos / Autorización
+  if (code === '42501' || message.includes('admin_only') || message.includes('permission denied')) {
+    return 'Permiso denegado: tu sesión no cuenta con rol de administrador activo para realizar modificaciones de perfil.'
+  }
+
+  // 2. Errores de tipos / operadores SQL en PostgreSQL
+  if (code === '42883' || message.includes('operator does not exist')) {
+    return `Error de ejecución en la base de datos (${message}). La operación fue rechazada por una incompatibilidad de tipos en la función de actualización.`
+  }
+
+  // 3. Errores de objeto/esquema faltante
+  if (code === '42P01' || (message.includes('relation') && message.includes('does not exist'))) {
+    return `Error de esquema en la base de datos (${message}).`
+  }
+
+  // 4. Errores de validación de negocio emitidos por la RPC
+  if (message.includes('invalid_target_profile')) {
+    return 'El perfil seleccionado no es válido o ya no existe en el sistema.'
+  }
+  if (message.includes('invalid_edit_reason') || message.includes('missing_audit_reason')) {
+    return 'El motivo de auditoría ingresado no es válido (mínimo 3 caracteres requeridos).'
+  }
+  if (message.includes('unauthorized_field_update')) {
+    return `Intento de modificar un campo no autorizado en el perfil: ${details || message}.`
+  }
+
+  // 5. Errores de red / conectividad
+  if (message.includes('fetch') || message.includes('Network') || message.includes('Failed to fetch')) {
+    return 'Error de conexión con el servidor. Verificá tu conexión a internet e intentá nuevamente.'
+  }
+
+  // 6. Mensaje general transparente sin sugerencias engañosas de migraciones
+  return `No se pudo guardar la edición: ${message || 'Error en el servidor'}.`
+}
+

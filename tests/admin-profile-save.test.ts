@@ -5,6 +5,7 @@ import {
   buildAdminProfilePatch,
   buildAdminProfileRpcPayload,
   buildAdminRelationPatches,
+  formatAdminProfileSaveError,
   validateAdminProfileEdit,
   type AdminProfileLike,
   type AdminEditFormState,
@@ -247,3 +248,35 @@ test('construcción de RPC payload incluye edit_reason y patches exactos', () =>
     edit_reason: 'Normalización de mayúsculas',
   })
 })
+
+test('formateo de errores de guardado: no sugiere migraciones genéricas y clasifica errores SQL', () => {
+  // Error de operador/tipo SQL
+  const typeError = formatAdminProfileSaveError({
+    code: '42883',
+    message: 'operator does not exist: text ->> unknown',
+  })
+  assert.match(typeError, /incompatibilidad de tipos/)
+  assert.match(typeError, /operator does not exist: text ->> unknown/)
+  assert.doesNotMatch(typeError, /migración de guardrails/i)
+
+  // Error de permisos
+  const permError = formatAdminProfileSaveError({
+    code: '42501',
+    message: 'admin_only',
+  })
+  assert.match(permError, /permiso denegado/i)
+  assert.doesNotMatch(permError, /guardrails/i)
+
+  // Error de validación de motivo
+  const reasonError = formatAdminProfileSaveError({
+    message: 'invalid_edit_reason',
+  })
+  assert.match(reasonError, /motivo de auditoría/i)
+
+  // Error de red
+  const netError = formatAdminProfileSaveError({
+    message: 'Failed to fetch',
+  })
+  assert.match(netError, /conexión/i)
+})
+
