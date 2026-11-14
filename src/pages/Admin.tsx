@@ -58,6 +58,13 @@ import {
   Send,
 } from 'lucide-react'
 import { CURRENT_TERMS_VERSION } from '@/lib/constants'
+import {
+  applySkillUpdate,
+  buildAdminProfilePatch,
+  buildAdminProfileRpcPayload,
+  buildAdminRelationPatches,
+  validateAdminProfileEdit,
+} from '@/lib/admin-profile-edit'
 import { SUPPORT_CATEGORY_LABELS, SUPPORT_STATUS_LABELS } from '@/lib/support'
 import { formatProfileLocation } from '@/lib/profile-location'
 import { describeLastSignIn, type AdminAuthActivityStatus } from '@/lib/auth-activity'
@@ -150,6 +157,8 @@ export default function Admin() {
   const [editForm, setEditForm] = useState<any>({})
   const [editReason, setEditReason] = useState('')
   const [editSkillQuery, setEditSkillQuery] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
   const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [credentialsSaving, setCredentialsSaving] = useState(false)
   const [jobRequests, setJobRequests] = useState<any[]>([])
@@ -737,6 +746,8 @@ export default function Admin() {
     setEditingResumeUrl(null)
     setCredentialsOpen(false)
     setEditReason('')
+    setEditError(null)
+    setSavingProfile(false)
     setEditForm({
       name: profile.name || '',
       bio: profile.bio || '',
@@ -780,9 +791,9 @@ export default function Admin() {
     const name = value.trim()
     if (!name) return
     setEditForm((current: any) => {
-      const skills = current.skills || []
-      if (skills.some((skill: any) => String(skill.name || '').toLowerCase() === name.toLowerCase())) return current
-      return { ...current, skills: [...skills, { name }] }
+      const { skills, changed } = applySkillUpdate(current.skills || [], name)
+      if (!changed) return current
+      return { ...current, skills }
     })
     setEditSkillQuery('')
   }
@@ -822,66 +833,20 @@ export default function Admin() {
   }
 
   const handleSaveProfile = async () => {
-    if (!editingProfile || !editForm.name.trim() || !editForm.provincia.trim() || !editForm.localidad.trim()) {
-      setActionMessage('Completá nombre, provincia y localidad antes de guardar.')
+    if (savingProfile) return
+    setEditError(null)
+
+    if (!editingProfile) return
+
+    const validation = validateAdminProfileEdit(editingProfile, editForm, editReason)
+    if (!validation.isValid) {
+      setEditError(validation.error || 'No se pudo validar el formulario.')
       return
     }
-    if (editReason.trim().length < 3) {
-      setActionMessage('Ingresá un motivo de auditoría para guardar la edición administrativa.')
-      return
-    }
-    const normalizeOptionalText = (value: unknown) => {
-      const text = typeof value === 'string' ? value.trim() : ''
-      return text || null
-    }
-    const profileValues: Record<string, unknown> = {
-      name: editForm.name.trim(),
-      bio: normalizeOptionalText(editForm.bio),
-      provincia: editForm.provincia.trim(),
-      localidad: editForm.localidad.trim(),
-      zona_trabajo: normalizeOptionalText(editForm.zona_trabajo),
-      modalidad: editForm.modalidad,
-      hybrid_presencial_pct: editForm.modalidad === 'ambas' ? Number(editForm.hybrid_presencial_pct) : null,
-      hybrid_remoto_pct: editForm.modalidad === 'ambas' ? 100 - Number(editForm.hybrid_presencial_pct) : null,
-      disponibilidad: editForm.disponibilidad,
-      intent: normalizeOptionalText(editForm.intent),
-    }
-    const originalProfileValues: Record<string, unknown> = {
-      name: editingProfile.name?.trim() || '',
-      bio: normalizeOptionalText(editingProfile.bio),
-      provincia: editingProfile.provincia?.trim() || '',
-      localidad: editingProfile.localidad?.trim() || '',
-      zona_trabajo: normalizeOptionalText(editingProfile.zona_trabajo),
-      modalidad: editingProfile.modalidad,
-      hybrid_presencial_pct: editingProfile.modalidad === 'ambas' ? editingProfile.hybrid_presencial_pct : null,
-      hybrid_remoto_pct: editingProfile.modalidad === 'ambas' ? editingProfile.hybrid_remoto_pct : null,
-      disponibilidad: editingProfile.disponibilidad,
-      intent: normalizeOptionalText(editingProfile.intent),
-    }
-    const profilePatch: Record<string, unknown> = {}
-    Object.entries(profileValues).forEach(([field, value]) => {
-      if (value !== originalProfileValues[field]) profilePatch[field] = value
-    })
 
-    const currentSkills = (editForm.skills || []).map((skill: any) => ({ ...skill, name: String(skill.name || '').trim() })).filter((skill: any) => skill.name)
-    const originalSkills = (editingProfile.skills || [])
-      .map((skill: any) => ({ ...(typeof skill === 'object' ? skill : {}), name: typeof skill === 'string' ? skill : skill.name }))
-      .filter((skill: any) => skill.name)
-    const skillsChanged = JSON.stringify(currentSkills) !== JSON.stringify(originalSkills)
-    let skillsPatch: any[] | undefined
-    let servicesPatch: any[] | undefined
-    let contactsPatch: any[] | undefined
-    let languagesPatch: any[] | undefined
-
-    const relationPatch = (current: unknown[], original: unknown[]) => JSON.stringify(current) === JSON.stringify(original) ? undefined : current
-    servicesPatch = relationPatch((editForm.services || []).map((service: any) => ({ ...service, title: String(service.title || '').trim(), description: String(service.description || '').trim() || null, precio_orientativo: String(service.precio_orientativo || '').trim() || null })), editingProfile.services || [])
-    contactsPatch = relationPatch((editForm.contact_methods || []).map((contact: any) => ({ ...contact, type: String(contact.type || '').trim(), value: String(contact.value || '').trim(), is_public: contact.is_public !== false })).filter((contact: any) => contact.type || contact.value), editingProfile.contact_methods || [])
-    languagesPatch = relationPatch((editForm.languages || []).map((language: any) => ({ ...language, language: String(language.language || '').trim(), level: language.level || 'intermedio', is_public: language.is_public !== false })).filter((language: any) => language.language), editingProfile.profile_languages || [])
-
-    if (skillsChanged) {
-      skillsPatch = currentSkills.map((skill: any) => skill.id ? { id: skill.id, name: skill.name } : skill.name)
-    }
-
+    const profilePatch = buildAdminProfilePatch(editingProfile, editForm)
+    const { currentSkills, skillsPatch, servicesPatch, contactsPatch, languagesPatch } =
+      buildAdminRelationPatches(editingProfile, editForm)
     const rpcPayload: Record<string, unknown> = {
       target_profile_id: editingProfile.id,
       profile_patch: profilePatch,
@@ -892,20 +857,31 @@ export default function Admin() {
     if (contactsPatch !== undefined) rpcPayload.contact_methods_patch = contactsPatch
     if (languagesPatch !== undefined) rpcPayload.languages_patch = languagesPatch
 
-    const { error } = await (supabase.rpc as any)('admin_update_profile', rpcPayload)
+    setSavingProfile(true)
+    try {
+      const { error } = await (supabase.rpc as any)('admin_update_profile', rpcPayload)
 
-    if (error) {
-      setActionMessage(`No se pudo guardar la edición segura: ${error.message}. Aplicá la migración de guardrails administrativos.`)
-      return
+      if (error) {
+        console.error('admin_update_profile_failed', { code: error.code || 'rpc_error' })
+        setEditError(`No se pudo guardar la edición segura: ${error.message}. Aplicá la migración de guardrails administrativos.`)
+        setSavingProfile(false)
+        return
+      }
+
+      const localUpdates: Record<string, unknown> = { ...profilePatch }
+      if (skillsPatch !== undefined) localUpdates.skills = currentSkills
+      if (servicesPatch !== undefined) localUpdates.services = servicesPatch
+      if (contactsPatch !== undefined) localUpdates.contact_methods = contactsPatch
+      if (languagesPatch !== undefined) localUpdates.profile_languages = languagesPatch
+      setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? { ...p, ...localUpdates } : p))
+      setEditingProfile(null)
+      setSavingProfile(false)
+      setActionMessage('Perfil actualizado desde Administración y registrado en auditoría.')
+    } catch (err: any) {
+      console.error('admin_update_profile_exception', err)
+      setEditError(`Error inesperado al guardar la edición: ${err?.message || 'Error de conexión'}.`)
+      setSavingProfile(false)
     }
-    const localUpdates: Record<string, unknown> = { ...profilePatch }
-    if (skillsPatch !== undefined) localUpdates.skills = currentSkills
-    if (servicesPatch !== undefined) localUpdates.services = servicesPatch
-    if (contactsPatch !== undefined) localUpdates.contact_methods = contactsPatch
-    if (languagesPatch !== undefined) localUpdates.profile_languages = languagesPatch
-    setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? { ...p, ...localUpdates } : p))
-    setEditingProfile(null)
-    setActionMessage('Perfil actualizado desde Administración y registrado en auditoría.')
   }
 
   const handleDeleteAccount = (profile: any) => {
@@ -3523,6 +3499,12 @@ export default function Admin() {
               </div>
               <button type="button" onClick={() => setEditingProfile(null)} className="rounded-lg p-1 text-[var(--color-laburante-text-muted)] hover:bg-[var(--color-laburante-surface-alt)]" aria-label="Cerrar"><XCircle size={19} /></button>
             </div>
+            {editError && (
+              <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 animate-in fade-in">
+                <span>{editError}</span>
+                <button type="button" onClick={() => setEditError(null)} className="text-xs font-bold text-rose-700 hover:text-rose-900" aria-label="Cerrar aviso de error">✕</button>
+              </div>
+            )}
             <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 p-3">
               {editingProfile.photo_url ? <img src={editingProfile.photo_url} alt={`Foto de ${editingProfile.name}`} className="h-16 w-16 rounded-full object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xs text-[var(--color-laburante-text-muted)]">Sin foto</div>}
               <div className="space-y-1 text-xs">
@@ -3572,7 +3554,23 @@ export default function Admin() {
                 <button type="button" disabled={credentialsSaving} onClick={handleUpdateCredentials} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60 sm:col-span-2"><KeyRound size={14} /> {credentialsSaving ? 'Actualizando...' : 'Guardar datos de acceso'}</button>
               </div>}
             </div>
-            <button type="button" onClick={handleSaveProfile} className="btn-dark mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold"><Save size={14} /> Guardar cambios</button>
+            <button
+              type="button"
+              disabled={savingProfile}
+              onClick={handleSaveProfile}
+              className="btn-dark mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold disabled:opacity-60 cursor-pointer"
+            >
+              {savingProfile ? (
+                <>
+                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Guardando cambios...
+                </>
+              ) : (
+                <>
+                  <Save size={14} /> Guardar cambios
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
