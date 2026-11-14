@@ -380,7 +380,7 @@ export default function Admin() {
   const loadAdminAudit = async () => {
     const pageSize = 20
     const { data, error, count } = await (supabase.from('admin_audit_events') as any)
-      .select('id, actor_user_id, action, entity_type, entity_id, result, reason, changed_fields, correlation_id, created_at', { count: 'exact' })
+      .select('id, actor_user_id, action, entity_type, entity_id, result, reason, changed_fields, created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range((adminAuditPage - 1) * pageSize, adminAuditPage * pageSize - 1)
     if (error) {
