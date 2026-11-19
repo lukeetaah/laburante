@@ -244,6 +244,7 @@ export type Database = {
           code: string
           status: 'pendiente' | 'aprobado' | 'rechazado'
           reviewed_at: string | null
+          expires_at?: string | null
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['whatsapp_verification_requests']['Row'], 'id' | 'created_at'>
@@ -322,6 +323,14 @@ export type Database = {
       reserve_notification_email_quota: {
         Args: { daily_limit_value: number; monthly_limit_value: number }
         Returns: { allowed: boolean; reason: string | null }[]
+      }
+      user_update_verified_whatsapp: {
+        Args: { p_new_phone: string }
+        Returns: boolean
+      }
+      user_expire_pending_whatsapp_request: {
+        Args: { p_request_id: string }
+        Returns: boolean
       }
     }
     Enums: Record<string, never>

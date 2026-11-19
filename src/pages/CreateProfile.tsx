@@ -48,6 +48,7 @@ export default function CreateProfile() {
 
   // Modals state
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false)
+  const [allowChangeVerifiedWA, setAllowChangeVerifiedWA] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   // Dynamic lists
@@ -242,7 +243,7 @@ export default function CreateProfile() {
 
   const handleRemoveContact = (idx: number) => {
     const target = contactMethods[idx]
-    if (myProfile?.whatsapp_verified && target?.type === 'whatsapp') {
+    if (myProfile?.whatsapp_verified && target?.type === 'whatsapp' && !allowChangeVerifiedWA) {
       return
     }
     setContactMethods(contactMethods.filter((_, i) => i !== idx))
@@ -250,7 +251,7 @@ export default function CreateProfile() {
 
   const handleContactChange = (idx: number, field: string, val: string) => {
     const target = contactMethods[idx]
-    if (myProfile?.whatsapp_verified && target?.type === 'whatsapp') {
+    if (myProfile?.whatsapp_verified && target?.type === 'whatsapp' && !allowChangeVerifiedWA) {
       return
     }
     const updated = [...contactMethods]
@@ -1081,7 +1082,7 @@ export default function CreateProfile() {
 
           <div className="space-y-3">
             {contactMethods.map((c, idx) => {
-              const isVerifiedWA = Boolean(myProfile?.whatsapp_verified && c.type === 'whatsapp')
+              const isVerifiedWA = Boolean(myProfile?.whatsapp_verified && c.type === 'whatsapp' && !allowChangeVerifiedWA)
 
               return (
                 <div key={idx} className="space-y-1.5">
@@ -1145,11 +1146,28 @@ export default function CreateProfile() {
                     )}
                   </div>
 
-                  {isVerifiedWA && (
-                    <div className="rounded-xl bg-emerald-50/70 border border-emerald-200 px-3 py-2 text-xs text-emerald-900 flex items-start gap-2">
-                      <ShieldCheck size={15} className="text-emerald-600 shrink-0 mt-0.5" />
+                  {Boolean(myProfile?.whatsapp_verified && c.type === 'whatsapp') && !allowChangeVerifiedWA && (
+                    <div className="rounded-xl bg-emerald-50/70 border border-emerald-200 px-3 py-2 text-xs text-emerald-900 space-y-1.5">
+                      <div className="flex items-start gap-2">
+                        <ShieldCheck size={15} className="text-emerald-600 shrink-0 mt-0.5" />
+                        <span className="text-[11px] leading-relaxed">
+                          <strong>WhatsApp verificado oficialmente.</strong> Este número tiene el sello de confianza activo.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAllowChangeVerifiedWA(true)}
+                        className="text-[11px] text-amber-700 hover:text-amber-900 underline underline-offset-2 cursor-pointer ml-[23px]"
+                      >
+                        Quiero cambiar mi número de WhatsApp
+                      </button>
+                    </div>
+                  )}
+                  {Boolean(myProfile?.whatsapp_verified && c.type === 'whatsapp') && allowChangeVerifiedWA && (
+                    <div className="rounded-xl bg-amber-50/70 border border-amber-300 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+                      <ShieldAlert size={15} className="text-amber-600 shrink-0 mt-0.5" />
                       <span className="text-[11px] leading-relaxed">
-                        <strong>WhatsApp verificado oficialmente:</strong> este número está protegido contra modificaciones accidentales. Para cambiarlo, comunicate con Administración.
+                        <strong>Atención:</strong> si cambiás tu número de WhatsApp, la verificación anterior se invalidará y necesitarás verificar el nuevo número para recuperar el sello de confianza.
                       </span>
                     </div>
                   )}

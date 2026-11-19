@@ -20,6 +20,11 @@ import {
   searchTermVariants,
   scoreSearchDocument,
 } from '@/lib/search-matching'
+import {
+  generateWhatsAppReference,
+  isVerificationRequestExpired,
+  calculateExpirationDate,
+} from '@/lib/whatsapp-reference'
 
 export interface ProfileWithDetails {
   id: string
@@ -258,7 +263,7 @@ async function reconcileContactMethods(
   userId: string,
   desiredMethods: any[],
   isWhatsAppVerified: boolean
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; whatsappNumberChanged?: boolean }> {
   try {
     const { data: existingRows, error: fetchErr } = await (supabase.from('contact_methods') as any)
       .select('id, type, value, is_public')
@@ -275,21 +280,24 @@ async function reconcileContactMethods(
       (c: any) => Boolean(c?.value && String(c.value).trim())
     )
 
+    let whatsappNumberChanged = false
+
     if (verifiedRow) {
-      const idx = sanitizedDesired.findIndex((c: any) => c.type === 'whatsapp')
-      if (idx >= 0) {
-        sanitizedDesired[idx].value = verifiedRow.value
+      const desiredWa = sanitizedDesired.find((c: any) => c.type === 'whatsapp')
+      const cleanVerified = verifiedRow.value.replace(/\D/g, '')
+      const cleanDesired = desiredWa?.value?.replace(/\D/g, '')
+
+      if (cleanDesired && cleanDesired !== cleanVerified) {
+        whatsappNumberChanged = true
+      } else if (!desiredWa) {
+        whatsappNumberChanged = true
       } else {
-        sanitizedDesired.unshift({
-          type: 'whatsapp',
-          value: verifiedRow.value,
-          is_public: verifiedRow.is_public !== false,
-        })
+        desiredWa.value = verifiedRow.value
       }
     }
 
     const rowsToDelete = existing.filter((ex) => {
-      if (verifiedRow && ex.id === verifiedRow.id) return false
+      if (verifiedRow && ex.id === verifiedRow.id && !whatsappNumberChanged) return false
       const stillDesired = sanitizedDesired.some(
         (des: any) => des.type === ex.type && des.value.trim().toLowerCase() === ex.value.trim().toLowerCase()
       )
@@ -937,12 +945,39 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }
       }
 
-      // 4. Reconcile Contact Methods safely (never deletes or alters verified WhatsApp)
+      // 4. Reconcile Contact Methods safely
       const isWAVerified = Boolean(existingProfile?.whatsapp_verified || get().myProfile?.whatsapp_verified)
       const contactSync = await reconcileContactMethods(userId, profileData.contact_methods || [], isWAVerified)
       if (contactSync.error) {
         captureAppError(new Error(contactSync.error), 'profile_contact_sync')
         return { error: contactSync.error }
+      }
+
+      if (contactSync.whatsappNumberChanged) {
+        // Invocar RPC atómica y transaccional para invalidar la certificación y actualizar de forma segura
+        const newWa = (profileData.contact_methods || []).find((c: any) => c.type === 'whatsapp')?.value || ''
+        try {
+          const { error: rpcErr } = await (supabase.rpc as any)('user_update_verified_whatsapp', {
+            p_new_phone: newWa,
+          })
+          if (rpcErr) {
+            console.warn('user_update_verified_whatsapp aviso/fallback:', rpcErr.message)
+            // Fallback directo por si la migración aún no fue ejecutada
+            await (supabase.from('profiles') as any)
+              .update({ whatsapp_verified: false, whatsapp_verified_at: null })
+              .eq('id', userId)
+            await (supabase.from('whatsapp_verification_requests') as any)
+              .update({ status: 'rechazado' })
+              .eq('profile_id', userId)
+              .eq('status', 'pendiente')
+          }
+        } catch (e) {
+          console.warn('user_update_verified_whatsapp omitida:', e)
+        }
+
+        const localWA = getLocalVerifiedWA()
+        delete localWA[userId]
+        saveLocalVerifiedWA(localWA)
       }
 
       // Refresh myProfile in state
@@ -1014,38 +1049,58 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           .maybeSingle()
 
         if (!checkErr && pendingDb?.id) {
-          // Si ya existe una solicitud pendiente, devolvemos la existente y NO generamos otro código ni insertamos duplicados
-          return {
-            error: null,
-            code: pendingDb.code,
-            officialPhone,
-            requestId: pendingDb.id,
-            alreadyPending: true,
+          // Si la solicitud expiró, la marcamos como rechazada usando la RPC autorizada bajo RLS
+          if (isVerificationRequestExpired(pendingDb.expires_at)) {
+            try {
+              await (supabase.rpc as any)('user_expire_pending_whatsapp_request', {
+                p_request_id: pendingDb.id,
+              })
+            } catch {
+              // Fallback directo por si la migración aún no se ejecutó
+              await (supabase.from('whatsapp_verification_requests') as any)
+                .update({ status: 'rechazado' })
+                .eq('id', pendingDb.id)
+                .catch(() => {})
+            }
+          } else {
+            // Solicitud vigente: devolvemos la existente
+            return {
+              error: null,
+              code: pendingDb.code,
+              officialPhone,
+              requestId: pendingDb.id,
+              alreadyPending: true,
+            }
           }
         }
       } catch (checkErr) {
         console.warn('Verificación previa en Supabase de solicitud WhatsApp pendiente omitida:', checkErr)
       }
 
-      // 2. Comprobar en memoria local si existe una solicitud pendiente
+      // 2. Comprobar en memoria local si existe una solicitud pendiente vigente
       const localExisting = getLocalWARequests().find(
         (r) => r.profile_id === profileId && r.status === 'pendiente'
       )
       if (localExisting) {
-        return {
-          error: null,
-          code: localExisting.code,
-          officialPhone,
-          requestId: localExisting.id,
-          alreadyPending: true,
+        if (isVerificationRequestExpired(localExisting.expires_at)) {
+          localExisting.status = 'rechazado'
+          saveLocalWARequests(getLocalWARequests())
+        } else {
+          return {
+            error: null,
+            code: localExisting.code,
+            officialPhone,
+            requestId: localExisting.id,
+            alreadyPending: true,
+          }
         }
       }
 
-      // 3. Crear una única solicitud nueva
-      const codeDigits = Math.floor(100000 + Math.random() * 900000).toString()
-      const code = `LAB-${codeDigits}`
+      // 3. Crear una única solicitud nueva con referencia criptográfica y vencimiento de 48 horas
+      const code = generateWhatsAppReference()
       const requestId = generateUUID()
       const now = new Date().toISOString()
+      const expiresAt = calculateExpirationDate(48)
 
       const newReq: WhatsAppVerificationRequest = {
         id: requestId,
@@ -1056,6 +1111,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         code,
         status: 'pendiente',
         reviewed_at: null,
+        expires_at: expiresAt,
         created_at: now,
       }
 
@@ -1065,9 +1121,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       )
       saveLocalWARequests([newReq, ...existing])
 
-      // Insertar en Supabase
+      // Insertar en Supabase (con fallback tolerante si la migración de expires_at aún no fue aplicada)
       try {
-        const { data: inserted, error: insErr } = await (supabase.from('whatsapp_verification_requests') as any).insert({
+        let insertRes = await (supabase.from('whatsapp_verification_requests') as any).insert({
           id: requestId,
           profile_id: profileId,
           profile_name: profileName,
@@ -1075,8 +1131,25 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           phone_declared: phoneDeclared,
           code,
           status: 'pendiente',
+          expires_at: expiresAt,
           created_at: now,
         }).select().maybeSingle()
+
+        // Si la columna expires_at aún no existe en el esquema remoto, reintentar sin ella
+        if (insertRes.error && /expires_at|PGRST204|42703/i.test(insertRes.error.message || '')) {
+          insertRes = await (supabase.from('whatsapp_verification_requests') as any).insert({
+            id: requestId,
+            profile_id: profileId,
+            profile_name: profileName,
+            profile_slug: profileSlug,
+            phone_declared: phoneDeclared,
+            code,
+            status: 'pendiente',
+            created_at: now,
+          }).select().maybeSingle()
+        }
+
+        const { data: inserted, error: insErr } = insertRes
 
         if (insErr) {
           // Si colisiona con el índice único o constraint de solicitud pendiente, recuperar la existente

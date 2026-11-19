@@ -26,17 +26,20 @@ export default function ProfileCompletionCard({
   )
   const isWhatsAppVerified = Boolean(profile.whatsapp_verified)
 
-  const steps = [
+  const requiredSteps = [
     { label: 'Cuenta creada', done: true },
     { label: 'Agregá una descripción sobre vos', done: hasBio },
     ...(!isSeeker ? [{ label: 'Contá qué sabés hacer (oficios y servicios)', done: hasSkills }] : []),
     { label: 'Completá tu zona y modalidad de trabajo', done: hasLocation },
     { label: 'Sumá al menos un medio de contacto', done: hasContact },
-    { label: 'Verificá tu WhatsApp para tener el sello oficial', done: isWhatsAppVerified },
   ]
 
-  const completedCount = steps.filter((s) => s.done).length
-  const isFullyComplete = completedCount === steps.length
+  const displaySteps = [
+    ...requiredSteps,
+    { label: 'Verificá tu WhatsApp para sumar el sello de confianza (opcional)', done: isWhatsAppVerified, optional: true },
+  ]
+
+  const isFullyComplete = requiredSteps.every((s) => s.done)
 
   if (isFullyComplete) {
     return (
@@ -53,13 +56,26 @@ export default function ProfileCompletionCard({
               </p>
             </div>
           </div>
-          <Link
-            to="/crear-perfil"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-emerald-300 font-heading font-bold text-xs text-emerald-900 hover:bg-emerald-100/60 transition-colors shrink-0 shadow-2xs"
-          >
-            <Edit3 size={13} />
-            <span>Editar perfil</span>
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            {!isWhatsAppVerified && onOpenWhatsAppVerify && (
+              <button
+                type="button"
+                onClick={onOpenWhatsAppVerify}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-100/70 border border-emerald-300 font-heading font-bold text-xs text-emerald-900 hover:bg-emerald-200/60 transition-colors shadow-2xs cursor-pointer"
+                title="Sumar el sello oficial de confianza de WhatsApp"
+              >
+                <ShieldCheck size={13} className="text-emerald-700" />
+                <span>Sumar sello (opcional)</span>
+              </button>
+            )}
+            <Link
+              to="/crear-perfil"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-emerald-300 font-heading font-bold text-xs text-emerald-900 hover:bg-emerald-100/60 transition-colors shadow-2xs"
+            >
+              <Edit3 size={13} />
+              <span>Editar perfil</span>
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -85,7 +101,7 @@ export default function ProfileCompletionCard({
 
       {/* Progress Checklist */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-        {steps.map((step, idx) => (
+        {displaySteps.map((step, idx) => (
           <div
             key={idx}
             className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs transition-colors ${

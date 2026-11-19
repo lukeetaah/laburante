@@ -2333,7 +2333,7 @@ export default function Admin() {
                         <p className="font-bold text-[var(--color-laburante-text)]">{req.phone_declared}</p>
                       </div>
                       <div>
-                        <span className="text-[var(--color-laburante-text-muted)]">Código:</span>
+                        <span className="text-[var(--color-laburante-text-muted)]">Referencia:</span>
                         <p className="font-mono font-bold text-indigo-800">{req.code}</p>
                       </div>
                       {req.reviewed_at && (

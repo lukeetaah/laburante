@@ -124,3 +124,85 @@ test('Oficios keeps its parent behavior and accepts a subcategory filter', () =>
   assert.deepEqual(categorySearchTerms('Carpinteria', categories), ['Carpintería'])
   assert.equal(matchesCategoryDocument({ publicText: '', workText: 'Carpintería' }, categorySearchTerms('Carpinteria', categories).map((term) => normalizeSearchText(term))), true)
 })
+
+test('Aeronáutica matches TCP, TMA and related aviation specialties with work evidence', () => {
+  const aeroTerms = categoryWorkTerms({
+    subcategories: [
+      'Tripulante de cabina de pasajeros',
+      'Auxiliar de vuelo',
+      'Piloto comercial',
+      'Mecánico aeronáutico',
+      'Técnico en mantenimiento de aeronaves',
+      'Despachante de aeronaves',
+    ],
+  })
+
+  const tcpDoc = { publicText: 'Perfil aeronáutico', workText: 'Tripulante de cabina de pasajeros en vuelos comerciales' }
+  const tmaDoc = { publicText: 'Base Ezeiza', workText: 'Mecánico aeronáutico habilitado TMA' }
+  const falseDoc = { publicText: 'Viajo mucho en avión como pasajero', workText: 'Ventas de oficina' }
+
+  assert.equal(matchesCategoryDocument(tcpDoc, aeroTerms), true)
+  assert.equal(matchesCategoryDocument(tmaDoc, aeroTerms), true)
+  assert.equal(matchesCategoryDocument(falseDoc, aeroTerms), false)
+})
+
+test('Marítimo, portuario y naval matches sailors and port operators', () => {
+  const maritimeTerms = categoryWorkTerms({
+    subcategories: ['Marinero', 'Marina mercante', 'Patrón de embarcación', 'Estibador', 'Buzo profesional'],
+  })
+
+  const sailorDoc = { publicText: 'Puerto Madryn', workText: 'Marinero de cubierta en marina mercante' }
+  const portDoc = { publicText: 'Terminal Portuaria', workText: 'Estibador y operador portuario' }
+  const falseDoc = { publicText: 'Me gusta navegar en kayak los fines de semana', workText: 'Contabilidad' }
+
+  assert.equal(matchesCategoryDocument(sailorDoc, maritimeTerms), true)
+  assert.equal(matchesCategoryDocument(portDoc, maritimeTerms), true)
+  assert.equal(matchesCategoryDocument(falseDoc, maritimeTerms), false)
+})
+
+test('Ferroviario, logística y maquinaria pesada matches drivers and operators', () => {
+  const transportTerms = categoryWorkTerms({
+    subcategories: ['Conductor ferroviario', 'Maquinista', 'Chofer de camión', 'Clarkista', 'Operador de autoelevador'],
+  })
+
+  const trainDoc = { publicText: 'Línea Mitre', workText: 'Maquinista y conductor ferroviario con experiencia' }
+  const clarkDoc = { publicText: 'Parque Industrial', workText: 'Clarkista y operador de autoelevador en depósito' }
+  const truckerDoc = { publicText: 'Ruta 3', workText: 'Chofer de camión de larga distancia' }
+  const falseDoc = { publicText: 'Tomo el tren todos los días', workText: 'Redacción de contenidos' }
+
+  assert.equal(matchesCategoryDocument(trainDoc, transportTerms), true)
+  assert.equal(matchesCategoryDocument(clarkDoc, transportTerms), true)
+  assert.equal(matchesCategoryDocument(truckerDoc, transportTerms), true)
+  assert.equal(matchesCategoryDocument(falseDoc, transportTerms), false)
+})
+
+test('Industria y manufactura matches CNC turners and mold makers', () => {
+  const industrialTerms = categoryWorkTerms({
+    subcategories: ['Operario industrial', 'Tornero', 'Operador CNC', 'Matricero', 'Fresador', 'Electromecánica'],
+  })
+
+  const cncDoc = { publicText: 'Taller metalúrgico', workText: 'Tornero y operador CNC matricero' }
+  const electroDoc = { publicText: 'Planta automotriz', workText: 'Técnico en electromecánica y mantenimiento' }
+  const falseDoc = { publicText: 'Compro productos industriales', workText: 'Marketing digital' }
+
+  assert.equal(matchesCategoryDocument(cncDoc, industrialTerms), true)
+  assert.equal(matchesCategoryDocument(electroDoc, industrialTerms), true)
+  assert.equal(matchesCategoryDocument(falseDoc, industrialTerms), false)
+})
+
+test('Pesca y servicios funerarios match specific work evidence', () => {
+  const maritimeTerms = categoryWorkTerms({
+    subcategories: ['Pesca', 'Pescador', 'Acuicultura'],
+  })
+  const funeralTerms = categoryWorkTerms({
+    subcategories: ['Servicios funerarios', 'Cochería'],
+  })
+
+  const fishermanDoc = { publicText: 'Puerto Mar del Plata', workText: 'Pescador artesanal y acuicultura' }
+  const funeralDoc = { publicText: 'Sepelios', workText: 'Gestión de servicios funerarios y cochería' }
+  const falseDoc = { publicText: 'Pescadería de barrio', workText: 'Vendedor de mostrador' }
+
+  assert.equal(matchesCategoryDocument(fishermanDoc, maritimeTerms), true)
+  assert.equal(matchesCategoryDocument(funeralDoc, funeralTerms), true)
+  assert.equal(matchesCategoryDocument(falseDoc, funeralTerms), false)
+})
