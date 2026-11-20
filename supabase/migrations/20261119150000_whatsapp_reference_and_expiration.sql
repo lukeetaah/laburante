@@ -132,7 +132,51 @@ BEGIN
 END;
 $$;
 
--- 4. Función RPC administrativa actualizada (ORDEN DE BLOQUEOS ANTI-DEADLOCK: profiles -> requests -> contacts):
+-- 4. Normalización telefónica inteligente para números argentinos e internacionales
+CREATE OR REPLACE FUNCTION public.normalize_whatsapp_phone(p_phone TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SET search_path = pg_catalog
+AS $$
+DECLARE
+  v_digits TEXT;
+BEGIN
+  v_digits := regexp_replace(trim(p_phone), '[^0-9]', '', 'g');
+
+  -- Si comienza con código de país Argentina (549 o 54):
+  IF v_digits ~ '^549[0-9]{10}$' THEN
+    v_digits := substring(v_digits from 4);
+  ELSIF v_digits ~ '^54[0-9]{10}$' THEN
+    v_digits := substring(v_digits from 3);
+  END IF;
+
+  -- Si comienza con 0 (prefijo interurbano nacional, ej: 011, 0351, 0341):
+  IF v_digits ~ '^0[0-9]{10,}$' THEN
+    v_digits := substring(v_digits from 2);
+  END IF;
+
+  -- Si tiene prefijo móvil 15 luego del código de área:
+  -- Área de 2 dígitos (AMBA 11): 11 15 xxxxxxxx
+  IF v_digits ~ '^1115[0-9]{8}$' THEN
+    v_digits := '11' || substring(v_digits from 5);
+  -- Áreas de 3 dígitos (ej: 351, 341, 261, 221, etc.):
+  ELSIF v_digits ~ '^[0-9]{3}15[0-9]{7}$' THEN
+    v_digits := substring(v_digits from 1 for 3) || substring(v_digits from 6);
+  -- Áreas de 4 dígitos (ej: 2944, 2202, etc.):
+  ELSIF v_digits ~ '^[0-9]{4}15[0-9]{6}$' THEN
+    v_digits := substring(v_digits from 1 for 4) || substring(v_digits from 7);
+  END IF;
+
+  RETURN v_digits;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.normalize_whatsapp_phone(TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.normalize_whatsapp_phone(TEXT) TO authenticated;
+
+-- 5. Función RPC administrativa actualizada (ORDEN DE BLOQUEOS ANTI-DEADLOCK: profiles -> requests -> contacts):
 CREATE OR REPLACE FUNCTION public.admin_approve_whatsapp_verification(
   p_request_id UUID,
   p_code TEXT
@@ -261,26 +305,48 @@ BEGIN
   END IF;
 
   IF v_contact_id IS NULL THEN
-    RAISE EXCEPTION 'whatsapp_phone_mismatch';
+    -- Si el perfil aún no tiene fila de contacto WhatsApp en la base de datos (por ejemplo, si
+    -- inició la verificación durante el registro previo a guardar el perfil), se crea
+    -- el método de contacto verificado de forma segura para este perfil:
+    INSERT INTO public.contact_methods (
+      profile_id,
+      type,
+      value,
+      is_public,
+      consent_at
+    )
+    VALUES (
+      v_profile_id,
+      'whatsapp',
+      v_phone,
+      false,
+      v_now
+    );
+  ELSE
+    -- Si ya existe un método de contacto de WhatsApp para este perfil, comprobar que el usuario
+    -- no haya modificado su número a uno diferente que invalide esta solicitud:
+    BEGIN
+      v_normalized_current_phone := public.normalize_whatsapp_phone(trim(COALESCE(v_current_contact_phone, '')));
+    EXCEPTION WHEN OTHERS THEN
+      v_normalized_current_phone := NULL;
+    END;
+
+    -- Comprobación nulo-segura y tolerante a formatos equivalentes (comparación canónica o de 10 dígitos nacionales):
+    IF v_normalized_current_phone IS NULL
+       OR (
+         v_normalized_current_phone <> v_normalized_phone
+         AND right(v_normalized_current_phone, 10) <> right(v_normalized_phone, 10)
+       ) THEN
+      RAISE EXCEPTION 'whatsapp_phone_mismatch';
+    END IF;
+
+    -- Sincronizar formato exacto declarado
+    UPDATE public.contact_methods
+       SET value = v_phone
+     WHERE id = v_contact_id
+       AND profile_id = v_profile_id
+       AND type = 'whatsapp';
   END IF;
-
-  BEGIN
-    v_normalized_current_phone := public.normalize_whatsapp_phone(trim(COALESCE(v_current_contact_phone, '')));
-  EXCEPTION WHEN OTHERS THEN
-    v_normalized_current_phone := NULL;
-  END;
-
-  -- Integridad ante cambio de número:
-  IF v_normalized_current_phone IS NULL OR v_normalized_current_phone <> v_normalized_phone THEN
-    RAISE EXCEPTION 'whatsapp_phone_mismatch';
-  END IF;
-
-  -- Sincronizar formato exacto
-  UPDATE public.contact_methods
-     SET value = v_phone
-   WHERE id = v_contact_id
-     AND profile_id = v_profile_id
-     AND type = 'whatsapp';
 
   -- Actualizar verificación en el perfil
   UPDATE public.profiles

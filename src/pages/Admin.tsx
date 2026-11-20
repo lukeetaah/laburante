@@ -28,6 +28,7 @@ import {
   EyeOff,
   Trash2,
   Filter,
+  Copy,
   MessageCircle,
   ExternalLink,
   Check,
@@ -143,6 +144,9 @@ export default function Admin() {
   const [adminAuditPage, setAdminAuditPage] = useState(1)
   const [adminAuditTotal, setAdminAuditTotal] = useState(0)
   const [waRequests, setWaRequests] = useState<WhatsAppVerificationRequest[]>([])
+  const [waSearch, setWaSearch] = useState('')
+  const [waStatusFilter, setWaStatusFilter] = useState<'todos' | 'pendiente' | 'aprobado' | 'rechazado'>('todos')
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [unconfirmedRegistrations, setUnconfirmedRegistrations] = useState<any[]>([])
   const [unconfirmedFilter, setUnconfirmedFilter] = useState<'todos' | 'pendiente' | 'recordatorio_1' | 'recordatorio_2' | 'limpieza_programada' | 'excluido_actividad'>('todos')
   const [unconfirmedSearch, setUnconfirmedSearch] = useState('')
@@ -2274,113 +2278,229 @@ export default function Admin() {
               Solicitudes de verificación de WhatsApp
             </p>
             <p className="text-[11px] text-indigo-800 leading-relaxed">
-              Los profesionales envían un mensaje con su código único a la Línea Oficial de WhatsApp. Comprobá que el remitente coincida con el número declarado y aprobá.
+              Los profesionales envían un mensaje con su nombre y código único a la Línea Oficial de WhatsApp. Comprobá la referencia unívoca en el panel y aprobá la certificación para el perfil correspondiente.
             </p>
           </div>
 
-          {waRequests.length === 0 ? (
-            <div className="p-10 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
-              No hay solicitudes de verificación por el momento.
+          {/* Filtros y búsqueda */}
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por referencia (LB-...), nombre o teléfono..."
+                value={waSearch}
+                onChange={(e) => setWaSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] focus:outline-hidden focus:border-indigo-500"
+              />
             </div>
-          ) : (
-            <div className="space-y-3">
-              {waRequests.map((req) => {
-                const requestsForProfile = waRequests.filter((r) => r.profile_id === req.profile_id)
-                const hasDuplicates = requestsForProfile.length > 1
-
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {(['todos', 'pendiente', 'aprobado', 'rechazado'] as const).map((filterStatus) => {
+                const count = filterStatus === 'todos'
+                  ? waRequests.length
+                  : waRequests.filter((r) => r.status === filterStatus).length
                 return (
-                  <div
-                    key={req.id}
-                    className={`p-5 rounded-2xl border bg-[var(--color-laburante-surface)] space-y-3 ${
-                      req.status === 'pendiente' ? 'border-indigo-300' : 'border-[var(--color-laburante-border)]'
+                  <button
+                    key={filterStatus}
+                    type="button"
+                    onClick={() => setWaStatusFilter(filterStatus)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-colors whitespace-nowrap cursor-pointer ${
+                      waStatusFilter === filterStatus
+                        ? 'bg-indigo-700 text-white'
+                        : 'bg-[var(--color-laburante-surface)] text-[var(--color-laburante-text-secondary)] border border-[var(--color-laburante-border)] hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                            req.status === 'pendiente'
-                              ? 'bg-amber-100 text-amber-800'
-                              : req.status === 'aprobado'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {req.status === 'pendiente' ? '⏳ Pendiente' : req.status === 'aprobado' ? '✅ Aprobada' : '❌ Rechazada'}
-                        </span>
-                        {hasDuplicates && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200" title="Historial de solicitudes registradas para este perfil">
-                            Total solicitudes: {requestsForProfile.length}
-                          </span>
-                        )}
-                        <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
-                          {req.profile_name}
-                        </h4>
-                        {req.profile_slug && (
-                          <Link to={`/p/${req.profile_slug}`} target="_blank" className="text-[11px] text-[var(--color-laburante-indigo)] hover:underline">
-                            @{req.profile_slug}
-                          </Link>
-                        )}
-                      </div>
-                      <span className="text-xs text-[var(--color-laburante-text-muted)]">
-                        {new Date(req.created_at).toLocaleDateString()} {new Date(req.created_at).toLocaleTimeString()}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs">
-                      <div>
-                        <span className="text-[var(--color-laburante-text-muted)]">Número declarado:</span>
-                        <p className="font-bold text-[var(--color-laburante-text)]">{req.phone_declared}</p>
-                      </div>
-                      <div>
-                        <span className="text-[var(--color-laburante-text-muted)]">Referencia:</span>
-                        <p className="font-mono font-bold text-indigo-800">{req.code}</p>
-                      </div>
-                      {req.reviewed_at && (
-                        <div>
-                          <span className="text-[var(--color-laburante-text-muted)]">Fecha de resolución:</span>
-                          <p className="font-medium text-[var(--color-laburante-text)]">
-                            {new Date(req.reviewed_at).toLocaleDateString()} {new Date(req.reviewed_at).toLocaleTimeString()}
-                          </p>
-                        </div>
-                      )}
-                      <div className="flex items-end">
-                        <a
-                          href={`https://wa.me/${req.phone_declared.replace(/[^0-9]/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 transition-colors"
-                        >
-                          <MessageCircle size={13} />
-                          Abrir chat con el profesional
-                          <ExternalLink size={11} />
-                        </a>
-                      </div>
-                    </div>
-
-                    {req.status === 'pendiente' && (
-                      <div className="flex flex-wrap items-center gap-2 pt-2">
-                        <button
-                          onClick={() => handleApproveWA(req)}
-                          className="py-1.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Check size={14} />
-                          Aprobar y Certificar ✓
-                        </button>
-                        <button
-                          onClick={() => handleRejectWA(req)}
-                          className="py-1.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <XCircle size={14} />
-                          Rechazar
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                    {filterStatus === 'todos' ? 'Todas' : filterStatus === 'pendiente' ? 'Pendientes' : filterStatus === 'aprobado' ? 'Aprobadas' : 'Rechazadas'} ({count})
+                  </button>
                 )
               })}
             </div>
-          )}
+          </div>
+
+          {(() => {
+            const filteredWaRequests = waRequests.filter((req) => {
+              if (waStatusFilter !== 'todos' && req.status !== waStatusFilter) return false
+              if (waSearch.trim()) {
+                const q = waSearch.toLowerCase().trim()
+                const qDigits = q.replace(/[^0-9]/g, '')
+                const matchName = (req.profile_name || '').toLowerCase().includes(q)
+                const matchCode = (req.code || '').toLowerCase().includes(q)
+                const matchPhone = qDigits && (req.phone_declared || '').replace(/[^0-9]/g, '').includes(qDigits)
+                if (!matchName && !matchCode && !matchPhone) return false
+              }
+              return true
+            })
+
+            if (filteredWaRequests.length === 0) {
+              return (
+                <div className="p-10 text-center rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] text-xs text-[var(--color-laburante-text-secondary)]">
+                  {waRequests.length === 0
+                    ? 'No hay solicitudes de verificación por el momento.'
+                    : 'No se encontraron solicitudes que coincidan con la búsqueda o filtro.'}
+                </div>
+              )
+            }
+
+            return (
+              <div className="space-y-3">
+                {filteredWaRequests.map((req) => {
+                  const requestsForProfile = waRequests.filter((r) => r.profile_id === req.profile_id)
+                  const hasDuplicates = requestsForProfile.length > 1
+                  const cleanCurrentPhone = (req.phone_declared || '').replace(/[^0-9]/g, '')
+                  const samePhoneRequests = cleanCurrentPhone
+                    ? waRequests.filter((r) => (r.phone_declared || '').replace(/[^0-9]/g, '') === cleanCurrentPhone && r.profile_id !== req.profile_id)
+                    : []
+                  const isExpired = req.expires_at ? new Date(req.expires_at).getTime() < Date.now() : false
+
+                  return (
+                    <div
+                      key={req.id}
+                      className={`p-5 rounded-2xl border bg-[var(--color-laburante-surface)] space-y-3 ${
+                        req.status === 'pendiente'
+                          ? isExpired
+                            ? 'border-amber-400 bg-amber-50/20'
+                            : 'border-indigo-300'
+                          : 'border-[var(--color-laburante-border)]'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[var(--color-laburante-border)]/60">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              req.status === 'pendiente'
+                                ? isExpired
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                                : req.status === 'aprobado'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {req.status === 'pendiente'
+                              ? isExpired
+                                ? '⚠️ Vencida'
+                                : '⏳ Pendiente'
+                              : req.status === 'aprobado'
+                              ? '✅ Aprobada'
+                              : '❌ Rechazada'}
+                          </span>
+                          {hasDuplicates && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200" title="Historial de solicitudes registradas para este perfil">
+                              Total solicitudes este perfil: {requestsForProfile.length}
+                            </span>
+                          )}
+                          {samePhoneRequests.length > 0 && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200" title="Mismo número telefónico utilizado en otra cuenta">
+                              Mismo teléfono en otra cuenta ({samePhoneRequests.length})
+                            </span>
+                          )}
+                          <h4 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                            {req.profile_name}
+                          </h4>
+                          {req.profile_slug && (
+                            <Link to={`/p/${req.profile_slug}`} target="_blank" className="text-[11px] text-[var(--color-laburante-indigo)] hover:underline">
+                              @{req.profile_slug}
+                            </Link>
+                          )}
+                        </div>
+                        <span className="text-xs text-[var(--color-laburante-text-muted)]">
+                          Solicitud: {new Date(req.created_at).toLocaleDateString()} {new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        <div>
+                          <span className="text-[var(--color-laburante-text-muted)] block">Nombre del solicitante:</span>
+                          <p className="font-bold text-[var(--color-laburante-text)]">{req.profile_name}</p>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-laburante-text-muted)] block">Número de WhatsApp:</span>
+                          <p className="font-bold text-[var(--color-laburante-text)] font-mono">{req.phone_declared}</p>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-laburante-text-muted)] block">Referencia unívoca:</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="font-mono font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                              {req.code}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(req.code)
+                                setCopiedCode(req.code)
+                                setTimeout(() => setCopiedCode(null), 2000)
+                              }}
+                              className="p-1 rounded-md text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 cursor-pointer transition-colors"
+                              title="Copiar referencia"
+                            >
+                              <Copy size={12} />
+                            </button>
+                            {copiedCode === req.code && (
+                              <span className="text-[10px] text-emerald-600 font-semibold">¡Copiada!</span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-laburante-text-muted)] block">Fecha de vencimiento:</span>
+                          {req.expires_at ? (
+                            <p className={`font-medium ${isExpired ? 'text-rose-600 font-bold' : 'text-[var(--color-laburante-text)]'}`}>
+                              {new Date(req.expires_at).toLocaleDateString()} {new Date(req.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {isExpired && ' (Vencida)'}
+                            </p>
+                          ) : (
+                            <p className="text-slate-500 font-medium">Sin vencimiento (histórica)</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[var(--color-laburante-border)]/50">
+                        <div className="flex items-center gap-3">
+                          {cleanCurrentPhone && (
+                            <a
+                              href={`https://wa.me/${cleanCurrentPhone}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 transition-colors"
+                            >
+                              <MessageCircle size={13} />
+                              Abrir chat WhatsApp
+                              <ExternalLink size={11} />
+                            </a>
+                          )}
+                          {req.reviewed_at && (
+                            <span className="text-[11px] text-[var(--color-laburante-text-muted)]">
+                              Resuelta: {new Date(req.reviewed_at).toLocaleDateString()} {new Date(req.reviewed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+
+                        {req.status === 'pendiente' && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleApproveWA(req)}
+                              className="py-1.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                            >
+                              <Check size={14} />
+                              Aprobar y Certificar ✓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRejectWA(req)}
+                              className="py-1.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <XCircle size={14} />
+                              Rechazar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
       )}
 

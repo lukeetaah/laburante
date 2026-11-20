@@ -58,3 +58,63 @@ export function isVerificationRequestExpired(expiresAt: string | null | undefine
 export function calculateExpirationDate(hours = DEFAULT_VERIFICATION_HOURS): string {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
 }
+
+/**
+ * Genera el mensaje preconfigurado oficial para solicitar verificación por WhatsApp.
+ * Incluye nombre del solicitante, texto explicativo y la referencia unívoca.
+ */
+export function generateWhatsAppVerificationMessage(profileName: string | null | undefined, referenceCode: string): string {
+  const name = (profileName || '').trim()
+  const greeting = name ? `Hola, soy ${name}.` : 'Hola.'
+  return `${greeting}\n\nEstoy solicitando verificar mi número de WhatsApp en LABURANTE.\n\nMi referencia de verificación es: ${referenceCode}.`
+}
+
+/**
+ * Normaliza un número telefónico de WhatsApp argentino o internacional a sus dígitos canónicos.
+ * Remueve prefijos de país (+54, 549, 54), prefijos interurbanos (0) y prefijos móviles (15).
+ */
+export function normalizeWhatsAppPhone(phone: string | null | undefined): string {
+  if (!phone) return ''
+  let digits = phone.replace(/[^0-9]/g, '')
+
+  // Prefijos argentinos: 549 o 54 seguidos de 10 dígitos (área + abonado nacional)
+  if (/^549[0-9]{10}$/.test(digits)) {
+    digits = digits.slice(3)
+  } else if (/^54[0-9]{10}$/.test(digits)) {
+    digits = digits.slice(2)
+  }
+
+  // Prefijo interurbano nacional (ej: 011, 0351, 0341)
+  if (/^0[0-9]{10,}$/.test(digits)) {
+    digits = digits.slice(1)
+  }
+
+  // Prefijo móvil local 15 luego del código de área
+  // AMBA (área 11): 11 15 xxxxxxxx
+  if (/^1115[0-9]{8}$/.test(digits)) {
+    digits = '11' + digits.slice(4)
+  } else if (/^[0-9]{3}15[0-9]{7}$/.test(digits)) {
+    digits = digits.slice(0, 3) + digits.slice(5)
+  } else if (/^[0-9]{4}15[0-9]{6}$/.test(digits)) {
+    digits = digits.slice(0, 4) + digits.slice(6)
+  }
+
+  return digits
+}
+
+/**
+ * Comprueba si dos representaciones de teléfono corresponden a la misma línea telefónica.
+ * Admite equivalencias entre formatos internacionales (+54 9 11...), nacionales con 0/15 y locales (11...).
+ */
+export function areWhatsAppPhonesMatching(phoneA: string | null | undefined, phoneB: string | null | undefined): boolean {
+  if (!phoneA || !phoneB) return false
+  const normA = normalizeWhatsAppPhone(phoneA)
+  const normB = normalizeWhatsAppPhone(phoneB)
+  if (!normA || !normB) return false
+  if (normA === normB) return true
+  // Si ambos tienen al menos 10 dígitos, comparar los últimos 10 dígitos (área + abonado nacional)
+  if (normA.length >= 10 && normB.length >= 10) {
+    return normA.slice(-10) === normB.slice(-10)
+  }
+  return false
+}

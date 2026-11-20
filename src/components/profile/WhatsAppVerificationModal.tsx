@@ -16,6 +16,7 @@ import { useProfileStore } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNotificationStore } from '@/stores/notification-store'
 import { useOperationalSettings } from '@/lib/operational-settings'
+import { generateWhatsAppVerificationMessage } from '@/lib/whatsapp-reference'
 
 interface WhatsAppVerificationModalProps {
   isOpen: boolean
@@ -138,7 +139,7 @@ export default function WhatsAppVerificationModal({
 
   const cleanPhone = phone.replace(/[^0-9]/g, '')
   const hasPhone = cleanPhone.length > 0
-  const verificationText = `Hola, LABURANTE. Quiero verificar el número de WhatsApp que asocié a mi perfil. Mi referencia es ${verificationCode}.`
+  const verificationText = generateWhatsAppVerificationMessage(profileName, verificationCode)
 
   const handleOpenWhatsApp = () => {
     const url = `https://wa.me/${officialWhatsApp}?text=${encodeURIComponent(verificationText)}`
