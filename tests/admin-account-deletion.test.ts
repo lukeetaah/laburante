@@ -141,6 +141,14 @@ test('la migración correctiva mantiene permisos service_role en ambas funciones
   assert.match(fixMigration, /REVOKE ALL ON FUNCTION public\.enforce_candidate_inquiry_transition/)
 })
 
+test('la migración correctiva incluye bypass para métodos de contacto WhatsApp verificados y campos de perfil', () => {
+  // protect_verified_whatsapp_contact_method debe permitir DELETE si service_role o app.admin_account_deletion
+  assert.match(fixMigration, /protect_verified_whatsapp_contact_method/)
+  assert.match(fixMigration, /protect_profile_verification_fields/)
+  assert.match(fixMigration, /admin_finalize_account_deletion/)
+  assert.match(fixMigration, /PERFORM set_config\('app\.admin_account_deletion', '1', true\)/)
+})
+
 test('la migración correctiva incluye COMMIT y NOTIFY para recarga del schema de PostgREST', () => {
   assert.match(fixMigration, /NOTIFY pgrst, 'reload schema'/)
   assert.match(fixMigration, /COMMIT;/)

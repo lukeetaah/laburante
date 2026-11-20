@@ -1,33 +1,177 @@
 -- ============================================================================
 -- LABURANTE: Corrección del flujo de eliminación administrativa de cuentas
 --
--- Problemas corregidos:
+-- CAUSA RAÍZ CONFIRMADA:
 --
--- 1. enforce_candidate_inquiry_transition no tenía bypass para app.admin_account_deletion.
---    Al ejecutar admin_prepare_account_deletion via service_role:
---      - auth.uid() = NULL
---      - auth.jwt()->'app_metadata'->>'role' != 'admin'  (es el JWT del service_role)
---    → El trigger caía en la rama `actor_id IS NULL` → RAISE 'candidate_inquiry_actor_not_allowed'
---    → La Edge Function devolvía HTTP 502 con el error real, pero supabase-js
---      descartaba el body → el frontend mostraba "etapa desconocida".
+-- Al ejecutar admin_finalize_account_deletion vía service_role:
+-- 1. Se ejecuta: DELETE FROM public.contact_methods WHERE profile_id = p_target_user_id;
+-- 2. El trigger protect_verified_whatsapp_contact_method se dispara sobre cada método
+--    de contacto. Dicho trigger solo comprobaba auth.jwt()->'app_metadata'->>'role' = 'admin'.
+-- 3. Al invocarse desde la Edge Function mediante la clave service_role:
+--      - auth.role() = 'service_role' (no 'admin' en app_metadata)
+--      - El perfil objetivo posee whatsapp_verified = true
+--    → El trigger arrojaba:
+--      "No podés eliminar un método de contacto WhatsApp verificado. Contactá a soporte para actualizarlo."
+--    → La transacción abortaba con estado 'failed_db' en fase 'database'.
 --
--- 2. La RPC insertaba explícitamente en company_candidate_inquiry_events DESPUÉS
---    del UPDATE de company_candidate_inquiries. Pero el trigger AFTER UPDATE
---    (record_candidate_inquiry_resolution) ya insertaba ese evento al detectar el
---    cambio de process_status. El ON CONFLICT (inquiry_id, event_type) de la RPC
---    era incorrecto: el índice único real es uq_company_candidate_inquiry_events_terminal
---    sobre (inquiry_id), no sobre (inquiry_id, event_type). Esto producía una
---    violación de unique constraint si el trigger ya había insertado la fila.
---    Corrección: eliminar el INSERT explícito de la RPC — el trigger lo gestiona.
---
--- 3. Se actualiza enforce_candidate_inquiry_transition para aceptar el bypass
---    app.admin_account_deletion = '1', con la misma lógica que enforce_job_request_transition.
+-- SOLUCIONES:
+-- 1. protect_verified_whatsapp_contact_method y protect_profile_verification_fields
+--    ahora reconocen service_role y app.admin_account_deletion = '1'.
+-- 2. admin_finalize_account_deletion activa PERFORM set_config('app.admin_account_deletion', '1', true)
+--    al inicio de la transacción de purga.
+-- 3. enforce_candidate_inquiry_transition incluye bypass para service_role y admin_account_deletion.
+-- 4. admin_prepare_account_deletion delega el registro de eventos al trigger AFTER UPDATE.
 -- ============================================================================
 
 BEGIN;
 
 -- ============================================================================
--- 1. Actualizar enforce_candidate_inquiry_transition con bypass administrativo
+-- 1. Actualizar protect_verified_whatsapp_contact_method para permitir purga administrativa
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.protect_verified_whatsapp_contact_method()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, auth
+AS $$
+DECLARE
+  v_is_admin BOOLEAN;
+  v_is_trusted_reset BOOLEAN;
+  v_target_profile_id UUID;
+  v_is_verified BOOLEAN;
+BEGIN
+  v_is_admin := (
+    COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
+    OR auth.role() = 'service_role'
+    OR COALESCE(current_setting('app.admin_account_deletion', true), '') = '1'
+  );
+  IF v_is_admin THEN
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+  END IF;
+
+  v_target_profile_id := COALESCE(OLD.profile_id, NEW.profile_id);
+  v_is_trusted_reset := (current_setting('laburante.allow_whatsapp_reset', true) = 'true' AND auth.uid() = v_target_profile_id);
+
+  IF v_is_trusted_reset THEN
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+  END IF;
+
+  -- Comprobar si el perfil dueño tiene certificación de WhatsApp activa
+  SELECT COALESCE(whatsapp_verified, false)
+    INTO v_is_verified
+  FROM public.profiles
+  WHERE id = v_target_profile_id;
+
+  IF v_is_verified IS TRUE THEN
+    IF TG_OP = 'DELETE' AND OLD.type = 'whatsapp' THEN
+      RAISE EXCEPTION 'No podés eliminar un método de contacto WhatsApp verificado. Contactá a soporte para actualizarlo.';
+    ELSIF TG_OP = 'UPDATE' AND OLD.type = 'whatsapp' THEN
+      IF NEW.type IS DISTINCT FROM 'whatsapp' OR NEW.value IS DISTINCT FROM OLD.value THEN
+        RAISE EXCEPTION 'No podés modificar el número de WhatsApp verificado. Contactá a soporte para actualizarlo.';
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+-- ============================================================================
+-- 2. Actualizar protect_profile_verification_fields para permitir purga administrativa
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.protect_profile_verification_fields()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, auth
+AS $$
+DECLARE
+  v_is_admin BOOLEAN;
+  v_is_trusted_reset BOOLEAN;
+BEGIN
+  v_is_admin := (
+    COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
+    OR auth.role() = 'service_role'
+    OR COALESCE(current_setting('app.admin_account_deletion', true), '') = '1'
+  );
+  v_is_trusted_reset := (current_setting('laburante.allow_whatsapp_reset', true) = 'true' AND auth.uid() = OLD.id);
+
+  IF NOT v_is_admin THEN
+    IF NOT v_is_trusted_reset AND OLD.whatsapp_verified IS TRUE AND (NEW.whatsapp_verified IS NOT TRUE OR NEW.whatsapp_verified IS NULL) THEN
+      NEW.whatsapp_verified := OLD.whatsapp_verified;
+      NEW.whatsapp_verified_at := OLD.whatsapp_verified_at;
+    END IF;
+
+    IF (OLD.whatsapp_verified IS NOT TRUE OR OLD.whatsapp_verified IS NULL) AND NEW.whatsapp_verified IS TRUE THEN
+      NEW.whatsapp_verified := false;
+      NEW.whatsapp_verified_at := NULL;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+-- ============================================================================
+-- 3. Actualizar admin_finalize_account_deletion activando flag de eliminación
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.admin_finalize_account_deletion(
+  p_target_user_id UUID,
+  p_operation_id UUID
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin'
+     AND auth.role() <> 'service_role' THEN
+    RAISE EXCEPTION 'Solo un administrador autorizado puede finalizar la eliminación';
+  END IF;
+
+  -- Habilitar bypass de mantenimiento para triggers de protección de contactos y verificación
+  PERFORM set_config('app.admin_account_deletion', '1', true);
+
+  -- Eliminar dependencias accesorias sin tocar tablas de trazabilidad
+  DELETE FROM public.whatsapp_verification_requests WHERE profile_id = p_target_user_id;
+  DELETE FROM public.company_opportunity_shares WHERE source_company_id = p_target_user_id OR recipient_company_id = p_target_user_id;
+  DELETE FROM public.company_opportunities WHERE source_company_id = p_target_user_id;
+  DELETE FROM public.company_saved_profiles WHERE company_id = p_target_user_id;
+  DELETE FROM public.company_projects WHERE company_id = p_target_user_id;
+  DELETE FROM public.company_shortlists WHERE company_id = p_target_user_id;
+  DELETE FROM public.profile_categories WHERE profile_id = p_target_user_id;
+  DELETE FROM public.skills WHERE profile_id = p_target_user_id;
+  DELETE FROM public.services WHERE profile_id = p_target_user_id;
+  DELETE FROM public.contact_methods WHERE profile_id = p_target_user_id;
+  DELETE FROM public.profile_languages WHERE profile_id = p_target_user_id;
+
+  -- Eliminar perfil público (las foreign keys ON DELETE SET NULL conservan solicitudes y trazabilidad)
+  DELETE FROM public.profiles WHERE id = p_target_user_id;
+
+  -- Actualizar estado de la operación
+  UPDATE public.admin_account_deletion_operations
+     SET status = 'db_cleared',
+         completed_stages = array_append(completed_stages, 'db_cleared'),
+         updated_at = clock_timestamp()
+   WHERE id = p_operation_id;
+
+  INSERT INTO public.admin_account_deletion_events (
+    operation_id,
+    event_type,
+    details
+  ) VALUES (
+    p_operation_id,
+    'db_cleared',
+    jsonb_build_object('target_user_id', p_target_user_id)
+  );
+
+  RETURN true;
+END;
+$$;
+
+-- ============================================================================
+-- 4. Actualizar enforce_candidate_inquiry_transition con bypass administrativo
 -- ============================================================================
 CREATE OR REPLACE FUNCTION public.enforce_candidate_inquiry_transition()
 RETURNS TRIGGER
@@ -41,10 +185,7 @@ DECLARE
                       OR auth.role() = 'service_role'
                       OR COALESCE(current_setting('app.admin_account_deletion', true), '') = '1';
 BEGIN
-  -- Bypass para eliminación administrativa (service_role sin auth.uid())
   IF is_admin AND TG_OP = 'UPDATE' THEN
-    -- Solo permitir bypass en UPDATE: el INSERT de nuevas inquiries sigue requiriendo actor_id.
-    -- Para el bypass de migración inicial de datos se mantiene el setting dedicado.
     IF COALESCE(current_setting('app.admin_account_deletion', true), '') = '1'
        OR auth.role() = 'service_role' THEN
       RETURN NEW;
@@ -68,8 +209,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Sólo la propia migración usa esta marca transaccional para completar
-  -- process_status histórico antes de exigir NOT NULL. No es una vía del API.
   IF current_setting('app.company_candidate_resolution_migration', true) = '1' THEN
     RETURN NEW;
   END IF;
@@ -185,10 +324,7 @@ END;
 $$;
 
 -- ============================================================================
--- 2. Corregir admin_prepare_account_deletion:
---    - Eliminar INSERT explícito en company_candidate_inquiry_events (ya lo hace
---      el trigger record_candidate_inquiry_resolution al detectar el UPDATE).
---    - Usar GET DIAGNOSTICS sobre el UPDATE de inquiries directamente.
+-- 5. Actualizar admin_prepare_account_deletion
 -- ============================================================================
 CREATE OR REPLACE FUNCTION public.admin_prepare_account_deletion(
   p_target_user_id UUID,
@@ -208,13 +344,11 @@ DECLARE
   v_active_jobs_cancelled INTEGER := 0;
   v_active_inquiries_cancelled INTEGER := 0;
 BEGIN
-  -- Validar privilegios del llamador
   IF COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin'
      AND auth.role() <> 'service_role' THEN
     RAISE EXCEPTION 'Solo un administrador autorizado puede preparar la eliminación de cuentas';
   END IF;
 
-  -- Validar parámetros
   IF p_target_user_id IS NULL OR p_admin_user_id IS NULL THEN
     RAISE EXCEPTION 'Los identificadores de usuario objetivo y administrador son obligatorios';
   END IF;
@@ -227,18 +361,15 @@ BEGIN
     RAISE EXCEPTION 'El motivo de eliminación debe contener al menos 10 caracteres';
   END IF;
 
-  -- Habilitar bypass de mantenimiento para triggers de transición
   PERFORM set_config('app.admin_account_deletion', '1', true);
   PERFORM set_config('app.company_candidate_resolution', '1', true);
 
-  -- Adquirir bloqueo y metadata si el perfil aún existe
   SELECT COALESCE(account_type, 'persona'), name
     INTO v_role, v_name
     FROM public.profiles
    WHERE id = p_target_user_id
      FOR UPDATE;
 
-  -- Gestión de idempotencia sobre la operación activa
   SELECT id, status INTO v_operation_id, v_existing_status
     FROM public.admin_account_deletion_operations
    WHERE target_user_id = p_target_user_id
@@ -247,7 +378,6 @@ BEGIN
      FOR UPDATE;
 
   IF v_operation_id IS NULL THEN
-    -- Verificar si ya fue completada previamente
     IF EXISTS (
       SELECT 1 FROM public.admin_account_deletion_operations
       WHERE target_user_id = p_target_user_id AND status = 'completed'
@@ -291,7 +421,7 @@ BEGIN
     );
   END IF;
 
-  -- 1. Snapshot de nombres profesionales en job_requests para cuando el perfil se elimine
+  -- 1. Snapshot de nombres profesionales en job_requests
   UPDATE public.job_requests j
      SET professional_name = COALESCE(j.professional_name, p.name)
     FROM public.profiles p
@@ -311,11 +441,7 @@ BEGIN
   )
   SELECT COUNT(*) INTO v_active_jobs_cancelled FROM cancelled_jobs;
 
-  -- 3. Cancelar procesos activos de selección empresa-candidato.
-  --    El trigger record_candidate_inquiry_resolution (AFTER UPDATE OF process_status)
-  --    inserta automáticamente el evento en company_candidate_inquiry_events al detectar
-  --    el cambio a 'cancelado'. No se realiza INSERT explícito aquí para evitar conflicto
-  --    con el índice único uq_company_candidate_inquiry_events_terminal (inquiry_id).
+  -- 3. Cancelar procesos activos de selección empresa-candidato
   UPDATE public.company_candidate_inquiries
      SET process_status = 'cancelado',
          status = 'cerrada',
@@ -328,12 +454,11 @@ BEGIN
 
   GET DIAGNOSTICS v_active_inquiries_cancelled = ROW_COUNT;
 
-  -- 4. Anonimizar reseñas emitidas por el usuario (si la tabla y columna existen)
+  -- 4. Anonimizar reseñas emitidas
   UPDATE public.recommendations
      SET from_name = 'Usuario eliminado'
    WHERE from_user_id = p_target_user_id;
 
-  -- Registrar evento de preparación
   INSERT INTO public.admin_account_deletion_events (
     operation_id,
     event_type,
@@ -357,11 +482,16 @@ BEGIN
 END;
 $$;
 
--- Mantener permisos: solo service_role puede ejecutar estas RPCs
+-- Permisos
 REVOKE ALL ON FUNCTION public.admin_prepare_account_deletion(UUID, UUID, TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_prepare_account_deletion(UUID, UUID, TEXT) TO service_role;
 
+REVOKE ALL ON FUNCTION public.admin_finalize_account_deletion(UUID, UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_finalize_account_deletion(UUID, UUID) TO service_role;
+
 REVOKE ALL ON FUNCTION public.enforce_candidate_inquiry_transition() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.protect_verified_whatsapp_contact_method() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.protect_profile_verification_fields() FROM PUBLIC, anon, authenticated;
 
 NOTIFY pgrst, 'reload schema';
 
