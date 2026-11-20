@@ -920,9 +920,14 @@ export default function Admin() {
         body: { target_user_id: accountToDelete.id, deletion_reason: trimmedReason },
       })
 
-      if (error || data?.error) {
-        const errorMsg = data?.error || error?.message || 'Error de eliminación'
-        const stage = data?.phase || 'desconocida'
+      // supabase-js descarta el body JSON de respuestas non-2xx y lo deja en error.context.
+      // Para obtener el detalle real del error (phase, mensaje descriptivo), se lo lee de allí.
+      const responseBody: Record<string, unknown> | null =
+        data ?? (error as any)?.context ?? null
+
+      if (error || responseBody?.error) {
+        const errorMsg = (responseBody?.error as string) || error?.message || 'Error de eliminación'
+        const stage = (responseBody?.phase as string) || 'desconocida'
         setDeleteError(`Fallo en etapa ${stage}: ${errorMsg}. Podés reintentar para completar las etapas pendientes.`)
         setDeleteStage(stage)
         setIsDeletingAccount(false)
