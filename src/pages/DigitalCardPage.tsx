@@ -65,7 +65,7 @@ export default function DigitalCardPage() {
     return () => {
       active = false
     }
-  }, [identifier])
+  }, [identifier, user?.id])
 
   // URL permanente canónica
   const canonicalUrl = cardData ? getCanonicalCardUrl(cardData.card_key) : ''
@@ -122,7 +122,9 @@ export default function DigitalCardPage() {
   // Descargar tarjeta completa como PDF con links clicables y QR
   const handleDownloadCardPdf = async () => {
     if (!cardData || !canonicalUrl) return
-    await downloadDigitalCardAsPdf(cardData, canonicalUrl, cardData.slug)
+    await downloadDigitalCardAsPdf(cardData, canonicalUrl, cardData.slug, {
+      contactsLocked: !user,
+    })
   }
 
   // Guardar contacto vCard (.vcf) con los datos autorizados
@@ -226,6 +228,8 @@ export default function DigitalCardPage() {
         services={cardData.services}
         languages={cardData.languages}
         contacts={cardData.contacts}
+        contactsLocked={!user}
+        hasLockedContacts={Boolean(cardData.has_contacts)}
         cardUrl={canonicalUrl}
         isOwnerPreview={false}
         showQr={true}
@@ -245,14 +249,24 @@ export default function DigitalCardPage() {
 
         {/* Action Row: Save Contact + Share + Copy Link */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          <button
-            type="button"
-            onClick={handleDownloadVCard}
-            className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 text-white hover:bg-black py-2.5 px-3 font-semibold text-xs transition-colors cursor-pointer"
-          >
-            <Download size={15} />
-            <span>Guardar en contactos (.vcf)</span>
-          </button>
+          {user ? (
+            <button
+              type="button"
+              onClick={handleDownloadVCard}
+              className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 text-white hover:bg-black py-2.5 px-3 font-semibold text-xs transition-colors cursor-pointer"
+            >
+              <Download size={15} />
+              <span>Guardar en contactos (.vcf)</span>
+            </button>
+          ) : (
+            <Link
+              to="/ingresar"
+              className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 text-white hover:bg-black py-2.5 px-3 font-semibold text-xs transition-colors"
+            >
+              <User size={15} />
+              <span>Ingresá para ver contactos</span>
+            </Link>
+          )}
 
           <button
             type="button"

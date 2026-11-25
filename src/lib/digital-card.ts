@@ -44,6 +44,8 @@ export interface PublicDigitalCardData {
   services?: { title: string; description: string | null; precio_orientativo?: string | null }[]
   languages?: { language: string; level: string }[]
   contacts?: { type: string; value: string }[]
+  contacts_locked?: boolean
+  has_contacts?: boolean
 }
 
 export interface AvailableCardFields {
@@ -286,6 +288,9 @@ export async function fetchPublicDigitalCard(identifier: string): Promise<Public
   const cleanId = identifier.trim().toLowerCase()
 
   try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const isAuthenticated = Boolean(sessionData?.session?.user)
+
     // 1. Invocar la RPC get_public_digital_card con principio de mínimo privilegio
     const { data, error } = await (supabase.rpc as any)('get_public_digital_card', {
       p_identifier: cleanId,
@@ -294,9 +299,16 @@ export async function fetchPublicDigitalCard(identifier: string): Promise<Public
     if (!error && data) {
       // Resolver photo_url pública o firmada
       const resolvedPhoto = data.photo_url ? await resolveProfilePhotoUrl(data.photo_url) : null
+      const rawContacts = Array.isArray(data.contacts) ? data.contacts : []
+      const contactsLocked = !isAuthenticated || Boolean(data.contacts_locked)
+      const hasContacts = Boolean(data.has_contacts) || rawContacts.length > 0
+
       return {
         ...data,
         photo_url: resolvedPhoto,
+        contacts: contactsLocked ? [] : rawContacts,
+        contacts_locked: contactsLocked,
+        has_contacts: hasContacts,
       } as PublicDigitalCardData
     }
 
@@ -377,22 +389,26 @@ async function fallbackFetchPublicDigitalCard(identifier: string): Promise<Publi
       services = svData || []
     }
 
-    // Obtener contactos públicos autorizados
+    // Obtener contactos públicos autorizados solo si el usuario está autenticado
+    const { data: sessionData } = await supabase.auth.getSession()
+    const isAuthenticated = Boolean(sessionData?.session?.user)
     let contacts: any[] = []
-    const { data: cData } = await (supabase.from('contact_methods') as any)
-      .select('type, value')
-      .eq('profile_id', profileRow.id)
+    if (isAuthenticated) {
+      const { data: cData } = await (supabase.from('contact_methods') as any)
+        .select('type, value')
+        .eq('profile_id', profileRow.id)
 
-    contacts = (cData || []).filter((c: any) => {
-      if (c.type === 'whatsapp') return config.show_whatsapp
-      if (c.type === 'telefono') return config.show_phone
-      if (c.type === 'email') return config.show_email
-      if (c.type === 'web') return config.show_web
-      if (c.type === 'instagram') return config.show_instagram
-      if (c.type === 'linkedin') return config.show_linkedin
-      if (c.type === 'portfolio') return config.show_portfolio
-      return false
-    })
+      contacts = (cData || []).filter((c: any) => {
+        if (c.type === 'whatsapp') return config.show_whatsapp
+        if (c.type === 'telefono') return config.show_phone
+        if (c.type === 'email') return config.show_email
+        if (c.type === 'web') return config.show_web
+        if (c.type === 'instagram') return config.show_instagram
+        if (c.type === 'linkedin') return config.show_linkedin
+        if (c.type === 'portfolio') return config.show_portfolio
+        return false
+      })
+    }
 
     const resolvedPhoto = config.show_photo && profileRow.photo_url
       ? await resolveProfilePhotoUrl(profileRow.photo_url)
@@ -416,6 +432,8 @@ async function fallbackFetchPublicDigitalCard(identifier: string): Promise<Publi
       skills,
       services,
       contacts,
+      contacts_locked: !isAuthenticated,
+      has_contacts: contacts.length > 0,
     }
   } catch (e) {
     console.warn('Fallback public card fetch failed:', e)

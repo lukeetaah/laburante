@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   MapPin,
   Briefcase,
@@ -10,6 +11,7 @@ import {
   MessageCircle,
   ExternalLink,
   QrCode,
+  Lock,
 } from 'lucide-react'
 import { formatModality, type WorkModality } from '@/lib/profile-format'
 import { generateQrSvgString } from '@/lib/qr-service'
@@ -32,6 +34,8 @@ export interface DigitalCardDisplayProps {
   services?: { title: string; description: string | null; precio_orientativo?: string | null }[]
   languages?: { language: string; level: string }[]
   contacts?: { type: string; value: string }[]
+  contactsLocked?: boolean
+  hasLockedContacts?: boolean
   cardUrl: string
   isOwnerPreview?: boolean
   showQr?: boolean
@@ -54,6 +58,8 @@ export default function DigitalCardView({
   services,
   languages,
   contacts,
+  contactsLocked = false,
+  hasLockedContacts = false,
   cardUrl,
   isOwnerPreview = false,
   showQr = true,
@@ -136,17 +142,17 @@ export default function DigitalCardView({
   return (
     <article className="w-full overflow-hidden rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] shadow-md">
       {/* Compact Brand Header */}
-      <div className="flex items-center justify-between bg-[#121324] px-4 py-2 border-b-2 border-[var(--color-laburante-accent)]">
-        <span className="font-heading text-[11px] font-black tracking-wider text-white">
+      <div className="flex items-center justify-between bg-[#121324] px-4 py-2.5 border-b-2 border-[var(--color-laburante-accent)]">
+        <span className="font-heading text-xs font-black tracking-wider text-white">
           LABURANTE
         </span>
         <div className="flex items-center gap-2">
           {isOwnerPreview && (
-            <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[9px] font-bold text-amber-300 border border-amber-300/30">
+            <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-300/30">
               Vista previa
             </span>
           )}
-          <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--color-laburante-accent)]">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-laburante-accent)]">
             Tarjeta digital
           </span>
         </div>
@@ -169,45 +175,45 @@ export default function DigitalCardView({
             )}
           </div>
 
-          <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <h3 className="font-heading text-base font-extrabold text-[var(--color-laburante-text)] leading-tight truncate">
+              <h3 className="font-heading text-base sm:text-lg font-extrabold text-[var(--color-laburante-text)] leading-tight truncate">
                 {name || 'Nombre del trabajador'}
               </h3>
               {whatsappVerified && (
                 <span
-                  className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200"
-                  title="WhatsApp certificado por LABURANTE"
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200"
+                  title="Número de WhatsApp verificado por LABURANTE"
                 >
-                  <ShieldCheck size={11} className="text-emerald-600" />
-                  Verificado
+                  <ShieldCheck size={12} className="text-emerald-600" />
+                  Número verificado
                 </span>
               )}
             </div>
 
             {headline && (
-              <p className="font-heading text-xs font-bold text-[var(--color-laburante-accent-hover)] leading-snug truncate">
+              <p className="font-heading text-xs sm:text-[13px] font-bold text-[var(--color-laburante-accent-hover)] leading-snug truncate">
                 {headline}
               </p>
             )}
 
             {(locationText || modalidad || disponibilidad) && (
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-[var(--color-laburante-text-secondary)]">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-[var(--color-laburante-text-secondary)]">
                 {locationText && (
                   <span className="inline-flex items-center gap-1">
-                    <MapPin size={11} className="text-[var(--color-laburante-accent)] shrink-0" />
+                    <MapPin size={12} className="text-[var(--color-laburante-accent)] shrink-0" />
                     {locationText}
                   </span>
                 )}
                 {modalidad && (
                   <span className="inline-flex items-center gap-1">
-                    <Briefcase size={11} className="text-[var(--color-laburante-text-muted)] shrink-0" />
+                    <Briefcase size={12} className="text-[var(--color-laburante-text-muted)] shrink-0" />
                     {formatModality(modalidad as WorkModality, hybridPresencialPct, hybridRemotoPct)}
                   </span>
                 )}
                 {disponibilidad && (
                   <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
-                    <Clock size={11} className="shrink-0" />
+                    <Clock size={12} className="shrink-0" />
                     {disponibilidad === 'disponible' ? 'Disponible' : disponibilidad}
                   </span>
                 )}
@@ -215,7 +221,7 @@ export default function DigitalCardView({
             )}
 
             {zonaTrabajo && (
-              <p className="text-[10px] text-[var(--color-laburante-text-muted)] truncate">
+              <p className="text-[11px] text-[var(--color-laburante-text-muted)] truncate">
                 Zona: <span className="text-[var(--color-laburante-text-secondary)]">{zonaTrabajo}</span>
               </p>
             )}
@@ -224,18 +230,18 @@ export default function DigitalCardView({
 
         {/* Brief Bio */}
         {bio && (
-          <p className="rounded-xl bg-[var(--color-laburante-surface-alt)]/70 px-3 py-2 text-[11px] leading-relaxed text-[var(--color-laburante-text-secondary)] line-clamp-2 border border-[var(--color-laburante-border)]/60">
+          <p className="rounded-xl bg-[var(--color-laburante-surface-alt)]/70 px-3 py-2 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)] line-clamp-2 border border-[var(--color-laburante-border)]/60">
             {bio}
           </p>
         )}
 
         {/* Skills Chips */}
         {visibleSkills.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1.5">
             {visibleSkills.map((skill, idx) => (
               <span
                 key={idx}
-                className="rounded-md border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 px-2 py-0.5 text-[10px] font-semibold text-[var(--color-laburante-text)]"
+                className="rounded-md border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/50 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-laburante-text)]"
               >
                 {skill}
               </span>
@@ -245,7 +251,7 @@ export default function DigitalCardView({
 
         {/* Services Compact Summary */}
         {visibleServices.length > 0 && (
-          <p className="text-[11px] text-[var(--color-laburante-text-secondary)] leading-snug">
+          <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-snug">
             <span className="font-bold text-[var(--color-laburante-text)]">Servicios: </span>
             {visibleServices
               .map((s) => (s.precio_orientativo ? `${s.title} (${s.precio_orientativo})` : s.title))
@@ -255,7 +261,7 @@ export default function DigitalCardView({
 
         {/* Languages Compact */}
         {languages && languages.length > 0 && (
-          <p className="text-[10px] text-[var(--color-laburante-text-muted)]">
+          <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
             <span className="font-semibold text-[var(--color-laburante-text-secondary)]">Idiomas: </span>
             {languages.map((l) => `${l.language} (${l.level})`).join(', ')}
           </p>
@@ -264,15 +270,31 @@ export default function DigitalCardView({
         {/* Bottom 2-Column Zone: Direct Contacts (Selectable & Clickable) + QR */}
         <div className="border-t border-[var(--color-laburante-border)] pt-3 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-1.5">
-            <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)]">
               Contacto directo
             </p>
-            {activeContacts.length === 0 ? (
-              <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
+            {contactsLocked ? (
+              <div className="rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/70 p-2.5 space-y-1">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-laburante-text)]">
+                  <Lock size={12} className="text-[var(--color-laburante-indigo)] shrink-0" />
+                  <span>{hasLockedContacts ? 'Contactos y enlaces protegidos' : 'Contactos protegidos'}</span>
+                </p>
+                <p className="text-[11px] text-[var(--color-laburante-text-secondary)] leading-snug">
+                  Iniciá sesión o registrate para ver los contactos y enlaces.{' '}
+                  <Link
+                    to="/ingresar"
+                    className="font-semibold text-[var(--color-laburante-indigo)] hover:underline"
+                  >
+                    Ingresar
+                  </Link>
+                </p>
+              </div>
+            ) : activeContacts.length === 0 ? (
+              <p className="text-xs text-[var(--color-laburante-text-muted)]">
                 Escaneá el QR o abrí el enlace para ver el perfil.
               </p>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {activeContacts.map((contact, idx) => {
                   const href = getDigitalCardContactHref(contact.type, contact.value)
                   const isExternal = Boolean(href && !href.startsWith('tel:') && !href.startsWith('mailto:'))
@@ -283,11 +305,11 @@ export default function DigitalCardView({
                       href={href || undefined}
                       target={isExternal ? '_blank' : undefined}
                       rel={isExternal ? 'noopener noreferrer' : undefined}
-                      className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-laburante-indigo)] hover:underline select-text break-all leading-tight"
+                      className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-laburante-indigo)] hover:underline select-text break-all leading-tight"
                     >
                       {getContactIcon(contact.type)}
                       <span className="min-w-0 flex-1 truncate">{label}</span>
-                      {isExternal && <ExternalLink size={10} className="shrink-0 opacity-60" />}
+                      {isExternal && <ExternalLink size={11} className="shrink-0 opacity-60" />}
                     </a>
                   )
                 })}
@@ -312,7 +334,7 @@ export default function DigitalCardView({
                 href={cardUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1 block text-[9px] font-semibold text-[var(--color-laburante-indigo)] hover:underline truncate select-all"
+                className="mt-1 block text-[10px] font-semibold text-[var(--color-laburante-indigo)] hover:underline truncate select-all"
                 title={cardUrl}
               >
                 {cardUrl.replace(/^https?:\/\//i, '')}
@@ -323,8 +345,8 @@ export default function DigitalCardView({
       </div>
 
       {/* Compact Footer */}
-      <div className="border-t border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] px-4 py-1.5 text-center">
-        <p className="text-[10px] text-[var(--color-laburante-text-muted)]">
+      <div className="border-t border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] px-4 py-2 text-center">
+        <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
           Tarjeta digital oficial de <strong className="text-[var(--color-laburante-text)]">LABURANTE</strong>
         </p>
       </div>

@@ -94,7 +94,8 @@ function loadPhotoDataUrl(src: string): Promise<string | null> {
 export async function downloadDigitalCardAsPdf(
   card: PublicDigitalCardData,
   cardUrl: string,
-  filenameSlug?: string
+  filenameSlug?: string,
+  options?: { contactsLocked?: boolean }
 ): Promise<void> {
   const pageW = 148 // A5 ancho (mm)
   const margin = 8
@@ -148,7 +149,7 @@ export async function downloadDigitalCardAsPdf(
     languages.length > 0 ? `Idiomas: ${languages.map((l) => `${l.language} (${l.level})`).join(', ')}` : ''
   const langLines = langText ? (probe.splitTextToSize(langText, contentW) as string[]).slice(0, 2) : []
 
-  const contacts = card.contacts || []
+  const contacts = options?.contactsLocked ? [] : card.contacts || []
 
   // Calcular altura exacta del documento
   let bodyH = 12 // header bar
@@ -256,7 +257,7 @@ export async function downloadDigitalCardAsPdf(
     doc.setTextColor(4, 120, 87)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7.5)
-    doc.text('✓ WhatsApp verificado en LABURANTE', infoX, infoY + 0.5)
+    doc.text('✓ Número verificado en LABURANTE', infoX, infoY + 0.5)
     infoY += 3.8
   }
 
@@ -354,7 +355,15 @@ export async function downloadDigitalCardAsPdf(
   doc.text('CONTACTO DIRECTO', cardX + padX, contactY)
   contactY += 4.5
 
-  if (contacts.length === 0) {
+  if (options?.contactsLocked) {
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(113, 113, 122)
+    const lockMsg = doc.splitTextToSize('Iniciá sesión en LABURANTE para ver contactos y enlaces.', leftW) as string[]
+    for (const line of lockMsg.slice(0, 2)) {
+      doc.text(line, cardX + padX, contactY)
+      contactY += 4.2
+    }
+  } else if (contacts.length === 0) {
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(113, 113, 122)
     doc.text('Escaneá el QR o abrí el enlace para ver el perfil.', cardX + padX, contactY)

@@ -277,7 +277,7 @@ export default function ProfilePage() {
 
     void loadCard()
     return () => { active = false }
-  }, [profile, isOwnerSession])
+  }, [profile, isOwnerSession, user?.id])
 
   const handleDownloadCardPdf = async () => {
     if (!digitalCard) return
@@ -285,7 +285,9 @@ export default function ProfilePage() {
     setCardDownloadError('')
     try {
       const cardUrl = getCanonicalCardUrl(digitalCard.card_key)
-      await downloadDigitalCardAsPdf(digitalCard, cardUrl, profile?.slug)
+      await downloadDigitalCardAsPdf(digitalCard, cardUrl, profile?.slug, {
+        contactsLocked: !user,
+      })
     } catch (err: any) {
       setCardDownloadError(err?.message || 'No se pudo generar el PDF de la tarjeta.')
     } finally {
@@ -346,7 +348,7 @@ export default function ProfilePage() {
     .filter((method) => method.href)
 
   return (
-    <div className="container py-8 md:py-12 max-w-4xl mx-auto space-y-8">
+    <div className="container py-8 md:py-12 max-w-6xl mx-auto space-y-8">
       {/* Back button */}
       <Link
         to="/buscar"
@@ -393,7 +395,7 @@ export default function ProfilePage() {
 
       {/* Main Profile Header Card */}
       <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 md:p-10 shadow-xs relative">
-        <div className={digitalCard && (isPublicProvider || isOwnProfile) ? 'grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6 items-start mb-6' : 'mb-6'}>
+        <div className={digitalCard && (isPublicProvider || isOwnProfile) ? 'grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_410px] gap-6 lg:gap-8 items-start mb-6' : 'mb-6'}>
           <div className="flex flex-col sm:flex-row items-start gap-6">
             <div className="h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full bg-[var(--color-laburante-surface-alt)] border-2 border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-extrabold text-2xl sm:text-3xl text-[var(--color-laburante-text)] flex-shrink-0">
               {profile.photo_url && !imageFailed ? (
@@ -443,7 +445,7 @@ export default function ProfilePage() {
 
           {/* Tarjeta digital compacta a la derecha del perfil */}
           {digitalCard && (isPublicProvider || isOwnProfile) && (
-            <div className="w-full max-w-[360px] lg:max-w-none mx-auto lg:mx-0 space-y-2.5">
+            <div className="w-full max-w-[410px] lg:max-w-none mx-auto lg:mx-0 space-y-2.5">
               <DigitalCardView
                 name={digitalCard.name}
                 photoUrl={digitalCard.photo_url}
@@ -461,6 +463,8 @@ export default function ProfilePage() {
                 services={digitalCard.services}
                 languages={digitalCard.languages}
                 contacts={digitalCard.contacts}
+                contactsLocked={!user}
+                hasLockedContacts={Boolean(digitalCard.has_contacts)}
                 cardUrl={getCanonicalCardUrl(digitalCard.card_key)}
                 isOwnerPreview={isOwnProfile && !cardConfiguredInDb}
               />
