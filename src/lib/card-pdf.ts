@@ -97,16 +97,15 @@ export async function downloadDigitalCardAsPdf(
   filenameSlug?: string,
   options?: { contactsLocked?: boolean }
 ): Promise<void> {
-  // A4 horizontal real (297mm x 210mm) con orientation: 'landscape' para que jsPDF no invierta los ejes
-  const pageW = 297
-  const pageH = 210
-  const margin = 12
+  // Dimensiones compactas tipo tarjeta digital (ancho fijo proporcional a la vista previa, alto dinámico)
+  const margin = 6
+  const cardW = 136
+  const pageW = cardW + margin * 2 // 148mm
   const cardX = margin
-  const cardW = pageW - margin * 2
-  const padX = 12
-  const contentW = cardW - padX * 2
+  const padX = 8
+  const contentW = cardW - padX * 2 // 120mm
 
-  const probe = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const probe = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [pageW, 200] })
 
   const locationText = [card.localidad, card.provincia].filter(Boolean).join(', ')
   const modalityText = card.modalidad
@@ -119,39 +118,38 @@ export async function downloadDigitalCardAsPdf(
     : ''
   const metaLine = [locationText, modalityText, availabilityText].filter(Boolean).join(' · ')
 
-  const avatarSize = 18
-  const avatarGap = 5
+  const avatarSize = 15
+  const avatarGap = 4
   const infoW = contentW - avatarSize - avatarGap
 
   probe.setFont('helvetica', 'bold')
-  probe.setFontSize(14)
+  probe.setFontSize(13)
   const nameLines = probe.splitTextToSize(card.name || 'Profesional LABURANTE', infoW) as string[]
 
   probe.setFont('helvetica', 'bold')
-  probe.setFontSize(10)
+  probe.setFontSize(9.5)
   const headlineLines = card.headline
     ? (probe.splitTextToSize(card.headline, infoW) as string[])
     : []
 
   probe.setFont('helvetica', 'normal')
-  probe.setFontSize(8.5)
+  probe.setFontSize(8)
   const metaLines = metaLine ? (probe.splitTextToSize(metaLine, infoW) as string[]) : []
   const zonaLines = card.zona_trabajo
     ? (probe.splitTextToSize(`Zona habitual: ${card.zona_trabajo}`, contentW) as string[])
     : []
 
   probe.setFont('helvetica', 'normal')
-  probe.setFontSize(8.5)
+  probe.setFontSize(8)
   const bioLines = card.bio ? (probe.splitTextToSize(card.bio, contentW - 6) as string[]) : []
 
   const skills = card.skills || []
 
   // Precalcular filas de pills para simulación de altura
-  const pillPadX = 3     // padding horizontal dentro del pill (mm)
-  const pillPadY = 1.5   // padding vertical dentro del pill (mm)
-  const pillGap = 2.5    // separación horizontal entre pills (mm)
-  const pillRowH = 6.5   // altura de una fila de pills (mm)
-  const pillFontSize = 8.5
+  const pillPadX = 2.6   // padding horizontal dentro del pill (mm)
+  const pillGap = 2      // separación horizontal entre pills (mm)
+  const pillRowH = 5.6   // altura de una fila de pills (mm)
+  const pillFontSize = 7.8
   let skillPillRows = 0
   if (skills.length > 0) {
     probe.setFont('helvetica', 'normal')
@@ -176,22 +174,24 @@ export async function downloadDigitalCardAsPdf(
           .map((s) => (s.precio_orientativo ? `${s.title} (${s.precio_orientativo})` : s.title))
           .join(' · ')}`
       : ''
+  probe.setFont('helvetica', 'normal')
+  probe.setFontSize(8)
   const servicesLines = servicesText ? (probe.splitTextToSize(servicesText, contentW) as string[]) : []
 
   const languages = card.languages || []
   const langText =
     languages.length > 0 ? `Idiomas: ${languages.map((l) => `${l.language} (${l.level})`).join(', ')}` : ''
-  probe.setFontSize(8)
+  probe.setFontSize(7.5)
   const langLines = langText ? (probe.splitTextToSize(langText, contentW) as string[]) : []
 
   const contacts = options?.contactsLocked ? [] : card.contacts || []
 
-  const qrSize = 34
+  const qrSize = 27
   const qrX = cardX + cardW - padX - qrSize
-  const leftW = qrX - (cardX + padX) - 8
+  const leftW = qrX - (cardX + padX) - 5
 
   probe.setFont('helvetica', 'normal')
-  probe.setFontSize(8.5)
+  probe.setFontSize(8)
   const contactBlocks = contacts.map((contact) => {
     const display = formatDigitalCardContactDisplay(contact.type, contact.value)
     const href = getDigitalCardContactHref(contact.type, contact.value)
@@ -204,57 +204,70 @@ export async function downloadDigitalCardAsPdf(
     : []
 
   const shortUrl = cardUrl.replace(/^https?:\/\//i, '')
+  const urlLabelText = 'O accedé mediante el link:'
+  probe.setFont('helvetica', 'normal')
+  probe.setFontSize(7.5)
+  const urlLabelW = probe.getTextWidth(urlLabelText)
   probe.setFont('helvetica', 'bold')
-  probe.setFontSize(8)
-  const urlLines = probe.splitTextToSize(shortUrl, contentW - 8) as string[]
+  probe.setFontSize(7.5)
+  const singleLineUrlW = probe.getTextWidth(shortUrl)
+  const urlFitsInline = urlLabelW + 1.5 + singleLineUrlW <= contentW - 6
+  const urlLines = urlFitsInline
+    ? [shortUrl]
+    : (probe.splitTextToSize(shortUrl, contentW - 6) as string[])
 
-  // Simular altura exacta de cada bloque para que no sobre ni falte espacio
-  let simY = margin + 17
-  let simInfoY = simY + 4.5
-  simInfoY += nameLines.length * 5.8
-  simInfoY += headlineLines.length * 4.5
-  simInfoY += metaLines.length * 4
-  if (card.whatsapp_verified) simInfoY += 5
-  simY = Math.max(simY + avatarSize, simInfoY) + 4
+  // Simular altura exacta de cada bloque sincronizada con el renderizado
+  let simY = margin + 16
+  let simInfoY = simY + 4
+  simInfoY += nameLines.length * 5.2
+  simInfoY += headlineLines.length * 4.2
+  simInfoY += metaLines.length * 3.8
+  if (card.whatsapp_verified) simInfoY += 4.5
+  simY = Math.max(simY + avatarSize, simInfoY) + 3.5
 
-  if (zonaLines.length > 0) simY += zonaLines.length * 4 + 2
-  if (bioLines.length > 0) simY += bioLines.length * 4.2 + 7.5
-  if (skillPillRows > 0) simY += skillPillRows * pillRowH + 6
-  if (servicesLines.length > 0) simY += servicesLines.length * 4.2 + 2.5
-  if (langLines.length > 0) simY += langLines.length * 4 + 2.5
+  if (zonaLines.length > 0) simY += zonaLines.length * 3.8 + 1.8
+  if (bioLines.length > 0) {
+    const bioBoxH = bioLines.length * 3.8 + 3.6
+    simY += bioBoxH + 2.5
+  }
+  if (skillPillRows > 0) simY += 3.5 + skillPillRows * pillRowH + 1.5
+  if (servicesLines.length > 0) simY += servicesLines.length * 3.8 + 2
+  if (langLines.length > 0) simY += langLines.length * 3.6 + 2
 
   // Divisor
-  simY += 6
+  simY += 5
 
-  // Zona inferior 2 columnas (Contactos + QR)
-  let leftColH = 6.5 // título CONTACTO DIRECTO
+  // Zona inferior 2 columnas (Contactos + QR integrados)
+  let leftColH = 5.5 // título CONTACTO DIRECTO + margen
   if (options?.contactsLocked) {
-    leftColH += lockLines.length * 4.5
+    leftColH += lockLines.length * 4
   } else if (contactBlocks.length === 0) {
-    leftColH += 5
+    leftColH += 4.5
   } else {
     for (const block of contactBlocks) {
-      leftColH += block.lines.length * 4.3 + 1.8
+      leftColH += block.lines.length * 3.9 + 1.4
     }
   }
-  const rightColH = qrSize + 4
-  simY += Math.max(leftColH, rightColH) + 3
+  const rightColH = qrSize + 5.5
+  simY += Math.max(leftColH, rightColH) + 2.5
 
   // Caja URL completa
   if (cardUrl) {
-    simY += urlLines.length * 4.2 + 7
+    const urlRowCount = urlFitsInline ? 1 : 1 + urlLines.length
+    const urlBoxH = urlRowCount * 3.8 + 3.6
+    simY += urlBoxH + 2.5
   }
 
-  const cardEndY = simY + 7
-  // Si el contenido es más bajo que el A4 horizontal, centramos la tarjeta verticalmente
-  const neededCardH = Math.max(120, cardEndY - margin)
-  const cardH = Math.min(pageH - margin * 2, neededCardH)
-  const cardY = Math.max(margin, (pageH - cardH) / 2)
+  // Footer
+  const cardEndY = simY + 4.5
+  const cardH = Math.ceil(cardEndY - margin)
+  const pageH = cardH + margin * 2
+  const cardY = margin
 
   const doc = new jsPDF({
-    orientation: 'landscape',
+    orientation: pageW > pageH ? 'landscape' : 'portrait',
     unit: 'mm',
-    format: 'a4',
+    format: [pageW, pageH],
     compress: true,
   })
 
@@ -266,26 +279,26 @@ export async function downloadDigitalCardAsPdf(
   doc.setFillColor(255, 255, 255)
   doc.setDrawColor(229, 229, 223)
   doc.setLineWidth(0.35)
-  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'FD')
+  doc.roundedRect(cardX, cardY, cardW, cardH, 3.5, 3.5, 'FD')
 
   // Header oscuro + línea acento
   doc.setFillColor(18, 19, 36)
-  doc.roundedRect(cardX, cardY, cardW, 11, 4, 4, 'F')
-  doc.rect(cardX, cardY + 7, cardW, 4, 'F')
+  doc.roundedRect(cardX, cardY, cardW, 10, 3.5, 3.5, 'F')
+  doc.rect(cardX, cardY + 6.5, cardW, 3.5, 'F')
   doc.setFillColor(245, 166, 35)
-  doc.rect(cardX, cardY + 11, cardW, 1, 'F')
+  doc.rect(cardX, cardY + 10, cardW, 0.9, 'F')
 
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.text('LABURANTE', cardX + padX, cardY + 7.2)
+  doc.setFontSize(9)
+  doc.text('LABURANTE', cardX + padX, cardY + 6.5)
 
   doc.setTextColor(245, 166, 35)
-  doc.setFontSize(7.5)
-  doc.text('TARJETA DIGITAL', cardX + cardW - padX, cardY + 7, { align: 'right' })
+  doc.setFontSize(7)
+  doc.text('TARJETA DIGITAL', cardX + cardW - padX, cardY + 6.4, { align: 'right' })
 
   // Identidad (Foto + Nombre + Headline + Meta)
-  let y = cardY + 17
+  let y = cardY + 16
   const avatarX = cardX + padX
   const avatarY = y
 
@@ -303,91 +316,92 @@ export async function downloadDigitalCardAsPdf(
       .join('')
     doc.setTextColor(255, 255, 255)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.text(initials, avatarX + avatarSize / 2, avatarY + avatarSize / 2 + 1.5, { align: 'center' })
+    doc.setFontSize(10)
+    doc.text(initials, avatarX + avatarSize / 2, avatarY + avatarSize / 2 + 1.3, { align: 'center' })
   }
 
   const infoX = avatarX + avatarSize + avatarGap
-  let infoY = avatarY + 4.5
+  let infoY = avatarY + 4
 
   doc.setTextColor(26, 26, 46)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
+  doc.setFontSize(13)
   for (const line of nameLines) {
     doc.text(line, infoX, infoY)
-    infoY += 5.8
+    infoY += 5.2
   }
 
   if (headlineLines.length > 0) {
     doc.setTextColor(217, 119, 6)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
+    doc.setFontSize(9.5)
     for (const line of headlineLines) {
       doc.text(line, infoX, infoY)
-      infoY += 4.5
+      infoY += 4.2
     }
   }
 
   if (metaLines.length > 0) {
     doc.setTextColor(82, 82, 91)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFontSize(8)
     for (const line of metaLines) {
       doc.text(line, infoX, infoY)
-      infoY += 4
+      infoY += 3.8
     }
   }
 
   if (card.whatsapp_verified) {
     // Dibujar tilde vectorial en lugar de carácter Unicode (✓) para evitar el bug de espaciado de jsPDF Helvetica
     doc.setDrawColor(4, 120, 87)
-    doc.setLineWidth(0.45)
-    const cx = infoX + 0.8
-    const cy = infoY - 0.5
-    doc.line(cx, cy, cx + 1.1, cy + 1.1)
-    doc.line(cx + 1.1, cy + 1.1, cx + 3.0, cy - 1.4)
+    doc.setLineWidth(0.42)
+    const cx = infoX + 0.6
+    const cy = infoY - 0.6
+    doc.line(cx, cy, cx + 1.0, cy + 1.0)
+    doc.line(cx + 1.0, cy + 1.0, cx + 2.7, cy - 1.3)
 
     doc.setTextColor(4, 120, 87)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.text('Número verificado en LABURANTE', infoX + 4.2, infoY + 0.5)
-    infoY += 5
+    doc.setFontSize(7.5)
+    doc.text('Número verificado en LABURANTE', infoX + 3.8, infoY + 0.3)
+    infoY += 4.5
   }
 
-  y = Math.max(avatarY + avatarSize, infoY) + 4
+  y = Math.max(avatarY + avatarSize, infoY) + 3.5
 
   if (zonaLines.length > 0) {
     doc.setTextColor(82, 82, 91)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFontSize(8)
     for (const line of zonaLines) {
       doc.text(line, cardX + padX, y)
-      y += 4
+      y += 3.8
     }
-    y += 2
+    y += 1.8
   }
 
   if (bioLines.length > 0) {
-    const bioBoxH = bioLines.length * 4.2 + 4
+    const bioBoxH = bioLines.length * 3.8 + 3.6
     doc.setFillColor(250, 250, 247)
-    doc.roundedRect(cardX + padX, y - 2.8, contentW, bioBoxH, 2, 2, 'F')
+    doc.roundedRect(cardX + padX, y - 2.4, contentW, bioBoxH, 2, 2, 'F')
     doc.setTextColor(63, 63, 70)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFontSize(8)
+    let bioY = y + 0.8
     for (const line of bioLines) {
-      doc.text(line, cardX + padX + 3, y + 0.8)
-      y += 4.2
+      doc.text(line, cardX + padX + 3, bioY)
+      bioY += 3.8
     }
-    y += 3.5
+    y += bioBoxH + 0.1
   }
 
   if (skills.length > 0) {
     // Título de sección
     doc.setTextColor(113, 113, 122)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
+    doc.setFontSize(7.2)
     doc.text('ESPECIALIDADES', cardX + padX, y)
-    y += 4
+    y += 3.5
 
     // Pills/globitos grises con texto
     doc.setFont('helvetica', 'normal')
@@ -399,7 +413,7 @@ export async function downloadDigitalCardAsPdf(
     for (const skill of skills) {
       const tw = doc.getTextWidth(skill)
       const pillW = tw + pillPadX * 2
-      const pillH = pillRowH - 1.5
+      const pillH = pillRowH - 1.3
 
       // Wrap a la siguiente fila si se desborda
       if (pillX > cardX + padX && pillX + pillW > cardX + padX + contentW) {
@@ -413,81 +427,81 @@ export async function downloadDigitalCardAsPdf(
       doc.setFillColor(232, 230, 225)
       doc.setDrawColor(215, 213, 208)
       doc.setLineWidth(0.2)
-      doc.roundedRect(pillX, pillY, pillW, pillH, 2, 2, 'FD')
+      doc.roundedRect(pillX, pillY, pillW, pillH, 1.8, 1.8, 'FD')
 
       // Texto centrado dentro del pill
       doc.setTextColor(42, 42, 54)
-      doc.text(skill, pillX + pillPadX, pillY + pillH / 2 + 1.2)
+      doc.text(skill, pillX + pillPadX, pillY + pillH / 2 + 1.05)
 
       pillX += pillW + pillGap
     }
 
-    y = pillBaseY + (currentRow + 1) * pillRowH + 2
+    y = pillBaseY + (currentRow + 1) * pillRowH + 1.5
   }
 
   if (servicesLines.length > 0) {
     doc.setTextColor(26, 26, 46)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFontSize(8)
     for (const line of servicesLines) {
       doc.text(line, cardX + padX, y)
-      y += 4.2
+      y += 3.8
     }
-    y += 2.5
+    y += 2
   }
 
   if (langLines.length > 0) {
     doc.setTextColor(82, 82, 91)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
+    doc.setFontSize(7.5)
     for (const line of langLines) {
       doc.text(line, cardX + padX, y)
-      y += 4
+      y += 3.6
     }
-    y += 2.5
+    y += 2
   }
 
   // Línea divisoria antes de Contactos + QR
-  y += 1.5
+  y += 1
   doc.setDrawColor(229, 229, 223)
   doc.line(cardX + padX, y, cardX + cardW - padX, y)
-  y += 4.5
+  y += 4
 
-  // Columna derecha: QR
+  // Columna derecha: QR integrado junto a los contactos
   const qrY = y
   const qrPng = await generateQrPngDataUrl(cardUrl, 512)
   doc.addImage(qrPng, 'PNG', qrX, qrY, qrSize, qrSize)
 
   doc.setTextColor(113, 113, 122)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
+  doc.setFontSize(6)
   doc.text('Escaneá para ver', qrX + qrSize / 2, qrY + qrSize + 1.5, { align: 'center' })
-  doc.text('el perfil completo', qrX + qrSize / 2, qrY + qrSize + 4.5, { align: 'center' })
+  doc.text('el perfil completo', qrX + qrSize / 2, qrY + qrSize + 4.2, { align: 'center' })
 
   // Columna izquierda: Contactos autorizados con link clicable y texto copiable
-  let contactY = y + 2
-  doc.setFontSize(8)
+  let contactY = y + 1.5
+  doc.setFontSize(7.2)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(113, 113, 122)
   doc.text('CONTACTO DIRECTO', cardX + padX, contactY)
-  contactY += 4.5
+  contactY += 4
 
   if (options?.contactsLocked) {
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFontSize(8)
     doc.setTextColor(113, 113, 122)
     for (const line of lockLines) {
       doc.text(line, cardX + padX, contactY)
-      contactY += 4.5
+      contactY += 4
     }
   } else if (contactBlocks.length === 0) {
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFontSize(8)
     doc.setTextColor(113, 113, 122)
     doc.text('Escaneá el QR o abrí el enlace para ver el perfil.', cardX + padX, contactY)
   } else {
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFontSize(8)
     for (const block of contactBlocks) {
       for (const line of block.lines) {
         if (block.href) {
@@ -497,44 +511,45 @@ export async function downloadDigitalCardAsPdf(
           doc.setTextColor(26, 26, 46)
           doc.text(line, cardX + padX, contactY)
         }
-        contactY += 4.3
+        contactY += 3.9
       }
-      contactY += 1.8
+      contactY += 1.4
     }
   }
 
-  y += Math.max(leftColH, rightColH) + 3
+  y += Math.max(leftColH, rightColH) + 2.5
 
   // Caja inferior con la URL completa (nunca cortada)
   if (cardUrl) {
-    const urlBoxH = urlLines.length * 4.2 + 4
+    const urlRowCount = urlFitsInline ? 1 : 1 + urlLines.length
+    const urlBoxH = urlRowCount * 3.8 + 3.6
     doc.setFillColor(244, 242, 237)
-    doc.roundedRect(cardX + padX, y - 1, contentW, urlBoxH, 2, 2, 'F')
+    doc.roundedRect(cardX + padX, y - 1.5, contentW, urlBoxH, 2, 2, 'F')
 
-    // Texto introductorio gris
-    const labelText = 'O accedé mediante el link:'
     doc.setTextColor(113, 113, 122)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.text(labelText, cardX + padX + 3, y + 2.5)
-    const labelW = doc.getTextWidth(labelText)
+    doc.setFontSize(7.5)
+    doc.text(urlLabelText, cardX + padX + 3, y + 1.8)
 
-    // URL en color, clicable, a continuación del label
     doc.setTextColor(79, 70, 229)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    let urlTextY = y + 2.5
-    for (const line of urlLines) {
-      doc.textWithLink(line, cardX + padX + 3 + labelW + 2, urlTextY, { url: cardUrl })
-      urlTextY += 4.2
+    doc.setFontSize(7.5)
+    if (urlFitsInline) {
+      doc.textWithLink(shortUrl, cardX + padX + 3 + urlLabelW + 1.5, y + 1.8, { url: cardUrl })
+    } else {
+      let urlTextY = y + 5.6
+      for (const line of urlLines) {
+        doc.textWithLink(line, cardX + padX + 3, urlTextY, { url: cardUrl })
+        urlTextY += 3.8
+      }
     }
   }
 
   // Footer
   doc.setTextColor(113, 113, 122)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.2)
-  doc.text('Tarjeta digital oficial de LABURANTE · Conexión laboral argentina', pageW / 2, cardY + cardH - 3.5, {
+  doc.setFontSize(6.8)
+  doc.text('Tarjeta digital oficial de LABURANTE · Conexión laboral argentina', pageW / 2, cardY + cardH - 3.2, {
     align: 'center',
   })
 
