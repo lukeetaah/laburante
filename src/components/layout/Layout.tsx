@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import Header from './Header'
 import Footer from './Footer'
 import AuthNotifier from './AuthNotifier'
+import FeatureAndProfileBanner from './FeatureAndProfileBanner'
 import WelcomeModal from './WelcomeModal'
 import IntentPromptModal from '@/components/profile/IntentPromptModal'
 import LegalGateModal from './LegalGateModal'
@@ -14,6 +15,7 @@ export default function Layout() {
       <ScrollToTop />
       <Header />
       <AuthNotifier />
+      <FeatureAndProfileBanner />
       <HelpRibbon />
       <WelcomeModal />
       <IntentPromptModal />

@@ -17,6 +17,7 @@ import { hasProviderContent, isProviderProfile, normalizeProfileIntent, type Pro
 import { loadEmailNotificationsEnabled, saveEmailNotificationsEnabled } from '@/lib/notification-preferences'
 import { toEditableContactMethod } from '@/lib/contact-methods'
 import { registerCustomProposedSkills, type ProposedSkillsClient } from '@/lib/proposed-skills'
+import { getDefaultDigitalCardConfig, saveDigitalCardConfig } from '@/lib/digital-card'
 
 export default function CreateProfile() {
   const { user, loading: authLoading } = useAuthStore()
@@ -67,6 +68,7 @@ export default function CreateProfile() {
   // Explicit voluntary consent checkbox (CRITICAL REQUIREMENT)
   const [consentGranted, setConsentGranted] = useState(false)
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true)
+  const [activateDigitalCard, setActivateDigitalCard] = useState(false)
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -446,6 +448,19 @@ export default function CreateProfile() {
           if (preferenceResult.error) {
             setError(`El perfil se guardó, pero no pudimos guardar la preferencia de emails: ${preferenceResult.error}`)
             return
+          }
+
+          // Si el usuario eligió activar su Tarjeta Digital en el onboarding, la guardamos con su configuración inicial
+          if (!isEditing && activateDigitalCard) {
+            try {
+              const createdProfile = await fetchMyProfile()
+              if (createdProfile) {
+                const defaultCardCfg = getDefaultDigitalCardConfig(createdProfile)
+                await saveDigitalCardConfig(createdProfile.id, defaultCardCfg)
+              }
+            } catch (cardErr) {
+              console.warn('No se pudo activar la tarjeta digital en el onboarding:', cardErr)
+            }
           }
 
           // Sólo se elimina la foto anterior después de confirmar que el perfil ya referencia la nueva.
@@ -1218,6 +1233,35 @@ export default function CreateProfile() {
             </span>
           </label>
         </section>
+
+        {/* Opt-in Tarjeta Digital en onboarding (solo nuevos perfiles) */}
+        {!isEditing && (
+          <section className="p-5 sm:p-6 rounded-3xl border border-indigo-200 bg-indigo-50/40 space-y-3">
+            <div className="flex items-start gap-2.5">
+              <QrCode size={18} className="text-[var(--color-laburante-indigo)] shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h2 className="font-heading font-bold text-sm text-[var(--color-laburante-text)]">
+                  Tarjeta Digital con código QR (opcional)
+                </h2>
+                <p className="text-xs leading-relaxed text-[var(--color-laburante-text-secondary)]">
+                  Podés tener tu tarjeta digital personal (con enlace propio y PDF descargable) para compartir tu trabajo por WhatsApp o redes. Vos elegís si querés activarla ahora o configurarla más adelante desde tu perfil.
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer rounded-2xl border border-indigo-200/80 bg-white px-4 py-3">
+              <input
+                type="checkbox"
+                checked={activateDigitalCard}
+                onChange={(event) => setActivateDigitalCard(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-[var(--color-laburante-border)] text-[var(--color-laburante-indigo)] focus:ring-0 cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-[var(--color-laburante-text)] leading-relaxed">
+                Sí, activar mi Tarjeta Digital y código QR al publicar mi perfil
+              </span>
+            </label>
+          </section>
+        )}
 
         {/* Submit Button */}
         <div className="pt-2">

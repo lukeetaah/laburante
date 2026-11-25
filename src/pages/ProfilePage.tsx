@@ -268,7 +268,7 @@ export default function ProfilePage() {
           languages: cfg.show_languages ? (profile.languages || []) : [],
           contacts,
         })
-        setCardConfiguredInDb(Boolean(saved))
+        setCardConfiguredInDb(Boolean(saved) && saved?.config?.enabled !== false)
       } else {
         setDigitalCard(null)
         setCardConfiguredInDb(false)

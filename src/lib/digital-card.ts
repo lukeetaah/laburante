@@ -1,9 +1,9 @@
 import { supabase } from '@/lib/supabase'
 import type { ProfileWithDetails } from '@/stores/profile-store'
-import { dispatchNotificationEmail } from '@/lib/notification-email'
 import { resolveProfilePhotoUrl } from '@/lib/profile-assets'
 
 export interface DigitalCardConfig {
+  enabled?: boolean
   show_photo: boolean
   show_headline: boolean
   custom_headline?: string
@@ -163,6 +163,7 @@ export function detectAvailableCardFields(profile: ProfileWithDetails | null | u
 export function getDefaultDigitalCardConfig(profile: ProfileWithDetails | null | undefined): DigitalCardConfig {
   const fields = detectAvailableCardFields(profile)
   return {
+    enabled: true,
     show_photo: fields.hasPhoto,
     show_headline: Boolean(fields.defaultHeadline),
     custom_headline: fields.defaultHeadline,
@@ -366,10 +367,11 @@ async function fallbackFetchPublicDigitalCard(identifier: string): Promise<Publi
       }
     }
 
-    if (!profileRow) return null
+    if (!profileRow || !cardRow) return null
 
-    const config: DigitalCardConfig = cardRow?.config || getDefaultDigitalCardConfig(profileRow)
-    const cardKey = cardRow?.card_key || profileRow.slug
+    const config: DigitalCardConfig = cardRow.config || getDefaultDigitalCardConfig(profileRow)
+    if (config.enabled === false) return null
+    const cardKey = cardRow.card_key || profileRow.slug
 
     // Obtener habilidades si están autorizadas
     let skills: string[] = []
@@ -470,60 +472,4 @@ export function getCardWhatsAppShareUrl(name: string, profession: string | null 
 
   const message = lines.join('\n')
   return `https://wa.me/?text=${encodeURIComponent(message)}`
-}
-
-/**
- * Envía el enlace permanente y el código QR de la tarjeta al correo del propio usuario
- * utilizando la infraestructura de notificaciones y emails existente.
- */
-export async function sendCardEmailToSelf(
-  _userId: string,
-  _userEmail: string,
-  cardKey: string,
-  _name: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    if (!cardKey || !cardKey.trim()) {
-      return {
-        success: false,
-        error: 'Primero guardá tu tarjeta para generar tu enlace permanente y poder enviártela por correo.',
-      }
-    }
-
-    // 1. Crear la notificación vía RPC segura (valida email confirmado, rate limit y URL en servidor)
-    const { data: notificationId, error: rpcErr } = await (supabase.rpc as any)('request_digital_card_email')
-
-    if (rpcErr) {
-      return { success: false, error: rpcErr.message || 'No se pudo preparar el envío por correo.' }
-    }
-
-    if (!notificationId) {
-      return { success: false, error: 'No se pudo registrar el envío de la tarjeta.' }
-    }
-
-    // 2. Disparar el envío por correo utilizando la función existente send-notification-email
-    const dispatchResult = await dispatchNotificationEmail(String(notificationId))
-    if (!dispatchResult.ok) {
-      return {
-        success: false,
-        error: dispatchResult.error || dispatchResult.reason || 'No se pudo enviar el correo en este momento.',
-      }
-    }
-
-    if (dispatchResult.status === 'skipped') {
-      const reasonMap: Record<string, string> = {
-        preference_disabled: 'Tenés desactivadas las notificaciones por email en tu perfil.',
-        recipient_email_unavailable: 'No encontramos un correo válido en tu cuenta.',
-        invalid_context: 'El contexto del correo no pudo validarse en el servidor.',
-      }
-      return {
-        success: false,
-        error: reasonMap[dispatchResult.reason || ''] || 'El envío por correo fue omitido por las reglas de notificación.',
-      }
-    }
-
-    return { success: true }
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Error inesperado al enviar el correo.' }
-  }
 }

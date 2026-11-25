@@ -21,7 +21,6 @@ import {
   Eye,
   Sliders,
   ExternalLink,
-  Send,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
@@ -33,7 +32,6 @@ import {
   saveDigitalCardConfig,
   getCanonicalCardUrl,
   getCardWhatsAppShareUrl,
-  sendCardEmailToSelf,
   type DigitalCardConfig,
 } from '@/lib/digital-card'
 import { downloadQrAsPng, downloadQrAsSvg } from '@/lib/qr-service'
@@ -57,8 +55,6 @@ export default function CardConfigPage() {
 
   // Feedback states
   const [copiedLink, setCopiedLink] = useState(false)
-  const [emailSending, setEmailSending] = useState(false)
-  const [emailStatus, setEmailStatus] = useState<{ ok: boolean; message: string } | null>(null)
 
   // Mobile layout state: 'preview' or 'config'
   const [mobileTab, setMobileTab] = useState<'preview' | 'config'>('preview')
@@ -251,35 +247,6 @@ export default function CardConfigPage() {
     await downloadQrAsSvg(canonicalUrl, `qr-laburante-${safeName}.svg`)
   }
 
-  // Enviarme mi QR por correo
-  const handleSendEmailToSelf = async () => {
-    if (!user?.id || !user.email || !myProfile) return
-    if (!cardKey) {
-      setEmailStatus({
-        ok: false,
-        message: 'Primero guardá tu tarjeta para generar tu enlace permanente y enviártela por correo.',
-      })
-      return
-    }
-    setEmailSending(true)
-    setEmailStatus(null)
-
-    const res = await sendCardEmailToSelf(user.id, user.email, cardKey, myProfile.name)
-    setEmailSending(false)
-
-    if (res.success) {
-      setEmailStatus({
-        ok: true,
-        message: `¡Listo! Te enviamos tu enlace permanente y datos a ${user.email}.`,
-      })
-    } else {
-      setEmailStatus({
-        ok: false,
-        message: res.error || 'No se pudo enviar el correo en este momento.',
-      })
-    }
-  }
-
   // Descargar vCard .vcf con solo los datos autorizados
   const handleDownloadVCard = () => {
     if (!myProfile || !config) return
@@ -395,6 +362,47 @@ export default function CardConfigPage() {
           </div>
         </div>
       )}
+
+      {/* Opt-in: Activar o pausar tarjeta pública */}
+      <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="space-y-0.5">
+          <p className="text-xs sm:text-sm font-bold text-[var(--color-laburante-text)] flex items-center gap-2">
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                config?.enabled !== false && cardKey ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
+            />
+            {!cardKey
+              ? 'Tu tarjeta digital todavía no está activada'
+              : config?.enabled !== false
+              ? 'Tarjeta digital pública activada'
+              : 'Tarjeta digital pausada (solo vos la ves)'}
+          </p>
+          <p className="text-[11px] text-[var(--color-laburante-text-secondary)]">
+            {!cardKey
+              ? 'Elegí qué datos mostrar y tocá "Guardar mi tarjeta" cuando quieras activarla para que otros puedan verla y escanear tu QR.'
+              : config?.enabled !== false
+              ? 'Cualquier persona con tu enlace o desde tu perfil puede ver tu tarjeta. Podés pausarla cuando quieras.'
+              : 'Guardá los cambios para ocultar tu tarjeta pública sin perder tu configuración.'}
+          </p>
+        </div>
+
+        {cardKey && (
+          <label className="inline-flex items-center gap-2.5 shrink-0 cursor-pointer select-none rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] px-3.5 py-2 text-xs font-semibold text-[var(--color-laburante-text)]">
+            <input
+              type="checkbox"
+              checked={config?.enabled !== false}
+              onChange={(e) => {
+                setConfig((prev) => (prev ? { ...prev, enabled: e.target.checked } : prev))
+                setSaveSuccess(false)
+                setSaveError(null)
+              }}
+              className="h-4 w-4 rounded border-[var(--color-laburante-border)] text-[var(--color-laburante-indigo)] focus:ring-0 cursor-pointer"
+            />
+            <span>Mostrar tarjeta pública</span>
+          </label>
+        )}
+      </div>
 
       {/* Mobile Tab Switcher */}
       <div className="flex rounded-2xl bg-[var(--color-laburante-surface-alt)] p-1 md:hidden">
@@ -986,44 +994,22 @@ export default function CardConfigPage() {
                 </div>
               </div>
 
-              {/* Extra Tools: Email QR to Self + vCard */}
+              {/* Extra Tools: vCard */}
               {!cardKey && (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-900">
                   Tocá <strong>Guardar mi tarjeta</strong> para activar tu enlace permanente y código QR definitivo.
                 </p>
               )}
-              <div className="pt-3 border-t border-[var(--color-laburante-border)] flex flex-wrap items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleSendEmailToSelf}
-                  disabled={emailSending}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-laburante-indigo)] hover:underline disabled:opacity-50 cursor-pointer"
-                >
-                  <Send size={13} />
-                  <span>{emailSending ? 'Enviando...' : 'Enviarme mi QR por correo'}</span>
-                </button>
-
+              <div className="pt-3 border-t border-[var(--color-laburante-border)] flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={handleDownloadVCard}
-                  className="inline-flex items-center gap-1.5 text-xs text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)]"
+                  className="inline-flex items-center gap-1.5 text-xs text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] cursor-pointer"
                 >
                   <Download size={13} />
                   <span>Guardar contacto (.vcf)</span>
                 </button>
               </div>
-
-              {emailStatus && (
-                <div
-                  className={`rounded-xl p-2.5 text-xs font-medium text-center ${
-                    emailStatus.ok
-                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                      : 'bg-rose-50 text-rose-800 border border-rose-200'
-                  }`}
-                >
-                  {emailStatus.message}
-                </div>
-              )}
             </div>
           </div>
         </div>

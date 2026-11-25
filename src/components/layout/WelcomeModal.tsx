@@ -85,7 +85,7 @@ export default function WelcomeModal() {
             ¿Qué tenés que hacer ahora?
           </div>
           <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
-            {isCompany ? <>Tu cuenta Empresa ya está activa. El próximo paso es <strong>buscar LABURANTEs, guardar perfiles y proponer entrevistas o contrataciones</strong>. La orden de compra y el alta de proveedor las gestiona tu empresa.</> : <>Para que personas de tu zona puedan encontrarte y enviarte pedidos de presupuesto, el paso siguiente es <strong>publicar tu perfil de servicios</strong>.</>}
+            {isCompany ? <>Tu cuenta Empresa ya está activa. El próximo paso es <strong>buscar LABURANTEs, guardar perfiles y proponer entrevistas o contrataciones</strong>. La orden de compra y el alta de proveedor las gestiona tu empresa.</> : <>Para que personas de tu zona puedan encontrarte y enviarte pedidos de presupuesto, el paso siguiente es <strong>publicar tu perfil de servicios</strong>. Además, vas a poder activar gratis tu <strong>Tarjeta Digital con código QR</strong> si querés compartir tu contacto.</>}
           </p>
           <div className="pt-2 border-t border-[var(--color-laburante-border)]/70 text-[11px] text-[var(--color-laburante-text-muted)] space-y-1">
             <p className="font-semibold text-[var(--color-laburante-text-secondary)]">
