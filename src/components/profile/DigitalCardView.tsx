@@ -39,6 +39,7 @@ export interface DigitalCardDisplayProps {
   cardUrl: string
   isOwnerPreview?: boolean
   showQr?: boolean
+  embeddedInProfile?: boolean
 }
 
 export default function DigitalCardView({
@@ -63,6 +64,7 @@ export default function DigitalCardView({
   cardUrl,
   isOwnerPreview = false,
   showQr = true,
+  embeddedInProfile = false,
 }: DigitalCardDisplayProps) {
   const [qrSvg, setQrSvg] = useState<string>('')
   const [imageFailed, setImageFailed] = useState(false)
@@ -162,25 +164,27 @@ export default function DigitalCardView({
       <div className="p-4 space-y-3">
         {/* Identity Row */}
         <div className="flex items-start gap-3">
-          <div className="h-12 w-12 overflow-hidden rounded-full border border-[var(--color-laburante-border)] bg-[#121324] flex items-center justify-center font-heading text-base font-extrabold text-white shrink-0">
-            {photoUrl && !imageFailed ? (
-              <img
-                src={photoUrl}
-                alt={name}
-                className="h-full w-full object-cover"
-                onError={() => setImageFailed(true)}
-              />
-            ) : (
-              <span>{name ? name.charAt(0).toUpperCase() : 'L'}</span>
-            )}
-          </div>
+          {!embeddedInProfile && (
+            <div className="h-12 w-12 overflow-hidden rounded-full border border-[var(--color-laburante-border)] bg-[#121324] flex items-center justify-center font-heading text-base font-extrabold text-white shrink-0">
+              {photoUrl && !imageFailed ? (
+                <img
+                  src={photoUrl}
+                  alt={name}
+                  className="h-full w-full object-cover"
+                  onError={() => setImageFailed(true)}
+                />
+              ) : (
+                <span>{name ? name.charAt(0).toUpperCase() : 'L'}</span>
+              )}
+            </div>
+          )}
 
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h3 className="font-heading text-base sm:text-lg font-extrabold text-[var(--color-laburante-text)] leading-tight truncate">
                 {name || 'Nombre del trabajador'}
               </h3>
-              {whatsappVerified && (
+              {whatsappVerified && !embeddedInProfile && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200"
                   title="Número de WhatsApp verificado por LABURANTE"
@@ -197,7 +201,7 @@ export default function DigitalCardView({
               </p>
             )}
 
-            {(locationText || modalidad || disponibilidad) && (
+            {!embeddedInProfile && (locationText || modalidad || disponibilidad) && (
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-[var(--color-laburante-text-secondary)]">
                 {locationText && (
                   <span className="inline-flex items-center gap-1">
@@ -220,7 +224,7 @@ export default function DigitalCardView({
               </div>
             )}
 
-            {zonaTrabajo && (
+            {!embeddedInProfile && zonaTrabajo && (
               <p className="text-[11px] text-[var(--color-laburante-text-muted)] truncate">
                 Zona: <span className="text-[var(--color-laburante-text-secondary)]">{zonaTrabajo}</span>
               </p>
@@ -229,14 +233,14 @@ export default function DigitalCardView({
         </div>
 
         {/* Brief Bio */}
-        {bio && (
+        {!embeddedInProfile && bio && (
           <p className="rounded-xl bg-[var(--color-laburante-surface-alt)]/70 px-3 py-2 text-xs leading-relaxed text-[var(--color-laburante-text-secondary)] line-clamp-2 border border-[var(--color-laburante-border)]/60">
             {bio}
           </p>
         )}
 
         {/* Skills Chips */}
-        {visibleSkills.length > 0 && (
+        {!embeddedInProfile && visibleSkills.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {visibleSkills.map((skill, idx) => (
               <span
@@ -250,7 +254,7 @@ export default function DigitalCardView({
         )}
 
         {/* Services Compact Summary */}
-        {visibleServices.length > 0 && (
+        {!embeddedInProfile && visibleServices.length > 0 && (
           <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-snug">
             <span className="font-bold text-[var(--color-laburante-text)]">Servicios: </span>
             {visibleServices
@@ -260,7 +264,7 @@ export default function DigitalCardView({
         )}
 
         {/* Languages Compact */}
-        {languages && languages.length > 0 && (
+        {!embeddedInProfile && languages && languages.length > 0 && (
           <p className="text-[11px] text-[var(--color-laburante-text-muted)]">
             <span className="font-semibold text-[var(--color-laburante-text-secondary)]">Idiomas: </span>
             {languages.map((l) => `${l.language} (${l.level})`).join(', ')}
@@ -330,18 +334,27 @@ export default function DigitalCardView({
                   <QrCode size={28} className="text-slate-300 animate-pulse" />
                 )}
               </div>
-              <a
-                href={cardUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 block text-[10px] font-semibold text-[var(--color-laburante-indigo)] hover:underline truncate select-all"
-                title={cardUrl}
-              >
-                {cardUrl.replace(/^https?:\/\//i, '')}
-              </a>
+              <p className="mt-1 text-[10px] font-medium text-[var(--color-laburante-text-muted)]">
+                Escaneá el QR
+              </p>
             </div>
           )}
         </div>
+
+        {/* Full Permanent URL (never truncated, readable in screenshots) */}
+        {cardUrl && (
+          <div className="rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)]/60 px-3 py-1.5 text-center">
+            <a
+              href={cardUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-[11px] font-semibold text-[var(--color-laburante-indigo)] hover:underline break-all select-all leading-snug"
+              title={cardUrl}
+            >
+              {cardUrl.replace(/^https?:\/\//i, '')}
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Compact Footer */}

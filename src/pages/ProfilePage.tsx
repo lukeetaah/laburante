@@ -467,6 +467,7 @@ export default function ProfilePage() {
                 hasLockedContacts={Boolean(digitalCard.has_contacts)}
                 cardUrl={getCanonicalCardUrl(digitalCard.card_key)}
                 isOwnerPreview={isOwnProfile && !cardConfiguredInDb}
+                embeddedInProfile={true}
               />
 
               <div className="flex flex-wrap items-center gap-2">
