@@ -97,14 +97,16 @@ export async function downloadDigitalCardAsPdf(
   filenameSlug?: string,
   options?: { contactsLocked?: boolean }
 ): Promise<void> {
-  const pageW = 210 // A4 ancho (mm) para que todo el contenido entre sin recortes
+  // A4 horizontal real (297mm x 210mm) con orientation: 'landscape' para que jsPDF no invierta los ejes
+  const pageW = 297
+  const pageH = 210
   const margin = 12
   const cardX = margin
   const cardW = pageW - margin * 2
-  const padX = 10
+  const padX = 12
   const contentW = cardW - padX * 2
 
-  const probe = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [pageW, 297] })
+  const probe = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
   const locationText = [card.localidad, card.provincia].filter(Boolean).join(', ')
   const modalityText = card.modalidad
@@ -163,9 +165,9 @@ export async function downloadDigitalCardAsPdf(
 
   const contacts = options?.contactsLocked ? [] : card.contacts || []
 
-  const qrSize = 30
+  const qrSize = 34
   const qrX = cardX + cardW - padX - qrSize
-  const leftW = qrX - (cardX + padX) - 6
+  const leftW = qrX - (cardX + padX) - 8
 
   probe.setFont('helvetica', 'normal')
   probe.setFontSize(8.5)
@@ -222,14 +224,16 @@ export async function downloadDigitalCardAsPdf(
     simY += urlLines.length * 4.2 + 7
   }
 
-  // Footer + margen inferior
   const cardEndY = simY + 7
-  const pageH = cardEndY + margin
+  // Si el contenido es más bajo que el A4 horizontal, centramos la tarjeta verticalmente
+  const neededCardH = Math.max(120, cardEndY - margin)
+  const cardH = Math.min(pageH - margin * 2, neededCardH)
+  const cardY = Math.max(margin, (pageH - cardH) / 2)
 
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
-    format: [pageW, pageH],
+    format: 'a4',
     compress: true,
   })
 
@@ -238,30 +242,29 @@ export async function downloadDigitalCardAsPdf(
   doc.rect(0, 0, pageW, pageH, 'F')
 
   // Tarjeta blanca con borde
-  const cardH = pageH - margin * 2
   doc.setFillColor(255, 255, 255)
   doc.setDrawColor(229, 229, 223)
   doc.setLineWidth(0.35)
-  doc.roundedRect(cardX, margin, cardW, cardH, 4, 4, 'FD')
+  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'FD')
 
   // Header oscuro + línea acento
   doc.setFillColor(18, 19, 36)
-  doc.roundedRect(cardX, margin, cardW, 11, 4, 4, 'F')
-  doc.rect(cardX, margin + 7, cardW, 4, 'F')
+  doc.roundedRect(cardX, cardY, cardW, 11, 4, 4, 'F')
+  doc.rect(cardX, cardY + 7, cardW, 4, 'F')
   doc.setFillColor(245, 166, 35)
-  doc.rect(cardX, margin + 11, cardW, 1, 'F')
+  doc.rect(cardX, cardY + 11, cardW, 1, 'F')
 
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9.5)
-  doc.text('LABURANTE', cardX + padX, margin + 7.2)
+  doc.text('LABURANTE', cardX + padX, cardY + 7.2)
 
   doc.setTextColor(245, 166, 35)
   doc.setFontSize(7.5)
-  doc.text('TARJETA DIGITAL', cardX + cardW - padX, margin + 7, { align: 'right' })
+  doc.text('TARJETA DIGITAL', cardX + cardW - padX, cardY + 7, { align: 'right' })
 
   // Identidad (Foto + Nombre + Headline + Meta)
-  let y = margin + 17
+  let y = cardY + 17
   const avatarX = cardX + padX
   const avatarY = y
 
@@ -466,7 +469,7 @@ export async function downloadDigitalCardAsPdf(
   doc.setTextColor(113, 113, 122)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.2)
-  doc.text('Tarjeta digital oficial de LABURANTE · Conexión laboral argentina', pageW / 2, margin + cardH - 3.5, {
+  doc.text('Tarjeta digital oficial de LABURANTE · Conexión laboral argentina', pageW / 2, cardY + cardH - 3.5, {
     align: 'center',
   })
 
