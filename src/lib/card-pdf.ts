@@ -145,8 +145,29 @@ export async function downloadDigitalCardAsPdf(
   const bioLines = card.bio ? (probe.splitTextToSize(card.bio, contentW - 6) as string[]) : []
 
   const skills = card.skills || []
-  const skillsText = skills.length > 0 ? `Especialidades: ${skills.join(' · ')}` : ''
-  const skillsLines = skillsText ? (probe.splitTextToSize(skillsText, contentW) as string[]) : []
+
+  // Precalcular filas de pills para simulación de altura
+  const pillPadX = 3     // padding horizontal dentro del pill (mm)
+  const pillPadY = 1.5   // padding vertical dentro del pill (mm)
+  const pillGap = 2.5    // separación horizontal entre pills (mm)
+  const pillRowH = 6.5   // altura de una fila de pills (mm)
+  const pillFontSize = 8.5
+  let skillPillRows = 0
+  if (skills.length > 0) {
+    probe.setFont('helvetica', 'normal')
+    probe.setFontSize(pillFontSize)
+    let rowX = 0
+    skillPillRows = 1
+    for (const skill of skills) {
+      const tw = probe.getTextWidth(skill)
+      const pillW = tw + pillPadX * 2
+      if (rowX > 0 && rowX + pillW > contentW) {
+        skillPillRows++
+        rowX = 0
+      }
+      rowX += pillW + pillGap
+    }
+  }
 
   const services = card.services || []
   const servicesText =
@@ -198,7 +219,7 @@ export async function downloadDigitalCardAsPdf(
 
   if (zonaLines.length > 0) simY += zonaLines.length * 4 + 2
   if (bioLines.length > 0) simY += bioLines.length * 4.2 + 7.5
-  if (skillsLines.length > 0) simY += skillsLines.length * 4.2 + 2.5
+  if (skillPillRows > 0) simY += skillPillRows * pillRowH + 6
   if (servicesLines.length > 0) simY += servicesLines.length * 4.2 + 2.5
   if (langLines.length > 0) simY += langLines.length * 4 + 2.5
 
@@ -360,15 +381,48 @@ export async function downloadDigitalCardAsPdf(
     y += 3.5
   }
 
-  if (skillsLines.length > 0) {
-    doc.setTextColor(26, 26, 46)
+  if (skills.length > 0) {
+    // Título de sección
+    doc.setTextColor(113, 113, 122)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.text('ESPECIALIDADES', cardX + padX, y)
+    y += 4
+
+    // Pills/globitos grises con texto
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    for (const line of skillsLines) {
-      doc.text(line, cardX + padX, y)
-      y += 4.2
+    doc.setFontSize(pillFontSize)
+    let pillX = cardX + padX
+    const pillBaseY = y
+    let currentRow = 0
+
+    for (const skill of skills) {
+      const tw = doc.getTextWidth(skill)
+      const pillW = tw + pillPadX * 2
+      const pillH = pillRowH - 1.5
+
+      // Wrap a la siguiente fila si se desborda
+      if (pillX > cardX + padX && pillX + pillW > cardX + padX + contentW) {
+        currentRow++
+        pillX = cardX + padX
+      }
+
+      const pillY = pillBaseY + currentRow * pillRowH
+
+      // Fondo gris claro con borde sutil
+      doc.setFillColor(232, 230, 225)
+      doc.setDrawColor(215, 213, 208)
+      doc.setLineWidth(0.2)
+      doc.roundedRect(pillX, pillY, pillW, pillH, 2, 2, 'FD')
+
+      // Texto centrado dentro del pill
+      doc.setTextColor(42, 42, 54)
+      doc.text(skill, pillX + pillPadX, pillY + pillH / 2 + 1.2)
+
+      pillX += pillW + pillGap
     }
-    y += 2.5
+
+    y = pillBaseY + (currentRow + 1) * pillRowH + 2
   }
 
   if (servicesLines.length > 0) {
@@ -406,8 +460,9 @@ export async function downloadDigitalCardAsPdf(
 
   doc.setTextColor(113, 113, 122)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.text('Escaneá el QR', qrX + qrSize / 2, qrY + qrSize + 3.2, { align: 'center' })
+  doc.setFontSize(6.5)
+  doc.text('Escaneá para ver', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' })
+  doc.text('el perfil completo', qrX + qrSize / 2, qrY + qrSize + 6, { align: 'center' })
 
   // Columna izquierda: Contactos autorizados con link clicable y texto copiable
   let contactY = y + 2
