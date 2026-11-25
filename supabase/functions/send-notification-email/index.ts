@@ -191,16 +191,31 @@ async function isValidNotificationContext(
     return false
   }
 
-  if (url.pathname.startsWith('/tarjeta/')) {
-    const cardKey = decodeURIComponent(url.pathname.slice('/tarjeta/'.length))
-    if (!cardKey) return false
-    const { data: card } = await admin
-      .from('profile_cards')
-      .select('profile_id')
-      .eq('card_key', cardKey)
-      .eq('profile_id', notification.user_id)
-      .maybeSingle()
-    return Boolean(card && actor.id === notification.user_id && notification.type === 'system')
+  if (url.pathname.startsWith('/tarjeta/') || url.pathname.startsWith('/t/')) {
+    const prefix = url.pathname.startsWith('/t/') ? '/t/' : '/tarjeta/'
+    const identifier = decodeURIComponent(url.pathname.slice(prefix.length))
+    if (!identifier) return false
+
+    // /t/ usa slug de perfil, /tarjeta/ usa card_key
+    let profileId: string | undefined
+    if (prefix === '/t/') {
+      const { data: profile } = await admin
+        .from('profiles')
+        .select('id')
+        .eq('slug', identifier)
+        .eq('id', notification.user_id)
+        .maybeSingle()
+      profileId = profile?.id
+    } else {
+      const { data: card } = await admin
+        .from('profile_cards')
+        .select('profile_id')
+        .eq('card_key', identifier)
+        .eq('profile_id', notification.user_id)
+        .maybeSingle()
+      profileId = card?.profile_id
+    }
+    return Boolean(profileId && actor.id === notification.user_id && notification.type === 'system')
   }
 
   if (url.pathname.startsWith('/p/')) {
