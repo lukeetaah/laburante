@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, Link, useSearchParams, useLocation } from 'react-router-dom'
-import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages, Edit3 } from 'lucide-react'
+import { MapPin, Briefcase, Share2, AlertTriangle, ShieldCheck, Check, Clock, Globe, ArrowLeft, Star, MessageSquare, MessageSquarePlus, FileText, EyeOff, Eye, Copy, ExternalLink, MessageCircle, Link2, Languages, Edit3, QrCode, Download } from 'lucide-react'
 import { useProfileStore, type ProfileWithDetails } from '@/stores/profile-store'
 import { useAuthStore } from '@/stores/auth-store'
 import ReportModal from '@/components/profile/ReportModal'
@@ -17,9 +17,19 @@ import { formatModality } from '@/lib/profile-format'
 import { formatProfileLocation } from '@/lib/profile-location'
 import { isProviderProfile } from '@/lib/profile-publication'
 import { focusContextualElement } from '@/lib/contextual-navigation'
-import { getAuthorizedResumeUrl } from '@/lib/profile-assets'
+import { getAuthorizedResumeUrl, resolveProfilePhotoUrl } from '@/lib/profile-assets'
 import { getPublicProfileContactHref, getPublicProfileContactLabel, getPublicProfileContacts } from '@/lib/contact-methods'
 import { trackProductEvent } from '@/lib/product-analytics'
+import DigitalCardView from '@/components/profile/DigitalCardView'
+import {
+  fetchPublicDigitalCard,
+  fetchDigitalCardConfig,
+  getDefaultDigitalCardConfig,
+  getCanonicalCardUrl,
+  type PublicDigitalCardData,
+} from '@/lib/digital-card'
+import { downloadQrAsPng } from '@/lib/qr-service'
+import { downloadDigitalCardAsPng } from '@/lib/card-image'
 
 function PublicContactIcon({ type }: { type: string }) {
   if (type === 'linkedin') {
@@ -71,6 +81,11 @@ export default function ProfilePage() {
   const [recommendationMessage, setRecommendationMessage] = useState('')
   const [resumeAccessUrl, setResumeAccessUrl] = useState<string | null>(null)
   const [resumeLoading, setResumeLoading] = useState(false)
+  const [digitalCard, setDigitalCard] = useState<PublicDigitalCardData | null>(null)
+  const [cardConfiguredInDb, setCardConfiguredInDb] = useState(false)
+  const [downloadingCard, setDownloadingCard] = useState(false)
+  const [downloadingQr, setDownloadingQr] = useState(false)
+  const [cardDownloadError, setCardDownloadError] = useState('')
   const trackedProfileId = useRef<string | null>(null)
   const requestIntentHandled = useRef(false)
 
@@ -190,6 +205,109 @@ export default function ProfilePage() {
     trackedProfileId.current = profile.id
     trackProductEvent('profile_viewed', { provider: isPublicProvider })
   }, [loading, profile?.id, isPublicProvider])
+
+  useEffect(() => {
+    let active = true
+    if (!profile?.slug) {
+      setDigitalCard(null)
+      setCardConfiguredInDb(false)
+      return () => { active = false }
+    }
+
+    const loadCard = async () => {
+      const publicCard = await fetchPublicDigitalCard(profile.slug)
+      if (!active) return
+
+      if (publicCard) {
+        setDigitalCard(publicCard)
+        setCardConfiguredInDb(true)
+        return
+      }
+
+      if (isOwnerSession) {
+        const saved = await fetchDigitalCardConfig(profile.id)
+        if (!active) return
+        const cfg = saved?.config || getDefaultDigitalCardConfig(profile)
+        const resolvedPhoto = cfg.show_photo && profile.photo_url
+          ? await resolveProfilePhotoUrl(profile.photo_url)
+          : null
+        if (!active) return
+
+        const contacts = (profile.contact_methods || [])
+          .filter((c: any) => {
+            if (c.type === 'whatsapp') return cfg.show_whatsapp
+            if (c.type === 'telefono') return cfg.show_phone
+            if (c.type === 'email') return cfg.show_email
+            if (c.type === 'web') return cfg.show_web
+            if (c.type === 'instagram') return cfg.show_instagram
+            if (c.type === 'linkedin') return cfg.show_linkedin
+            if (c.type === 'portfolio') return cfg.show_portfolio
+            return false
+          })
+          .map((c: any) => ({ type: c.type, value: c.value }))
+
+        const skillsList = cfg.show_skills
+          ? (profile.skills || []).map((s: any) => (typeof s === 'string' ? s : s.name)).filter(Boolean)
+          : []
+
+        setDigitalCard({
+          card_key: saved?.card_key || profile.slug,
+          slug: profile.slug,
+          name: profile.name,
+          photo_url: resolvedPhoto,
+          headline: cfg.show_headline ? (cfg.custom_headline || skillsList[0] || null) : null,
+          bio: cfg.show_bio ? profile.bio : null,
+          provincia: cfg.show_location ? profile.provincia : null,
+          localidad: cfg.show_location ? profile.localidad : null,
+          zona_trabajo: cfg.show_zona_trabajo ? profile.zona_trabajo : null,
+          disponibilidad: cfg.show_availability ? profile.disponibilidad : null,
+          modalidad: cfg.show_modality ? profile.modalidad : null,
+          hybrid_presencial_pct: cfg.show_modality ? profile.hybrid_presencial_pct : null,
+          hybrid_remoto_pct: cfg.show_modality ? profile.hybrid_remoto_pct : null,
+          whatsapp_verified: cfg.show_verified_badge ? Boolean(profile.whatsapp_verified) : false,
+          skills: skillsList,
+          services: cfg.show_services ? (profile.services || []) : [],
+          languages: cfg.show_languages ? (profile.languages || []) : [],
+          contacts,
+        })
+        setCardConfiguredInDb(Boolean(saved))
+      } else {
+        setDigitalCard(null)
+        setCardConfiguredInDb(false)
+      }
+    }
+
+    void loadCard()
+    return () => { active = false }
+  }, [profile, isOwnerSession])
+
+  const handleDownloadCardImage = async () => {
+    if (!digitalCard) return
+    setDownloadingCard(true)
+    setCardDownloadError('')
+    try {
+      const cardUrl = getCanonicalCardUrl(digitalCard.card_key)
+      await downloadDigitalCardAsPng(digitalCard, cardUrl, profile?.slug)
+    } catch (err: any) {
+      setCardDownloadError(err?.message || 'No se pudo generar la imagen de la tarjeta.')
+    } finally {
+      setDownloadingCard(false)
+    }
+  }
+
+  const handleDownloadCardQr = async () => {
+    if (!digitalCard) return
+    setDownloadingQr(true)
+    setCardDownloadError('')
+    try {
+      const cardUrl = getCanonicalCardUrl(digitalCard.card_key)
+      await downloadQrAsPng(cardUrl, `qr-${profile?.slug || digitalCard.card_key}.png`, 1024)
+    } catch (err: any) {
+      setCardDownloadError(err?.message || 'No se pudo descargar el código QR.')
+    } finally {
+      setDownloadingQr(false)
+    }
+  }
 
   const handleShare = () => {
     const url = `${window.location.origin}/p/${profile?.slug}`
@@ -347,6 +465,13 @@ export default function ProfilePage() {
                 onOpenWhatsAppVerify={() => setWhatsAppVerifyOpen(true)}
               />
               <EmailPreferencesToggle variant="inline" />
+              <Link
+                to="/mi-tarjeta"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] px-4 py-3 text-xs font-bold text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-border)] transition-colors w-full"
+              >
+                <QrCode size={15} className="text-[var(--color-laburante-accent)]" />
+                Configurar mi tarjeta digital y código QR
+              </Link>
             </div>
           )}
           {!isPublicProvider && !isOwnProfile && (
@@ -771,6 +896,106 @@ export default function ProfilePage() {
         )}
         {recommendationMessage && <p className="text-xs font-semibold text-indigo-800">{recommendationMessage}</p>}
       </section>}
+
+      {/* Tarjeta Digital LABURANTE */}
+      {digitalCard && (isPublicProvider || isOwnProfile) && (
+        <section id="tarjeta-digital" className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)] flex items-center gap-2">
+                <QrCode size={18} className="text-[var(--color-laburante-accent)]" />
+                Tarjeta digital de contacto
+              </h2>
+              <p className="text-xs text-[var(--color-laburante-text-secondary)]">
+                {isOwnProfile && !cardConfiguredInDb
+                  ? 'Vista previa sugerida. Personalizá qué datos mostrar y guardala para activar tu enlace permanente.'
+                  : 'Lista para hacer captura de pantalla, compartir o descargar como imagen.'}
+              </p>
+            </div>
+            {isOwnProfile && (
+              <Link
+                to="/mi-tarjeta"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3.5 py-2 text-xs font-bold text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)] transition-colors"
+              >
+                <Edit3 size={13} />
+                {cardConfiguredInDb ? 'Configurar tarjeta' : 'Personalizar y guardar'}
+              </Link>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,440px)_1fr] gap-6 items-start">
+            <div className="w-full max-w-[440px] mx-auto lg:mx-0">
+              <DigitalCardView
+                name={digitalCard.name}
+                photoUrl={digitalCard.photo_url}
+                headline={digitalCard.headline}
+                bio={digitalCard.bio}
+                provincia={digitalCard.provincia}
+                localidad={digitalCard.localidad}
+                zonaTrabajo={digitalCard.zona_trabajo}
+                disponibilidad={digitalCard.disponibilidad}
+                modalidad={digitalCard.modalidad}
+                hybridPresencialPct={digitalCard.hybrid_presencial_pct}
+                hybridRemotoPct={digitalCard.hybrid_remoto_pct}
+                whatsappVerified={digitalCard.whatsapp_verified}
+                skills={digitalCard.skills}
+                services={digitalCard.services}
+                languages={digitalCard.languages}
+                contacts={digitalCard.contacts}
+                cardUrl={getCanonicalCardUrl(digitalCard.card_key)}
+                isOwnerPreview={isOwnProfile && !cardConfiguredInDb}
+              />
+            </div>
+
+            <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5 space-y-4">
+              <div className="space-y-1">
+                <h3 className="font-heading text-sm font-bold text-[var(--color-laburante-text)]">
+                  Usá esta tarjeta donde quieras
+                </h3>
+                <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
+                  Descargá la tarjeta completa como imagen PNG para enviarla por WhatsApp o subirla a tus redes, o bajá el código QR para imprimir.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleDownloadCardImage}
+                  disabled={downloadingCard}
+                  className="btn-dark w-full py-3 px-4 rounded-xl font-heading font-bold text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-60 cursor-pointer"
+                >
+                  <Download size={15} />
+                  {downloadingCard ? 'Generando imagen...' : 'Descargar tarjeta completa (PNG)'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadCardQr}
+                  disabled={downloadingQr}
+                  className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] hover:bg-[var(--color-laburante-border)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs flex items-center justify-center gap-2 transition-colors disabled:opacity-60 cursor-pointer"
+                >
+                  <QrCode size={15} className="text-[var(--color-laburante-accent)]" />
+                  {downloadingQr ? 'Generando QR...' : 'Descargar solo QR (PNG)'}
+                </button>
+
+                {cardConfiguredInDb && (
+                  <Link
+                    to={`/tarjeta/${encodeURIComponent(digitalCard.card_key)}`}
+                    className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-white hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <ExternalLink size={14} />
+                    Abrir página de la tarjeta
+                  </Link>
+                )}
+              </div>
+
+              {cardDownloadError && (
+                <p className="text-xs font-medium text-rose-600">{cardDownloadError}</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Signals of Trust (Honest, not fabricated) */}
       <section className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-xs text-[var(--color-laburante-text-secondary)] space-y-2">

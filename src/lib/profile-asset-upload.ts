@@ -12,7 +12,7 @@ type StorageUploadOptions = {
 }
 
 type StorageBucket = {
-  upload: (path: string, file: UploadableProfileAsset, options: StorageUploadOptions) => Promise<{ error: any | null }>
+  upload: (path: string, file: any, options: StorageUploadOptions) => Promise<{ error: any | null }>
   remove?: (paths: string[]) => Promise<{ error: any | null }>
   getPublicUrl?: (path: string) => { data?: { publicUrl?: string | null } } | null | undefined
 }

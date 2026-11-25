@@ -191,6 +191,18 @@ async function isValidNotificationContext(
     return false
   }
 
+  if (url.pathname.startsWith('/tarjeta/')) {
+    const cardKey = decodeURIComponent(url.pathname.slice('/tarjeta/'.length))
+    if (!cardKey) return false
+    const { data: card } = await admin
+      .from('profile_cards')
+      .select('profile_id')
+      .eq('card_key', cardKey)
+      .eq('profile_id', notification.user_id)
+      .maybeSingle()
+    return Boolean(card && actor.id === notification.user_id && notification.type === 'system')
+  }
+
   if (url.pathname.startsWith('/p/')) {
     const slug = decodeURIComponent(url.pathname.slice(3))
     const { data: profile } = await admin.from('profiles').select('id, whatsapp_verified').eq('slug', slug).maybeSingle()

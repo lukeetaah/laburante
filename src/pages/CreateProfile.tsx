@@ -7,7 +7,7 @@ import { PROVINCES } from '@/data/provinces'
 import { CATEGORIES } from '@/data/categories'
 import { normalizeSearchText } from '@/lib/search-intent'
 import { formatModality, type WorkModality } from '@/lib/profile-format'
-import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages, Mail, Search, X } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight, User, Eye, EyeOff, AlertTriangle, Upload, FileText, Languages, Mail, Search, X, QrCode } from 'lucide-react'
 import WhatsAppVerificationModal from '@/components/profile/WhatsAppVerificationModal'
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal'
 import AvatarCropModal from '@/components/profile/AvatarCropModal'
@@ -514,12 +514,20 @@ export default function CreateProfile() {
               Los cambios que guardes se reflejarán inmediatamente en las búsquedas públicas.
             </p>
           </div>
-          <Link
-            to={`/p/${myProfile.slug}`}
-            className="px-4 py-2 rounded-xl bg-white border border-indigo-200 font-heading font-bold text-xs text-indigo-700 hover:bg-indigo-100/50 shrink-0 transition-colors shadow-2xs"
-          >
-            Ver mi perfil público →
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Link
+              to={`/p/${myProfile.slug}`}
+              className="px-4 py-2 rounded-xl bg-white border border-indigo-200 font-heading font-bold text-xs text-indigo-700 hover:bg-indigo-100/50 shrink-0 transition-colors shadow-2xs"
+            >
+              Ver mi perfil público →
+            </Link>
+            <Link
+              to="/mi-tarjeta"
+              className="px-4 py-2 rounded-xl bg-white border border-indigo-200 font-heading font-bold text-xs text-indigo-700 hover:bg-indigo-100/50 shrink-0 transition-colors shadow-2xs inline-flex items-center gap-1.5"
+            >
+              <QrCode size={14} /> Mi tarjeta QR
+            </Link>
+          </div>
         </div>
       )}
 

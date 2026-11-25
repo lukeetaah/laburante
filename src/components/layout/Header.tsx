@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProfileStore } from '@/stores/profile-store'
 import { isCompanyAccount } from '@/lib/account'
-import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2, LayoutGrid, CircleHelp, LifeBuoy } from 'lucide-react'
+import { Menu, X, Search, UserPlus, LogIn, LogOut, User, ShieldAlert, Briefcase, Building2, LayoutGrid, CircleHelp, LifeBuoy, QrCode } from 'lucide-react'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { hasProviderContent, normalizeProfileIntent } from '@/lib/profile-publication'
 import { useNotificationStore } from '@/stores/notification-store'
@@ -211,6 +211,15 @@ export default function Header() {
                 <User size={14} className="shrink-0 text-[var(--color-laburante-accent)]" />
                 <span className="truncate">{displayName}</span>
               </Link>
+              {!companyAccount && myProfile && (
+                <Link
+                  to="/mi-tarjeta"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-xs font-medium text-[var(--color-laburante-text-secondary)] hover:text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-border)] transition-colors"
+                  title="Mi tarjeta LABURANTE"
+                >
+                  <QrCode size={14} />
+                </Link>
+              )}
               <button
                 onClick={handleSignOut}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-[var(--color-laburante-text-muted)] hover:text-rose-600 hover:bg-rose-50 transition-colors"
@@ -324,6 +333,11 @@ export default function Header() {
                     <Link to={accountPath} onClick={closeMenu} className={mobileLinkClass(accountPath)}>
                       <User size={17} aria-hidden="true" /> {companyAccount ? 'Espacio Empresa' : 'Mi perfil profesional'}
                     </Link>
+                    {!companyAccount && myProfile && (
+                      <Link to="/mi-tarjeta" onClick={closeMenu} className={mobileLinkClass('/mi-tarjeta')}>
+                        <QrCode size={17} aria-hidden="true" /> Mi tarjeta LABURANTE
+                      </Link>
+                    )}
                     <button type="button" onClick={handleSignOut} className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50">
                       <LogOut size={17} aria-hidden="true" /> Cerrar sesión
                     </button>

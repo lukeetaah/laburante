@@ -21,6 +21,8 @@ import NotFound from '@/pages/NotFound'
 import Support from '@/pages/Support'
 import Companies from '@/pages/Companies'
 import CompanyWorkspace from '@/pages/CompanyWorkspace'
+import CardConfigPage from '@/pages/CardConfigPage'
+import DigitalCardPage from '@/pages/DigitalCardPage'
 import { Analytics } from '@vercel/analytics/react'
 import { addAppBreadcrumb } from '@/lib/sentry'
 import { recordUserActivity } from '@/lib/user-activity'
@@ -66,6 +68,9 @@ export default function App() {
           <Route path="recuperar-contrasena" element={<ForgotPassword />} />
           <Route path="restablecer-contrasena" element={<ResetPassword />} />
           <Route path="crear-perfil" element={<CreateProfile />} />
+          <Route path="mi-tarjeta" element={<CardConfigPage />} />
+          <Route path="tarjeta/:identifier" element={<DigitalCardPage />} />
+          <Route path="contacto/:identifier" element={<DigitalCardPage />} />
           <Route path="soporte" element={<Support />} />
           <Route path="admin" element={<Admin />} />
           <Route path="como-funciona" element={<HowItWorks />} />

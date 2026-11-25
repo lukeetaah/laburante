@@ -250,6 +250,29 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['whatsapp_verification_requests']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['whatsapp_verification_requests']['Insert']>
       }
+      profile_cards: {
+        Row: {
+          profile_id: string
+          card_key: string
+          config: Record<string, any>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          profile_id: string
+          card_key?: string
+          config: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          profile_id?: string
+          card_key?: string
+          config?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -331,6 +354,14 @@ export type Database = {
       user_expire_pending_whatsapp_request: {
         Args: { p_request_id: string }
         Returns: boolean
+      }
+      get_public_digital_card: {
+        Args: { p_identifier: string }
+        Returns: Record<string, any> | null
+      }
+      request_digital_card_email: {
+        Args: Record<string, never>
+        Returns: string
       }
     }
     Enums: Record<string, never>
