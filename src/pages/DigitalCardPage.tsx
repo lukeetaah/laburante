@@ -67,8 +67,8 @@ export default function DigitalCardPage() {
     }
   }, [identifier, user?.id])
 
-  // URL permanente canónica
-  const canonicalUrl = cardData ? getCanonicalCardUrl(cardData.card_key) : ''
+  // URL permanente canónica (/t/:slug)
+  const canonicalUrl = cardData ? getCanonicalCardUrl(cardData.slug || cardData.card_key) : ''
 
   // Compartir por WhatsApp
   const handleShareWhatsApp = () => {

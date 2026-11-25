@@ -122,9 +122,9 @@ export default function CardConfigPage() {
     return detectAvailableCardFields(myProfile)
   }, [myProfile])
 
-  // URL canónica permanente
+  // URL canónica personalizada (/t/:slug)
   const canonicalUrl = useMemo(() => {
-    const keyToUse = cardKey || myProfile?.slug || 'usuario'
+    const keyToUse = myProfile?.slug || cardKey || 'usuario'
     return getCanonicalCardUrl(keyToUse)
   }, [cardKey, myProfile?.slug])
 

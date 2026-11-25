@@ -284,7 +284,7 @@ export default function ProfilePage() {
     setDownloadingCard(true)
     setCardDownloadError('')
     try {
-      const cardUrl = getCanonicalCardUrl(digitalCard.card_key)
+      const cardUrl = getCanonicalCardUrl(digitalCard.slug || profile?.slug || digitalCard.card_key)
       await downloadDigitalCardAsPdf(digitalCard, cardUrl, profile?.slug, {
         contactsLocked: !user,
       })
@@ -465,7 +465,7 @@ export default function ProfilePage() {
                 contacts={digitalCard.contacts}
                 contactsLocked={!user}
                 hasLockedContacts={Boolean(digitalCard.has_contacts)}
-                cardUrl={getCanonicalCardUrl(digitalCard.card_key)}
+                cardUrl={getCanonicalCardUrl(digitalCard.slug || profile.slug || digitalCard.card_key)}
                 isOwnerPreview={isOwnProfile && !cardConfiguredInDb}
                 embeddedInProfile={true}
               />

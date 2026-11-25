@@ -69,6 +69,7 @@ export default function App() {
           <Route path="restablecer-contrasena" element={<ResetPassword />} />
           <Route path="crear-perfil" element={<CreateProfile />} />
           <Route path="mi-tarjeta" element={<CardConfigPage />} />
+          <Route path="t/:identifier" element={<DigitalCardPage />} />
           <Route path="tarjeta/:identifier" element={<DigitalCardPage />} />
           <Route path="contacto/:identifier" element={<DigitalCardPage />} />
           <Route path="soporte" element={<Support />} />

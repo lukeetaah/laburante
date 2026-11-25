@@ -444,9 +444,9 @@ async function fallbackFetchPublicDigitalCard(identifier: string): Promise<Publi
 /**
  * Devuelve la URL canónica y permanente de la tarjeta digital.
  */
-export function getCanonicalCardUrl(cardKey: string): string {
+export function getCanonicalCardUrl(identifier: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://laburante.ar'
-  return `${origin}/tarjeta/${encodeURIComponent(cardKey)}`
+  return `${origin}/t/${encodeURIComponent(identifier)}`
 }
 
 /**
