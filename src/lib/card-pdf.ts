@@ -461,8 +461,8 @@ export async function downloadDigitalCardAsPdf(
   doc.setTextColor(113, 113, 122)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(6.5)
-  doc.text('Escaneá para ver', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' })
-  doc.text('el perfil completo', qrX + qrSize / 2, qrY + qrSize + 6, { align: 'center' })
+  doc.text('Escaneá para ver', qrX + qrSize / 2, qrY + qrSize + 1.5, { align: 'center' })
+  doc.text('el perfil completo', qrX + qrSize / 2, qrY + qrSize + 4.5, { align: 'center' })
 
   // Columna izquierda: Contactos autorizados con link clicable y texto copiable
   let contactY = y + 2
@@ -510,12 +510,22 @@ export async function downloadDigitalCardAsPdf(
     const urlBoxH = urlLines.length * 4.2 + 4
     doc.setFillColor(244, 242, 237)
     doc.roundedRect(cardX + padX, y - 1, contentW, urlBoxH, 2, 2, 'F')
+
+    // Texto introductorio gris
+    const labelText = 'O accedé mediante el link:'
+    doc.setTextColor(113, 113, 122)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.text(labelText, cardX + padX + 3, y + 2.5)
+    const labelW = doc.getTextWidth(labelText)
+
+    // URL en color, clicable, a continuación del label
     doc.setTextColor(79, 70, 229)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     let urlTextY = y + 2.5
     for (const line of urlLines) {
-      doc.textWithLink(line, pageW / 2, urlTextY, { url: cardUrl, align: 'center' })
+      doc.textWithLink(line, cardX + padX + 3 + labelW + 2, urlTextY, { url: cardUrl })
       urlTextY += 4.2
     }
   }
