@@ -28,8 +28,7 @@ import {
   getCanonicalCardUrl,
   type PublicDigitalCardData,
 } from '@/lib/digital-card'
-import { downloadQrAsPng } from '@/lib/qr-service'
-import { downloadDigitalCardAsPng } from '@/lib/card-image'
+import { downloadDigitalCardAsPdf } from '@/lib/card-pdf'
 
 function PublicContactIcon({ type }: { type: string }) {
   if (type === 'linkedin') {
@@ -84,7 +83,6 @@ export default function ProfilePage() {
   const [digitalCard, setDigitalCard] = useState<PublicDigitalCardData | null>(null)
   const [cardConfiguredInDb, setCardConfiguredInDb] = useState(false)
   const [downloadingCard, setDownloadingCard] = useState(false)
-  const [downloadingQr, setDownloadingQr] = useState(false)
   const [cardDownloadError, setCardDownloadError] = useState('')
   const trackedProfileId = useRef<string | null>(null)
   const requestIntentHandled = useRef(false)
@@ -281,31 +279,17 @@ export default function ProfilePage() {
     return () => { active = false }
   }, [profile, isOwnerSession])
 
-  const handleDownloadCardImage = async () => {
+  const handleDownloadCardPdf = async () => {
     if (!digitalCard) return
     setDownloadingCard(true)
     setCardDownloadError('')
     try {
       const cardUrl = getCanonicalCardUrl(digitalCard.card_key)
-      await downloadDigitalCardAsPng(digitalCard, cardUrl, profile?.slug)
+      await downloadDigitalCardAsPdf(digitalCard, cardUrl, profile?.slug)
     } catch (err: any) {
-      setCardDownloadError(err?.message || 'No se pudo generar la imagen de la tarjeta.')
+      setCardDownloadError(err?.message || 'No se pudo generar el PDF de la tarjeta.')
     } finally {
       setDownloadingCard(false)
-    }
-  }
-
-  const handleDownloadCardQr = async () => {
-    if (!digitalCard) return
-    setDownloadingQr(true)
-    setCardDownloadError('')
-    try {
-      const cardUrl = getCanonicalCardUrl(digitalCard.card_key)
-      await downloadQrAsPng(cardUrl, `qr-${profile?.slug || digitalCard.card_key}.png`, 1024)
-    } catch (err: any) {
-      setCardDownloadError(err?.message || 'No se pudo descargar el código QR.')
-    } finally {
-      setDownloadingQr(false)
     }
   }
 
@@ -409,51 +393,106 @@ export default function ProfilePage() {
 
       {/* Main Profile Header Card */}
       <div className="rounded-3xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-6 sm:p-8 md:p-10 shadow-xs relative">
-        <div className="flex flex-col sm:flex-row items-start gap-6 mb-6">
-          <div className="h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full bg-[var(--color-laburante-surface-alt)] border-2 border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-extrabold text-2xl sm:text-3xl text-[var(--color-laburante-text)] flex-shrink-0">
-            {profile.photo_url && !imageFailed ? (
-              <img src={profile.photo_url} alt={`Foto de ${profile.name}`} className="h-full w-full object-cover" onError={() => setImageFailed(true)} />
-            ) : profile.name.charAt(0)}
-          </div>
+        <div className={digitalCard && (isPublicProvider || isOwnProfile) ? 'grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6 items-start mb-6' : 'mb-6'}>
+          <div className="flex flex-col sm:flex-row items-start gap-6">
+            <div className="h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full bg-[var(--color-laburante-surface-alt)] border-2 border-[var(--color-laburante-border)] flex items-center justify-center font-heading font-extrabold text-2xl sm:text-3xl text-[var(--color-laburante-text)] flex-shrink-0">
+              {profile.photo_url && !imageFailed ? (
+                <img src={profile.photo_url} alt={`Foto de ${profile.name}`} className="h-full w-full object-cover" onError={() => setImageFailed(true)} />
+              ) : profile.name.charAt(0)}
+            </div>
 
-          <div className="flex-1 min-w-0 space-y-2">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
-                {profile.name}
-              </h1>
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-[var(--color-laburante-text)] tracking-tight">
+                  {profile.name}
+                </h1>
 
-              {profile.whatsapp_verified && (
-                <span
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
-                  title="Titularidad de número de WhatsApp certificada por LABURANTE"
-                >
-                  <ShieldCheck size={14} className="text-emerald-600" />
-                  <span>Número verificado</span>
+                {profile.whatsapp_verified && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
+                    title="Titularidad de número de WhatsApp certificada por LABURANTE"
+                  >
+                    <ShieldCheck size={14} className="text-emerald-600" />
+                    <span>Número verificado</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs sm:text-sm text-[var(--color-laburante-text-secondary)]">
+                <span className="flex items-center gap-1">
+                  <MapPin size={14} className="text-[var(--color-laburante-accent)]" />
+                  {formatProfileLocation(profile)}
                 </span>
+                <span className="flex items-center gap-1">
+                  <Briefcase size={14} className="text-[var(--color-laburante-text-muted)]" />
+                  {formatModality(profile.modalidad, profile.hybrid_presencial_pct, profile.hybrid_remoto_pct)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock size={14} className="text-emerald-600" />
+                  {profile.disponibilidad === 'disponible' ? 'Disponible' : profile.disponibilidad}
+                </span>
+              </div>
+
+              {profile.zona_trabajo && (
+                <p className="text-xs text-[var(--color-laburante-text-muted)]">
+                  Zona habitual: <span className="text-[var(--color-laburante-text-secondary)]">{profile.zona_trabajo}</span>
+                </p>
               )}
             </div>
-
-            <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs sm:text-sm text-[var(--color-laburante-text-secondary)]">
-              <span className="flex items-center gap-1">
-                <MapPin size={14} className="text-[var(--color-laburante-accent)]" />
-                {formatProfileLocation(profile)}
-              </span>
-              <span className="flex items-center gap-1">
-                <Briefcase size={14} className="text-[var(--color-laburante-text-muted)]" />
-                {formatModality(profile.modalidad, profile.hybrid_presencial_pct, profile.hybrid_remoto_pct)}
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock size={14} className="text-emerald-600" />
-                {profile.disponibilidad === 'disponible' ? 'Disponible' : profile.disponibilidad}
-              </span>
-            </div>
-
-            {profile.zona_trabajo && (
-              <p className="text-xs text-[var(--color-laburante-text-muted)]">
-                Zona habitual: <span className="text-[var(--color-laburante-text-secondary)]">{profile.zona_trabajo}</span>
-              </p>
-            )}
           </div>
+
+          {/* Tarjeta digital compacta a la derecha del perfil */}
+          {digitalCard && (isPublicProvider || isOwnProfile) && (
+            <div className="w-full max-w-[360px] lg:max-w-none mx-auto lg:mx-0 space-y-2.5">
+              <DigitalCardView
+                name={digitalCard.name}
+                photoUrl={digitalCard.photo_url}
+                headline={digitalCard.headline}
+                bio={digitalCard.bio}
+                provincia={digitalCard.provincia}
+                localidad={digitalCard.localidad}
+                zonaTrabajo={digitalCard.zona_trabajo}
+                disponibilidad={digitalCard.disponibilidad}
+                modalidad={digitalCard.modalidad}
+                hybridPresencialPct={digitalCard.hybrid_presencial_pct}
+                hybridRemotoPct={digitalCard.hybrid_remoto_pct}
+                whatsappVerified={digitalCard.whatsapp_verified}
+                skills={digitalCard.skills}
+                services={digitalCard.services}
+                languages={digitalCard.languages}
+                contacts={digitalCard.contacts}
+                cardUrl={getCanonicalCardUrl(digitalCard.card_key)}
+                isOwnerPreview={isOwnProfile && !cardConfiguredInDb}
+              />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadCardPdf}
+                  disabled={downloadingCard}
+                  className="btn-dark flex-1 py-2.5 px-3.5 rounded-xl font-heading font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs disabled:opacity-60 cursor-pointer"
+                >
+                  <Download size={14} />
+                  {downloadingCard ? 'Generando PDF...' : 'Descargar tarjeta (PDF)'}
+                </button>
+
+                {isOwnProfile && (
+                  <Link
+                    to="/mi-tarjeta"
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] px-3 py-2.5 text-xs font-semibold text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-border)] transition-colors"
+                    title="Configurar campos de mi tarjeta"
+                  >
+                    <Edit3 size={13} />
+                    <span>Configurar</span>
+                  </Link>
+                )}
+              </div>
+
+              {cardDownloadError && (
+                <p className="text-[11px] font-medium text-rose-600">{cardDownloadError}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Action Buttons: Request Budget + Contact + Review + Share */}
@@ -896,106 +935,6 @@ export default function ProfilePage() {
         )}
         {recommendationMessage && <p className="text-xs font-semibold text-indigo-800">{recommendationMessage}</p>}
       </section>}
-
-      {/* Tarjeta Digital LABURANTE */}
-      {digitalCard && (isPublicProvider || isOwnProfile) && (
-        <section id="tarjeta-digital" className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <h2 className="font-heading text-lg font-bold text-[var(--color-laburante-text)] flex items-center gap-2">
-                <QrCode size={18} className="text-[var(--color-laburante-accent)]" />
-                Tarjeta digital de contacto
-              </h2>
-              <p className="text-xs text-[var(--color-laburante-text-secondary)]">
-                {isOwnProfile && !cardConfiguredInDb
-                  ? 'Vista previa sugerida. Personalizá qué datos mostrar y guardala para activar tu enlace permanente.'
-                  : 'Lista para hacer captura de pantalla, compartir o descargar como imagen.'}
-              </p>
-            </div>
-            {isOwnProfile && (
-              <Link
-                to="/mi-tarjeta"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] px-3.5 py-2 text-xs font-bold text-[var(--color-laburante-text)] hover:bg-[var(--color-laburante-surface-alt)] transition-colors"
-              >
-                <Edit3 size={13} />
-                {cardConfiguredInDb ? 'Configurar tarjeta' : 'Personalizar y guardar'}
-              </Link>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,440px)_1fr] gap-6 items-start">
-            <div className="w-full max-w-[440px] mx-auto lg:mx-0">
-              <DigitalCardView
-                name={digitalCard.name}
-                photoUrl={digitalCard.photo_url}
-                headline={digitalCard.headline}
-                bio={digitalCard.bio}
-                provincia={digitalCard.provincia}
-                localidad={digitalCard.localidad}
-                zonaTrabajo={digitalCard.zona_trabajo}
-                disponibilidad={digitalCard.disponibilidad}
-                modalidad={digitalCard.modalidad}
-                hybridPresencialPct={digitalCard.hybrid_presencial_pct}
-                hybridRemotoPct={digitalCard.hybrid_remoto_pct}
-                whatsappVerified={digitalCard.whatsapp_verified}
-                skills={digitalCard.skills}
-                services={digitalCard.services}
-                languages={digitalCard.languages}
-                contacts={digitalCard.contacts}
-                cardUrl={getCanonicalCardUrl(digitalCard.card_key)}
-                isOwnerPreview={isOwnProfile && !cardConfiguredInDb}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface)] p-5 space-y-4">
-              <div className="space-y-1">
-                <h3 className="font-heading text-sm font-bold text-[var(--color-laburante-text)]">
-                  Usá esta tarjeta donde quieras
-                </h3>
-                <p className="text-xs text-[var(--color-laburante-text-secondary)] leading-relaxed">
-                  Descargá la tarjeta completa como imagen PNG para enviarla por WhatsApp o subirla a tus redes, o bajá el código QR para imprimir.
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5">
-                <button
-                  type="button"
-                  onClick={handleDownloadCardImage}
-                  disabled={downloadingCard}
-                  className="btn-dark w-full py-3 px-4 rounded-xl font-heading font-bold text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-60 cursor-pointer"
-                >
-                  <Download size={15} />
-                  {downloadingCard ? 'Generando imagen...' : 'Descargar tarjeta completa (PNG)'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadCardQr}
-                  disabled={downloadingQr}
-                  className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] hover:bg-[var(--color-laburante-border)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs flex items-center justify-center gap-2 transition-colors disabled:opacity-60 cursor-pointer"
-                >
-                  <QrCode size={15} className="text-[var(--color-laburante-accent)]" />
-                  {downloadingQr ? 'Generando QR...' : 'Descargar solo QR (PNG)'}
-                </button>
-
-                {cardConfiguredInDb && (
-                  <Link
-                    to={`/tarjeta/${encodeURIComponent(digitalCard.card_key)}`}
-                    className="w-full py-2.5 px-4 rounded-xl border border-[var(--color-laburante-border)] bg-white hover:bg-[var(--color-laburante-surface-alt)] text-[var(--color-laburante-text)] font-heading font-semibold text-xs flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <ExternalLink size={14} />
-                    Abrir página de la tarjeta
-                  </Link>
-                )}
-              </div>
-
-              {cardDownloadError && (
-                <p className="text-xs font-medium text-rose-600">{cardDownloadError}</p>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* Signals of Trust (Honest, not fabricated) */}
       <section className="p-5 rounded-2xl border border-[var(--color-laburante-border)] bg-[var(--color-laburante-surface-alt)] text-xs text-[var(--color-laburante-text-secondary)] space-y-2">

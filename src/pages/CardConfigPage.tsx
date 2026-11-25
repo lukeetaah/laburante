@@ -37,7 +37,7 @@ import {
   type DigitalCardConfig,
 } from '@/lib/digital-card'
 import { downloadQrAsPng, downloadQrAsSvg } from '@/lib/qr-service'
-import { downloadDigitalCardAsPng } from '@/lib/card-image'
+import { downloadDigitalCardAsPdf } from '@/lib/card-pdf'
 import { downloadVCard } from '@/lib/vcard'
 import { resolveProfilePhotoUrl } from '@/lib/profile-assets'
 
@@ -204,10 +204,10 @@ export default function CardConfigPage() {
     }
   }
 
-  // Descargar tarjeta completa como PNG
-  const handleDownloadCardPng = async () => {
+  // Descargar tarjeta completa como PDF con links clicables y QR
+  const handleDownloadCardPdf = async () => {
     if (!myProfile || !config) return
-    await downloadDigitalCardAsPng(
+    await downloadDigitalCardAsPdf(
       {
         card_key: cardKey || myProfile.slug,
         slug: myProfile.slug,
@@ -949,19 +949,19 @@ export default function CardConfigPage() {
                 </button>
               </div>
 
-              {/* QR & Card Downloads: PNG & SVG */}
+              {/* Card PDF & QR Downloads */}
               <div className="pt-3 border-t border-[var(--color-laburante-border)] space-y-2">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)] flex items-center gap-1.5">
                   <QrCode size={13} /> Descargar tarjeta o código QR
                 </p>
                 <button
                   type="button"
-                  onClick={handleDownloadCardPng}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-[var(--color-laburante-surface-alt)] hover:bg-[var(--color-laburante-border)] border border-[var(--color-laburante-border)] py-2.5 px-3 text-xs font-bold text-[var(--color-laburante-text)] transition-colors cursor-pointer"
-                  title="Imagen PNG lista para compartir por WhatsApp o redes"
+                  onClick={handleDownloadCardPdf}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl btn-dark py-2.5 px-3 text-xs font-bold transition-colors cursor-pointer"
+                  title="PDF con texto seleccionable, links clicables y código QR integrado"
                 >
-                  <Download size={14} className="text-[var(--color-laburante-accent)]" />
-                  <span>Descargar tarjeta completa (PNG)</span>
+                  <Download size={14} />
+                  <span>Descargar tarjeta (PDF)</span>
                 </button>
                 <div className="grid grid-cols-2 gap-2">
                   <button

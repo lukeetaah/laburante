@@ -22,8 +22,7 @@ import {
   getCardWhatsAppShareUrl,
   type PublicDigitalCardData,
 } from '@/lib/digital-card'
-import { downloadQrAsPng, downloadQrAsSvg } from '@/lib/qr-service'
-import { downloadDigitalCardAsPng } from '@/lib/card-image'
+import { downloadDigitalCardAsPdf } from '@/lib/card-pdf'
 import { downloadVCard } from '@/lib/vcard'
 
 export default function DigitalCardPage() {
@@ -120,24 +119,10 @@ export default function DigitalCardPage() {
     }
   }
 
-  // Descargar tarjeta completa como PNG
-  const handleDownloadCardPng = async () => {
+  // Descargar tarjeta completa como PDF con links clicables y QR
+  const handleDownloadCardPdf = async () => {
     if (!cardData || !canonicalUrl) return
-    await downloadDigitalCardAsPng(cardData, canonicalUrl, cardData.slug)
-  }
-
-  // Descargar QR como PNG
-  const handleDownloadQrPng = async () => {
-    if (!cardData || !canonicalUrl) return
-    const safeName = cardData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-    await downloadQrAsPng(canonicalUrl, `qr-laburante-${safeName}.png`, 1024)
-  }
-
-  // Descargar QR como SVG
-  const handleDownloadQrSvg = async () => {
-    if (!cardData || !canonicalUrl) return
-    const safeName = cardData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-    await downloadQrAsSvg(canonicalUrl, `qr-laburante-${safeName}.svg`)
+    await downloadDigitalCardAsPdf(cardData, canonicalUrl, cardData.slug)
   }
 
   // Guardar contacto vCard (.vcf) con los datos autorizados
@@ -288,38 +273,16 @@ export default function DigitalCardPage() {
           </button>
         </div>
 
-        {/* QR & Card Downloads */}
-        <div className="pt-3 border-t border-[var(--color-laburante-border)] space-y-2">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-laburante-text-muted)] flex items-center gap-1.5">
-            <QrCode size={13} /> Descargar tarjeta o código QR
-          </p>
+        {/* Descargar tarjeta completa en PDF */}
+        <div className="pt-3 border-t border-[var(--color-laburante-border)]">
           <button
             type="button"
-            onClick={handleDownloadCardPng}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-[var(--color-laburante-surface-alt)] hover:bg-[var(--color-laburante-border)] border border-[var(--color-laburante-border)] py-2.5 px-3 text-xs font-bold text-[var(--color-laburante-text)] transition-colors cursor-pointer"
+            onClick={handleDownloadCardPdf}
+            className="w-full flex items-center justify-center gap-2 rounded-xl btn-dark py-3 px-4 text-xs font-bold transition-colors cursor-pointer"
           >
-            <Download size={14} className="text-[var(--color-laburante-accent)]" />
-            <span>Descargar tarjeta completa (PNG)</span>
+            <Download size={15} />
+            <span>Descargar tarjeta (PDF)</span>
           </button>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={handleDownloadQrPng}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-[var(--color-laburante-border)] bg-white hover:bg-[var(--color-laburante-surface-alt)] py-2 px-3 text-xs font-semibold text-slate-800 transition-colors cursor-pointer"
-            >
-              <Download size={14} className="text-slate-600" />
-              <span>QR en PNG</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadQrSvg}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100/50 py-2 px-3 text-xs font-semibold text-indigo-900 transition-colors cursor-pointer"
-            >
-              <Download size={14} className="text-indigo-600" />
-              <span>QR en SVG</span>
-            </button>
-          </div>
         </div>
 
         {/* Full Profile CTA Button */}
