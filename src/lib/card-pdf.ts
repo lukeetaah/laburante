@@ -323,8 +323,10 @@ export async function downloadDigitalCardAsPdf(
   y += 4.5
 
   // Columna derecha: QR + URL clicable
-  const qrSize = 28
-  const qrX = cardX + cardW - padX - qrSize
+  // qrMarginR: margen interno derecho adicional para que el QR no llegue al borde del card
+  const qrSize = 26
+  const qrMarginR = 2
+  const qrX = cardX + cardW - padX - qrSize - qrMarginR
   const qrY = y
   const qrPng = await generateQrPngDataUrl(cardUrl, 512)
   doc.addImage(qrPng, 'PNG', qrX, qrY, qrSize, qrSize)
@@ -333,15 +335,18 @@ export async function downloadDigitalCardAsPdf(
   doc.setTextColor(79, 70, 229)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(6.5)
-  const urlLines = doc.splitTextToSize(shortUrl, qrSize + 4) as string[]
+  // Centrar la URL sobre el QR (no sobre la página)
+  const urlCenterX = qrX + qrSize / 2
+  const urlLines = doc.splitTextToSize(shortUrl, qrSize + 2) as string[]
   let urlY = qrY + qrSize + 3
   for (const line of urlLines.slice(0, 2)) {
-    doc.textWithLink(line, qrX + qrSize / 2, urlY, { url: cardUrl, align: 'center' })
+    doc.textWithLink(line, urlCenterX, urlY, { url: cardUrl, align: 'center' })
     urlY += 2.8
   }
 
   // Columna izquierda: Contactos autorizados con link clicable y texto copiable
-  const leftW = contentW - qrSize - 6
+  // leftW: ancho disponible desde el inicio del contenido hasta 4mm antes del QR
+  const leftW = qrX - (cardX + padX) - 4
   let contactY = y + 2
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'bold')
